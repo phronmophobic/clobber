@@ -3,6 +3,17 @@
         io.github.bonede/tree-sitter {:mvn/version "0.24.5"}
         io.github.bonede/tree-sitter-clojure {:mvn/version "0.0.12a"}
         io.github.bonede/tree-sitter-json {:mvn/version "0.23.0"}
-        io.github.IGJoshua/ropes {:git/sha "85ebbfced8c9e1fcd6e09c152dcc2bd4b9a72a86"}}
+        io.github.IGJoshua/ropes {;;:git/sha "85ebbfced8c9e1fcd6e09c152dcc2bd4b9a72a86"
+                                  :local/root "../ropes"
+                                  }
+        org.clojars.quoll/tiara {:mvn/version "0.3.7"}
+        clope/clope {:mvn/version "1"}
+        io.lacuna/bifurcan {:mvn/version "0.2.0-rc1"}
+
+        com.ibm.icu/icu4j {:mvn/version "68.1"}
+        com.ibm.icu/icu4j-charset {:mvn/version "68.1"}
+        com.ibm.icu/icu4j-localespi {:mvn/version "68.1"}
+        }
  :aliases
- {}}
+ {:project
+  {:extra-deps {virgil/virgil {:mvn/version "0.4.0"}}}}}
