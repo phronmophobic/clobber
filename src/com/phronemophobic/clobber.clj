@@ -306,29 +306,35 @@
                                  [(.getStartByte node)
                                   start-row]
                                  [(.getEndByte node)
-                                  (.getRow (.getEndPoint node))]))
+                                  (.getRow (.getEndPoint node))]))]
+      (if (> target-line line)
+        (.numBytes rope)
+        (let [;; now backtrack
+              cs (.toCharSequence (.sliceBytes rope 0 byte-offset))
+              bi (doto (BreakIterator/getCharacterInstance)
+                   (.setText cs))
 
-          ;; now backtrack
-          cs (.toCharSequence (.sliceBytes rope 0 byte-offset))
-          bi (doto (BreakIterator/getCharacterInstance)
-               (.setText (.toCharSequence rope)))
-          char-index (loop [char-index (.length cs)
-                            line line]
-                       (let [prev-char-index (.preceding bi char-index)]
-                         (if (= (.charAt cs prev-char-index)
-                                \newline)
-                           (if (= line target-line)
-                             char-index
-                             (recur prev-char-index
-                                    (dec line)))
-                           (recur prev-char-index
-                                  line))))
-          byte-offset (- byte-offset
-                         (-> (.subSequence cs char-index (.length cs))
-                             (.toString)
-                             (.getBytes "utf-8")
-                             alength))]
-      byte-offset)))
+              char-index (loop [char-index (.last bi)
+                                line line]
+                           (let [prev-char-index (.preceding bi char-index)]
+
+                             (if (= (.charAt cs prev-char-index)
+                                    \newline)
+                               (if (= line target-line)
+                                 char-index
+                                 (recur prev-char-index
+                                        (dec line)))
+                               (recur prev-char-index
+                                      line))
+                             ))
+              byte-offset (- byte-offset
+                             (-> (.subSequence cs char-index (.length cs))
+                                 (.toString)
+                                 (.getBytes "utf-8")
+                                 alength))]
+          byte-offset)))))
+
+
 
 (defn highlighted-text [
                         ;;lang highlight-queries
@@ -362,7 +368,7 @@
                                 p)
 
                             ;; add matched text
-                            ;;;; matches can overlap
+                            ;; ; matches can overlap
                             p (if (> end-byte offset)
                                 (let [color (get text-colors capture-name)
                                       chunk-text (rope->str rope (max start-byte offset) end-byte)
