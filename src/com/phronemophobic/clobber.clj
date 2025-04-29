@@ -19,7 +19,6 @@
                            TSQueryCapture
                            TSQueryCursor
                            TSQueryMatch
-                           TSTreeCursor
                            TreeSitterClojure
                            TreeSitterJson
                            TSInputEdit
@@ -111,9 +110,6 @@
 (defonce json-lang (TreeSitterJson.))
 (defonce parser (doto (TSParser.)
               (.setLanguage clojure-lang)))
-
-
-
 
 
 (defrecord StringReader [^String s]
@@ -269,22 +265,85 @@
             (recur iter (- offset src-remaining) to-read)))))
     (String. (.array dest) "utf-8")))
 
+(defn node->str
+  "Extracts the TSNode `node` as a string from the corresponding Rope."
+  [^Rope rope ^TSNode  node]
+  (-> (.sliceBytes rope
+                   (.getStartByte node)
+                   (.getEndByte node))
+      .toString))
+
+(defn find-byte-offset-for-line [^TSTree tree ^Rope rope target-line]
+  (if (zero? target-line)
+    0
+    (let [ ;; find first node past line
+          root-node (.getRootNode tree)
+          cursor (TSTreeCursor. root-node)
+
+          point (TSPoint. target-line 0)
+          ^TSNode
+          node
+          (loop [node root-node]
+            (let [idx (.gotoFirstChildForPoint cursor point)]
+              (if (= -1 idx)
+                ;; loop through children to see if any are past
+                ;; current point
+                (let [child (when (.gotoFirstChild cursor)
+                              (loop []
+                                (let [child (.currentNode cursor)
+                                      child-end-row (-> child
+                                                        .getEndPoint
+                                                        .getRow)]
+                                  (if (>= child-end-row target-line)
+                                    child
+                                    (when (.gotoNextSibling cursor)
+                                      (recur))))))]
+                  (or child node))
+                (recur (.currentNode cursor)))))
+
+          [byte-offset line] (let [start-row (.getRow (.getStartPoint node))]
+                               (if (>= start-row target-line)
+                                 [(.getStartByte node)
+                                  start-row]
+                                 [(.getEndByte node)
+                                  (.getRow (.getEndPoint node))]))
+
+          ;; now backtrack
+          cs (.toCharSequence (.sliceBytes rope 0 byte-offset))
+          bi (doto (BreakIterator/getCharacterInstance)
+               (.setText (.toCharSequence rope)))
+          char-index (loop [char-index (.length cs)
+                            line line]
+                       (let [prev-char-index (.preceding bi char-index)]
+                         (if (= (.charAt cs prev-char-index)
+                                \newline)
+                           (if (= line target-line)
+                             char-index
+                             (recur prev-char-index
+                                    (dec line)))
+                           (recur prev-char-index
+                                  line))))
+          byte-offset (- byte-offset
+                         (-> (.subSequence cs char-index (.length cs))
+                             (.toString)
+                             (.getBytes "utf-8")
+                             alength))]
+      byte-offset)))
+
 (defn highlighted-text [
                         ;;lang highlight-queries
                         ^TSQueryCursor qc
                         ^TSQuery query
                         base-style ^TSTree tree
                         ^Rope
-                        rope]
-  (let [
-        ;; query (TSQuery. lang highlight-queries)
-        ;; qc (TSQueryCursor.)
-
-        ;; _ (.setByteRange qc 35 (alength bs))
+                        rope
+                        start-byte-offset
+                        end-byte-offset]
+  (let [_ (.setByteRange qc start-byte-offset end-byte-offset)
         _ (.exec qc query (.getRootNode tree))
         matches (.getCaptures qc)
         paragraph (loop [p []
-                         offset 0
+                         offset start-byte-offset
                          matches matches]
                     (if (.hasNext matches)
                       (let [match (.next matches)
@@ -659,7 +718,7 @@
   ;; Find enclosing coll literal
   ;; if enclosing coll is on the same line, keep climbing
   ;; 
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -668,6 +727,7 @@
          cursor-column :column} cursor]
     (let [root-node (.getRootNode tree)
           node (.getDescendantForByteRange root-node cursor-byte cursor-byte)
+          ^TSNode
           parent-coll-node
           (loop [node node]
             (if (.isNull node)
@@ -903,7 +963,7 @@
 
 
 (defn editor-paredit-close-coll [editor close-char]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -914,6 +974,7 @@
       editor
       (let [root-node (.getRootNode tree)
             cursor (TSTreeCursor. root-node)
+            ^TSNode
             parent-coll-node
             (loop [parent nil]
               (let [idx (.gotoFirstChildForByte cursor cursor-byte)
@@ -981,7 +1042,7 @@
   (editor-paredit-close-coll editor \}))
 (defn editor-paredit-kill [editor]
   ;; find all siblings on the same line and remove them?
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -999,6 +1060,7 @@
                         :column (+ cursor-column 1)})
         (let [root-node (.getRootNode tree)
               cursor (TSTreeCursor. root-node)
+              ^TSNode
               parent-coll-node
               (loop [parent nil]
                 (let [idx (.gotoFirstChildForByte cursor cursor-byte)
@@ -1271,8 +1333,8 @@
 
   ,)
 (defn cursor-view [^Rope rope para cursor]
-  
-  (let [cursor-char (:char cursor)
+  (let [cursor-char (- (:char cursor)
+                       (get para :char-offset 0))
         cs (.toCharSequence rope)
         {:keys [x y width height] :as rect}
         (cond
@@ -1297,7 +1359,6 @@
                 bi (doto (BreakIterator/getCharacterInstance)
                      (.setText cs))
 
-                cursor-char (:char cursor)
                 next-char (.following bi cursor-char)
                 diff-string (-> (.subSequence cs cursor-char next-char)
                                 .toString)]
@@ -1322,25 +1383,52 @@
                     0.4]
                    width height))))
 
+(defn editor->paragraph [editor]
+  (let [tree (:tree editor)
+        lang (:language editor)
+        ^Rope
+        rope (:rope editor)
+
+        start-line (max 0
+                        (- (-> editor
+                               :cursor
+                               :row)
+                           10))
+        end-line (+ start-line 60)
+        
+        start-byte-offset (find-byte-offset-for-line tree rope start-line)
+        end-byte-offset (find-byte-offset-for-line tree rope end-line)
+        char-offset (-> (.sliceBytes rope 0 start-byte-offset)
+                        .toCharSequence
+                        .length)
+        para (para/paragraph (highlighted-text (TSQueryCursor.)
+                                               (TSQuery. lang
+                                                         (lang->highlight-queries lang))
+                                               (:base-style editor)
+                                               tree
+                                               (:rope editor)
+                                               start-byte-offset
+                                               end-byte-offset)
+                             nil
+                             {:paragraph-style/text-style (:base-style editor)})
+        para (assoc para
+                    :char-offset char-offset
+                    :start-byte-offset start-byte-offset
+                    :end-byte-offset end-byte-offset)]
+    para))
+
 (defn editor-view [editor]
   (when-let [tree (:tree editor)]
     (let [lang (:language editor)
           rope (:rope editor)
-          para (para/paragraph (highlighted-text (TSQueryCursor.)
-                                                 (TSQuery. lang
-                                                           (lang->highlight-queries lang))
-                                                 (:base-style editor)
-                                                 tree
-                                                 (:rope editor))
-                               nil
-                               {:paragraph-style/text-style (:base-style editor)})]
+          para (editor->paragraph editor)]
       [(cursor-view rope para (:cursor editor))
        para])))
 
 
 
 (defui code-editor [{:keys [editor
-                             ^:membrane.component/contextual
+                            ^:membrane.component/contextual
                              focus]}]
   (let [body (editor-view editor)
         focused? (= $editor focus)
@@ -1354,10 +1442,6 @@
                          super? (not (zero? (bit-and ui/SUPER-MASK mods)))
                          shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
                          ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-                     #_(tap> {:key key
-                              :scancode scancode
-                              :action action
-                              :mods mods})
                      (cond
 
                        ctrl?
@@ -1499,10 +1583,47 @@
               :mouse-down
               (fn [_]
                 [[:set $focus $editor]])
-              body)]
+              body)
+
+        structure-state (get extra :structure-state)]
     (ui/vertical-layout
      (ui/label (pr-str (:cursor editor)))
-     body)))
+     #_[(ui/spacer 100 100)
+      (ui/label structure-state)]
+     (ui/on
+      :mouse-move
+      (fn [[mx my]]
+        [[::do-structure {:editor editor
+                          :x mx
+                          :y my
+                          :$structure-state $structure-state}]])
+      body))))
+
+(defeffect ::do-structure [{:keys [editor x y $structure-state]}]
+  (future
+    (when (pos? (.size (:rope editor)))
+      (let [para (editor->paragraph editor)
+            [char-index affinity] (para/glyph-position-at-coordinate para x y)
+            cs (.toCharSequence (:rope editor))
+            bi (doto (BreakIterator/getCharacterInstance)
+                 (.setText cs))
+            char-index (if (zero? affinity)
+                         (.following cs char-index)
+                         char-index)
+            
+            byte-index (let [s (.toString (.subSequence cs 0 char-index))
+                             bs (.getBytes s "utf-8")]
+                         (alength bs))
+
+            rope (:rope editor)
+            tree (:tree editor)
+            root-node (.getRootNode tree)
+            node (.getNamedDescendantForByteRange root-node byte-index byte-index)
+            node-start-byte (.getStartByte node)
+            node-end-byte (.getEndByte node)
+            node-str (.toString (.sliceBytes rope node-start-byte node-end-byte))]
+        (when (not= node-end-byte (.size rope))
+         (dispatch! :set $structure-state node-str))))))
 
 (defui debug [{:keys [editor]}]
   (code-editor {:editor editor}))
@@ -1517,7 +1638,7 @@
 ;; break break break
 ;; break break break
 ;; break break break")
-                                            #_(editor-self-insert-command s)
+                                            (editor-self-insert-command s)
                                             (assoc :cursor {:byte 0
                                                             :char 0
                                                             :point 0
