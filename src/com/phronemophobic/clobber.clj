@@ -385,9 +385,9 @@
                                end-byte
                                matches))
                       ;; else
-                      (let [p (if (< offset (.numBytes rope))
+                      (let [p (if (< offset end-byte-offset)
                                 (conj p
-                                      (rope->str rope offset (.numBytes rope)))
+                                      (rope->str rope offset end-byte-offset))
                                 p)]
                         p)))
         ]
