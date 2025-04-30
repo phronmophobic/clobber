@@ -1713,7 +1713,11 @@
          (dispatch! :set $structure-state node-str))))))
 
 (defui debug [{:keys [editor]}]
-  (code-editor {:editor editor}))
+  (ui/vertical-layout
+   (ui/button "tap>"
+              (fn []
+                [[::tap editor]]))
+   (code-editor {:editor editor})))
 
 
 (comment
