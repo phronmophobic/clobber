@@ -841,6 +841,7 @@
               diff-string (.toString (.subSequence cs char-index cursor-char))
               
               byte-index (- cursor-byte (alength (.getBytes diff-string "utf-8")))
+              point-index (- cursor-point (num-points diff-string))
 
               ;; move forward until newline or non whitespace
               num-spaces (loop [idx char-index]
@@ -854,10 +855,6 @@
 
               ;; measure indent in bytes for now
               indent-diff (- indent num-spaces)
-              _ (dtap {:before (<= cursor-column num-spaces)
-                       :indent indent
-                       :indent-diff indent-diff
-                       :num-spaces num-spaces})
 ]
           (if (zero? indent-diff)
             ;; need to also move cursor, even if
@@ -898,12 +895,12 @@
                   new-cursor (if (<= cursor-column num-spaces) 
                                {:byte (+ byte-index indent)
                                 :char (+ char-index indent)
-                                :point (+ char-index indent)
+                                :point (+ point-index indent)
                                 :row cursor-row
                                 :column indent}
                                {:byte (+ cursor-byte indent-diff)
                                 :char (+ cursor-char indent-diff)
-                                :point (+ cursor-char indent-diff)
+                                :point (+ cursor-point indent-diff)
                                 :row cursor-row
                                 :column (+ cursor-column indent-diff)})]
 
