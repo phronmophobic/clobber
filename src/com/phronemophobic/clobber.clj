@@ -464,6 +464,55 @@
           {:row row
            :column column})))))
 
+(defn editor-update-viewport [editor]
+  (let [row (-> editor :cursor :row)
+        {:keys [start-line num-lines]} (:viewport editor)]
+    (cond
+
+      (< row start-line)
+      (assoc-in editor [:viewport :start-line]
+                (max 0 (- start-line
+                          (quot num-lines 2))))
+
+      (> row (+ start-line num-lines))
+      (assoc-in editor
+                [:viewport :start-line]
+                (+ start-line
+                   (quot num-lines 2)))
+
+      :else editor)))
+
+(defn editor-recenter-top-bottom [editor]
+  (let [row (-> editor :cursor :row)
+        {:keys [start-line num-lines]} (:viewport editor)
+
+        middle (max 0
+                    (- row
+                       (quot num-lines 2)))
+        top row
+        bottom (max 0
+                    (inc (- row num-lines)))]
+
+    (cond
+      ;; middle, go to top
+      (= start-line middle)
+      (assoc-in editor
+                [:viewport :start-line]
+                top)
+
+
+      ;; at top, go to bottom
+      (= start-line top)
+      (assoc-in editor
+                [:viewport :start-line]
+                bottom)
+
+      ;; goto middle
+      :else
+      (assoc-in editor
+                [:viewport :start-line]
+                middle))))
+
 (defn editor-forward-char [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
@@ -474,7 +523,7 @@
          cursor-column :column} cursor
         cs (.toCharSequence rope)
         bi (doto (BreakIterator/getCharacterInstance)
-                   (.setText cs))
+             (.setText cs))
 
         next-char (.following bi cursor-char)]
     (if (= -1 next-char)
@@ -488,12 +537,13 @@
             new-cursor-column (if newline?
                                 0
                                 (inc cursor-column))]
-        (assoc editor
-               :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (+ cursor-char (.length diff-string))
-                        :point (+ cursor-point (num-points diff-string))
-                        :row new-cursor-row
-                        :column new-cursor-column})))))
+        (editor-update-viewport
+         (assoc editor
+                :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
+                         :char (+ cursor-char (.length diff-string))
+                         :point (+ cursor-point (num-points diff-string))
+                         :row new-cursor-row
+                         :column new-cursor-column}))))))
 
 
 
@@ -530,12 +580,13 @@
                                                (.previous bi))))
                                     column))
                                 (dec cursor-column))]
-        (assoc editor
-               :cursor {:byte (- cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (- cursor-char (.length diff-string))
-                        :point (- cursor-point (num-points diff-string))
-                        :row new-cursor-row
-                        :column new-cursor-column})))))
+        (editor-update-viewport
+         (assoc editor
+                :cursor {:byte (- cursor-byte (alength (.getBytes diff-string "utf-8")))
+                         :char (- cursor-char (.length diff-string))
+                         :point (- cursor-point (num-points diff-string))
+                         :row new-cursor-row
+                         :column new-cursor-column}))))))
 
 (defn editor-forward-word [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -561,12 +612,13 @@
             new-cursor-column (if newline?
                                 0
                                 (inc cursor-column))]
-        (assoc editor
-               :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (+ cursor-char (.length diff-string))
-                        :point (+ cursor-point (num-points diff-string))
-                        :row new-cursor-row
-                        :column new-cursor-column})))))
+        (editor-update-viewport
+         (assoc editor
+                :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
+                         :char (+ cursor-char (.length diff-string))
+                         :point (+ cursor-point (num-points diff-string))
+                         :row new-cursor-row
+                         :column new-cursor-column}))))))
 (defn editor-backward-word [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
@@ -591,12 +643,13 @@
             new-cursor-column (if newline?
                                 0
                                 (inc cursor-column))]
-        (assoc editor
-               :cursor {:byte (- cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (- cursor-char (.length diff-string))
-                        :point (- cursor-point (num-points diff-string))
-                        :row new-cursor-row
-                        :column new-cursor-column})))))
+        (editor-update-viewport
+         (assoc editor
+                :cursor {:byte (- cursor-byte (alength (.getBytes diff-string "utf-8")))
+                         :char (- cursor-char (.length diff-string))
+                         :point (- cursor-point (num-points diff-string))
+                         :row new-cursor-row
+                         :column new-cursor-column}))))))
 (defn editor-forward-paragraph [editor]
   editor)
 (defn editor-backward-paragraph [editor]
@@ -625,12 +678,13 @@
                             .toString)
             num-bytes (alength (.getBytes diff-string "utf-8"))
             new-cursor-column (- cursor-column num-bytes)]
-        (assoc editor
-               :cursor {:byte (- cursor-byte num-bytes)
-                        :char (- cursor-char (.length diff-string))
-                        :point (- cursor-point (num-points diff-string))
-                        :row cursor-row
-                        :column new-cursor-column}))))
+        (editor-update-viewport
+         (assoc editor
+                :cursor {:byte (- cursor-byte num-bytes)
+                         :char (- cursor-char (.length diff-string))
+                         :point (- cursor-point (num-points diff-string))
+                         :row cursor-row
+                         :column new-cursor-column})))))
   )
 (defn editor-move-end-of-line [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -663,62 +717,61 @@
                         :row cursor-row
                         :column new-cursor-column})))))
 
-(defn editor-previous-line [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-        
-        {cursor-byte :byte
-         cursor-char :char
-         cursor-point :point
-         cursor-row :row
-         cursor-target-column :target-column
-         cursor-column :column} cursor
+(defn editor-previous-line
+  ([editor]
+   (editor-previous-line editor 1))
+  ([editor n]
+   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+         
+         {cursor-byte :byte
+          cursor-char :char
+          cursor-point :point
+          cursor-row :row
+          cursor-target-column :target-column
+          cursor-column :column} cursor
 
-        target-column (or cursor-target-column
-                          cursor-column)
+         target-column (or cursor-target-column
+                           cursor-column)
 
-        cs (.toCharSequence rope)
-        bi (doto (BreakIterator/getCharacterInstance)
-             (.setText cs))
+         cs (.toCharSequence rope)
+         bi (doto (BreakIterator/getCharacterInstance)
+              (.setText cs))
 
-        ;; find previous newline twice
-        [newline? char-index] (loop [char-index cursor-char
-                                     n 1]
-                                (let [prev-char (.preceding bi char-index)]
-                                  (cond
-                                    (= -1 prev-char) [(< n 1) char-index]
-                                    (= \newline (.charAt cs prev-char)) (if (zero? n)
-                                                                          [true char-index]
-                                                                          (recur prev-char (dec n)))
-                                    :else (recur prev-char n))))
-        
+         ;; find previous newline twice
+         [lines char-index] (loop [char-index cursor-char
+                                   lines 0]
+                              (let [prev-char (.preceding bi char-index)]
+                                (cond
+                                  (= -1 prev-char) [lines char-index]
+                                  (= \newline (.charAt cs prev-char)) (if (= n lines)
+                                                                        [lines char-index]
+                                                                        (recur prev-char (inc lines)))
+                                  :else (recur prev-char lines))))
 
-
-        ;; keep going until target column
-        [char-index column]
-        (loop [char-index char-index
-               column 0]
-          (let [next-char (.following bi char-index)]
-            (cond
-
-              (= -1 next-char) [char-index column]
-              (= \newline (.charAt cs char-index)) [char-index column]
-              (= column target-column) [char-index column]
-              :else (recur next-char (inc column)))))]
-    (if (= char-index cursor-char)
-      editor
-      (let [diff-string (-> (.subSequence cs char-index cursor-char)
-                            .toString)
-            num-bytes (alength (.getBytes diff-string "utf-8"))
-            new-cursor-column (- cursor-column num-bytes)]
-        (assoc editor
-               :cursor {:byte (- cursor-byte num-bytes)
-                        :char (- cursor-char (.length diff-string))
-                        :point (- cursor-point (num-points diff-string))
-                        :row (if newline?
-                               (dec cursor-row)
-                               cursor-row)
-                        :target-column target-column
-                        :column column})))))
+         ;; keep going until target column
+         [char-index column]
+         (loop [char-index char-index
+                column 0]
+           (let [next-char (.following bi char-index)]
+             (cond
+               (= -1 next-char) [char-index column]
+               (= \newline (.charAt cs char-index)) [char-index column]
+               (= column target-column) [char-index column]
+               :else (recur next-char (inc column)))))]
+     (if (= char-index cursor-char)
+       editor
+       (let [diff-string (-> (.subSequence cs char-index cursor-char)
+                             .toString)
+             num-bytes (alength (.getBytes diff-string "utf-8"))
+             new-cursor-row (- cursor-row lines)]
+         (editor-update-viewport
+          (assoc editor
+                 :cursor {:byte (- cursor-byte num-bytes)
+                          :char (- cursor-char (.length diff-string))
+                          :point (- cursor-point (num-points diff-string))
+                          :row new-cursor-row
+                          :target-column target-column
+                          :column column})))))))
 
 (defn editor-indent [editor]
   ;; Find enclosing coll literal
@@ -896,76 +949,92 @@
         
         reader (->RopeReader new-rope)
         new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-    (assoc editor
-           :tree new-tree
-           :cursor {:byte (+ cursor-byte (alength sbytes))
-                    :char (+ cursor-char (.length s))
-                    :point (+ cursor-point (num-points s))
-                    :row new-cursor-row
-                    :column new-cursor-column}
-           :paragraph nil
-           :rope new-rope)))
+    (editor-update-viewport
+     (assoc editor
+            :tree new-tree
+            :cursor {:byte (+ cursor-byte (alength sbytes))
+                     :char (+ cursor-char (.length s))
+                     :point (+ cursor-point (num-points s))
+                     :row new-cursor-row
+                     :column new-cursor-column}
+            :paragraph nil
+            :rope new-rope))))
 
 (defn editor-open-line [editor]
   (-> editor
       (editor-self-insert-command "\n")
       (assoc :cursor (:cursor editor))))
 
-(defn editor-next-line [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-        
-        {cursor-byte :byte
-         cursor-char :char
-         cursor-point :point
-         cursor-row :row
-         cursor-target-column :target-column
-         cursor-column :column} cursor
+(defn editor-next-line
+  ([editor]
+   (editor-next-line editor 1))
+  ([editor n]
+   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+         {cursor-byte :byte
+          cursor-char :char
+          cursor-point :point
+          cursor-row :row
+          cursor-target-column :target-column
+          cursor-column :column} cursor
 
-        target-column (or cursor-target-column
-                          cursor-column)
+         target-column (or cursor-target-column
+                           cursor-column)
 
-        cs (.toCharSequence rope)
-        bi (doto (BreakIterator/getCharacterInstance)
-             (.setText cs))
+         cs (.toCharSequence rope)
+         bi (doto (BreakIterator/getCharacterInstance)
+              (.setText cs))
 
-        ;; find newline
-        [newline? char-index] (loop [char-index cursor-char]
-                                (let [next-char (.following bi char-index)]
-                                  (cond
-                                    ;; last line. don't move
-                                    (= -1 next-char) [false cursor-char]
-                                    (= \newline (.charAt cs char-index)) [true next-char]
-                                    :else (recur next-char))))
+         ;; find newline
+         [lines char-index] (loop [char-index cursor-char
+                                   lines 0]
+                              (let [next-char (.following bi char-index)]
+                                (cond
+                                  ;; last line. don't move
+                                  (= -1 next-char) [lines cursor-char]
+                                  (= \newline (.charAt cs char-index)) (let [lines (inc lines)]
+                                                                         (if (= lines n)
+                                                                           [lines next-char]
+                                                                           (recur next-char lines)))
+                                  :else (recur next-char lines))))
 
-        ;; keep going until target column
-        [char-index column]
-        (if (= cursor-char char-index)
-          [char-index cursor-column]
-          (loop [char-index char-index
-                 column 0]
-            (let [next-char (.following bi char-index)]
-              (cond
+         ;; keep going until target column
+         [char-index column]
+         (if (= cursor-char char-index)
+           [char-index cursor-column]
+           (loop [char-index char-index
+                  column 0]
+             (let [next-char (.following bi char-index)]
+               (cond
 
-                (= -1 next-char) [char-index column]
-                (= \newline (.charAt cs char-index)) [char-index column]
-                (= column target-column) [char-index column]
-                :else (recur next-char (inc column))))))]
-    (if (= char-index cursor-char)
-      editor
-      (let [diff-string (-> (.subSequence cs cursor-char char-index )
-                            .toString)
-            num-bytes (alength (.getBytes diff-string "utf-8"))
-            new-cursor-column (+ cursor-column num-bytes)
-            new-cursor-row (if newline?
-                             (inc cursor-row)
-                             cursor-row)]
-        (assoc editor
-               :cursor {:byte (+ cursor-byte num-bytes)
-                        :char (+ cursor-char (.length diff-string))
-                        :point (+ cursor-point (num-points diff-string))
-                        :row new-cursor-row
-                        :target-column target-column
-                        :column column})))))
+                 (= -1 next-char) [char-index column]
+                 (= \newline (.charAt cs char-index)) [char-index column]
+                 (= column target-column) [char-index column]
+                 :else (recur next-char (inc column))))))]
+     (if (= char-index cursor-char)
+       editor
+       (let [diff-string (-> (.subSequence cs cursor-char char-index )
+                             .toString)
+             num-bytes (alength (.getBytes diff-string "utf-8"))
+             new-cursor-column (+ cursor-column num-bytes)
+             new-cursor-row (+ cursor-row lines)]
+         (editor-update-viewport
+          (assoc editor
+                 :cursor {:byte (+ cursor-byte num-bytes)
+                          :char (+ cursor-char (.length diff-string))
+                          :point (+ cursor-point (num-points diff-string))
+                          :row new-cursor-row
+                          :target-column target-column
+                          :column column})))))))
+
+(defn editor-scroll-down [editor]
+  (let [to-scroll (quot (-> editor :viewport :num-lines)
+                        2)]
+    (editor-next-line editor to-scroll)))
+
+(defn editor-scroll-up [editor]
+  (let [to-scroll (quot (-> editor :viewport :num-lines)
+                        2)]
+    (editor-previous-line editor to-scroll)))
 
 
 (defn editor-paredit-close-coll [editor close-char]
@@ -1006,12 +1075,13 @@
                 new-cursor-column (if (pos? (:row point-offset))
                                     (:column point-offset)
                                     (+ (:column point-offset) cursor-column))]
-            (assoc editor
-                   :cursor {:byte (+ cursor-byte diff-bytes)
-                            :char (+ cursor-char diff-char)
-                            :point (+ cursor-point diff-points)
-                            :row new-cursor-row
-                            :column new-cursor-column})))))))
+            (editor-update-viewport
+             (assoc editor
+                    :cursor {:byte (+ cursor-byte diff-bytes)
+                             :char (+ cursor-char diff-char)
+                             :point (+ cursor-point diff-points)
+                             :row new-cursor-row
+                             :column new-cursor-column}))))))))
 
 (defn editor-cider-eval-defun-at-point [editor]
   editor)
@@ -1203,15 +1273,16 @@
 
               reader (->RopeReader new-rope)
               new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-          (assoc editor
-                 :tree new-tree
-                 :cursor {:byte prev-byte
-                          :char prev
-                          :point prev-point
-                          :row new-cursor-row
-                          :column new-cursor-column}
-                 :paragraph nil
-                 :rope new-rope)))))
+          (editor-update-viewport
+           (assoc editor
+                  :tree new-tree
+                  :cursor {:byte prev-byte
+                           :char prev
+                           :point prev-point
+                           :row new-cursor-row
+                           :column new-cursor-column}
+                  :paragraph nil
+                  :rope new-rope))))))
 
 
 (defn editor-goto-line [editor n]
@@ -1302,6 +1373,8 @@
               :point 0
               :row 0
               :column 0}
+     :viewport {:start-line 0
+                :num-lines 40}
      :paragraph nil
      :base-style #:text-style {:font-families ["Menlo"]
                                :font-size 12}
@@ -1398,12 +1471,8 @@
         ^Rope
         rope (:rope editor)
 
-        start-line (max 0
-                        (- (-> editor
-                               :cursor
-                               :row)
-                           10))
-        end-line (+ start-line 60)
+        {:keys [start-line num-lines]} (:viewport editor)
+        end-line (+ start-line num-lines)
         
         start-byte-offset (find-byte-offset-for-line tree rope start-line)
         end-byte-offset (find-byte-offset-for-line tree rope end-line)
@@ -1478,6 +1547,9 @@
                          \K
                          [[:update $editor #(editor-paredit-kill %)]]
 
+                         \L
+                         [[:update $editor #(editor-recenter-top-bottom %)]]
+
                          \N
                          [[:update $editor #(editor-next-line %)]]
 
@@ -1486,6 +1558,9 @@
 
                          \P
                          [[:update $editor #(editor-previous-line %)]]
+
+                         \V
+                         [[:update $editor #(editor-scroll-down %)]]
 
                          ;; else
                          nil)
@@ -1498,6 +1573,9 @@
                          
                          \F
                          [[:update $editor #(editor-forward-word %)]]
+
+                         \V
+                         [[:update $editor #(editor-scroll-up %)]]
                          
 
                          ;; else
@@ -1652,7 +1730,8 @@
                                                             :char 0
                                                             :point 0
                                                             :row 0
-                                                            :column 0}))})
+                                                            :column 0})
+                                            (editor-update-viewport))})
 
 
   (require '[clj-async-profiler.core :as prof])
