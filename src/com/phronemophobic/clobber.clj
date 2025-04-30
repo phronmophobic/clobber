@@ -1448,22 +1448,24 @@
              (para/get-rects-for-range para cursor-char (+ cursor-char (.length diff-string))
                                        :max
                                        :tight))))
-        _ (assert rect)
-        width (if (zero? width)
-                (-> (para/get-rects-for-range (assoc para :paragraph " ")
-                                              0 1
-                                              :max
-                                              :tight)
-                    first
-                    :width)
-                width)]
-    (ui/translate x y
-                  (ui/filled-rectangle
-                   [0.5725490196078431
-                    0.5725490196078431
-                    0.5725490196078431
-                    0.4]
-                   width height))))
+]
+    (if (not rect)
+      (println "no cursor rect!")
+      (let [width (if (zero? width)
+                    (-> (para/get-rects-for-range (assoc para :paragraph " ")
+                                                  0 1
+                                                  :max
+                                                  :tight)
+                        first
+                        :width)
+                    width)]
+        (ui/translate x y
+                      (ui/filled-rectangle
+                       [0.5725490196078431
+                        0.5725490196078431
+                        0.5725490196078431
+                        0.4]
+                       width height))))))
 
 (defn editor->paragraph [editor]
   (let [tree (:tree editor)
