@@ -1341,6 +1341,9 @@
 (defn cursor-view [^Rope rope para cursor]
   (let [cursor-char (- (:char cursor)
                        (get para :char-offset 0))
+        rope (.sliceBytes rope
+                          (:start-byte-offset para)
+                          (:end-byte-offset para))
         cs (.toCharSequence rope)
         {:keys [x y width height] :as rect}
         (cond
