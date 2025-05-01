@@ -963,10 +963,16 @@
           (if (zero? indent-diff)
             ;; need to also move cursor, even if
             ;; spaces aren't added or removed
-            editor
-            (let [
-                  
-                  new-rope (if (pos? indent-diff)
+            (let [new-cursor (if (<= cursor-column num-spaces) 
+                               {:byte (+ byte-index indent)
+                                :char (+ char-index indent)
+                                :point (+ point-index indent)
+                                :row cursor-row
+                                :column indent}
+                               cursor)]
+              (assoc editor
+                     :cursor new-cursor))
+            (let [new-rope (if (pos? indent-diff)
                              (.concat (.sliceBytes rope 0 byte-index)
                                       (.concat (Rope/from (str/join (repeat indent-diff " ")))
                                                (.sliceBytes rope byte-index (.size rope))))
