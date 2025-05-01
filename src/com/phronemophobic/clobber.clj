@@ -7,7 +7,8 @@
             [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
-            [ropes.core :as ropes])
+            [ropes.core :as ropes]
+            [com.phronemophobic.viscous :as viscous])
   (:import (org.treesitter TSLanguage
                            TSQuery
                            TSParser
@@ -912,6 +913,40 @@
           )
         ))))
 
+(def eval-ns *ns*)
+(defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
+  (future
+    (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+          
+          {cursor-byte :byte
+           cursor-char :char
+           cursor-point :point
+           cursor-row :row
+           cursor-column :column} cursor]
+      (let [root-node (.getRootNode tree)
+            cursor (TSTreeCursor. root-node)
+            idx (.gotoFirstChildForByte cursor cursor-byte)]
+        (if (= -1 idx)
+          editor
+          ;; do indent
+          (try
+            (let [node (.currentNode cursor)
+                  line-number (-> node
+                                  .getEndPoint
+                                  .getRow)]
+              (binding [*ns* eval-ns]
+                (let [form (read-string (node->str rope node))
+                      val (eval form)]
+                  (dispatch! :update $editor
+                             update :line-val
+                             (fn [m]
+                               (let [line-val (get m rope)]
+                                 {rope (assoc line-val line-number (viscous/wrap val))}))))))
+            (catch Exception e
+              (prn e))))))))
+
+
+
 
 
 
@@ -1494,20 +1529,72 @@
                     :end-byte-offset end-byte-offset)]
     para))
 
-(defn editor-view [editor]
+
+(defui line-val-view [{:keys [tree rope para line-val]}]
+  (into []
+        (map (fn [[line val]]
+               (let [byte-start-index (find-byte-offset-for-line tree rope line)
+                     byte-end-index (find-byte-offset-for-line tree rope (inc line))
+                     char-offset (get para :char-offset 0)
+                     rect (first
+                           (para/get-rects-for-range para
+                                                     (- (byte-index->char-index rope byte-start-index)
+                                                        char-offset)
+                                                     (- (byte-index->char-index rope byte-end-index)
+                                                        char-offset)
+                                                     :max
+                                                     :tight))]
+                 (when rect
+                   (let [{:keys [x y width height]} rect
+                         offset 4]
+                     
+                     #_(ui/translate (- (+ x width 10) offset) (- y offset)
+                                   (let [inspector-extra (get extra [::inspector [line val]])]
+                                     (ui/vertical-layout
+                                      (viscous/inspector
+                                       {:obj val
+                                        :width (get inspector-extra :width 40)
+                                        :height (get inspector-extra :height 1)
+                                        :show-context? (get inspector-extra :show-context?)
+                                        :extra inspector-extra})))
+                                   #_(-> (make-editor)
+                                       (editor-self-insert-command
+                                        "=> ")
+                                       (editor-self-insert-command
+                                        (pr-str val))
+                                       (editor->paragraph)))
+                     (ui/translate (+ x width 10)  y 
+                                   (-> (make-editor)
+                                       (editor-self-insert-command
+                                        "=> ")
+                                       (editor-self-insert-command
+                                        (pr-str @val))
+                                       (editor->paragraph))))))))
+        line-val))
+
+
+(defui editor-view [{:keys [editor]}]
   (when-let [tree (:tree editor)]
     (let [lang (:language editor)
           rope (:rope editor)
-          para (editor->paragraph editor)]
+          para (editor->paragraph editor)
+          line-vals (when-let [line-val (-> editor :line-val (get rope))]
+                      (line-val-view
+                       {:tree tree
+                        :rope rope
+                        :para para
+                        :line-val line-val}))]
       [(cursor-view rope para (:cursor editor))
-       para])))
+       para
+       line-vals])))
 
 
 
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
-                             focus]}]
-  (let [body (editor-view editor)
+                             focus]
+                     :as this}]
+  (let [body (editor-view {:editor editor})
         focused? (= $editor focus)
         body (if focused?
                (ui/on
@@ -1520,6 +1607,14 @@
                          shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
                          ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
                      (cond
+
+                       (and ctrl?
+                            alt?)
+                       (case (char key)
+                         \X
+                         [[::editor-eval-top-form this]]
+
+                         nil)
 
                        ctrl?
                        (case (char key)
