@@ -1478,10 +1478,27 @@
 
 (defn editor-goto-line [editor n]
   editor)
+
 (defn editor-end-of-buffer [editor]
-  editor)
+  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        ;; could probably be more efficient
+        {:keys [row column]} (count-points (.toString rope))]
+    (editor-update-viewport
+     (assoc editor
+            :cursor {:byte (.numBytes rope)
+                     :char (-> rope .toCharSequence .length)
+                     :point (-> rope .size)
+                     :row row
+                     :column column}))))
+
 (defn editor-beginning-of-buffer [editor]
-  editor)
+  (editor-update-viewport
+   (assoc editor
+          :cursor {:byte 0
+                   :char 0
+                   :point 0
+                   :row 0
+                   :column 0})))
 (defn editor-isearch-forward [editor]
   editor)
 (defn editor-kill-ring-save [editor]
@@ -1829,11 +1846,18 @@
 
                          \V
                          [[:update $editor #(editor-scroll-up %)]]
+
                          
+                         \,
+                         (when shift?
+                           [[:update $editor #(editor-beginning-of-buffer %)]])
+
+                         \.
+                         (when shift?
+                           [[:update $editor #(editor-end-of-buffer %)]])
 
                          ;; else
-                         nil
-                         )
+                         nil)
 
                        :else
                        nil
