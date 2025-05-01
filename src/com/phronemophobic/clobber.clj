@@ -1935,7 +1935,7 @@
                       [[:update $editor #(editor-backward-char %)]]
 
                       :else
-                      (do (tap> s)
+                      (do #_(tap> s)
                           nil)))
                   )
                 body)
