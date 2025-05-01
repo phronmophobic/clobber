@@ -1929,8 +1929,47 @@
     2 (tap> (vec args))))
 
 
+(defn ^:private query
+  "Simple helper for testing tree sitter queries."
+  [s query]
+  (let [rope (Rope/from s)
+        qc (TSQueryCursor.)
+        q (TSQuery. clojure-lang query)
+        ^TSTree
+        tree (parse clojure-lang s)
+        _ (.exec qc q (.getRootNode tree))
+        matches (.getCaptures qc)]
+    (loop [ret []
+           ]
+      (if (.hasNext matches)
+        (let [match (.next matches)
+              ^TSQueryCapture
+              capture (aget (.getCaptures match) (.getCaptureIndex match))
+              capture-name (.getCaptureNameForId q (.getIndex capture))
+              node (.getNode capture)
+
+              match-info {:name capture-name
+                          :s (node->str rope node)}]
+          (recur (conj ret match-info)))
+        ;; else
+        ret))))
+
+(comment
+  (query "(defn foo [] )"
+           "((list_lit
+.
+(sym_lit) @call_name
+)
 
 
 
+        ) @funcall
+
+(vec_lit) @vec
+
+   ")
+  (first (:arglists (meta #'defn )))
+  [name doc-string? attr-map? [params*] prepost-map? body]
+  )
 
 
