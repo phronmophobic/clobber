@@ -1245,49 +1245,120 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor]
-    (if (= cursor-byte (.size rope))
-      editor
-      (if false ;; (= close-char (.nth rope cursor-point))
-        (assoc editor
-               :cursor {:byte (+ cursor-byte 1)
-                        :char (+ cursor-char 1)
-                        :point (+ cursor-point 1)
-                        :row cursor-row
-                        :column (+ cursor-column 1)})
-        (let [root-node (.getRootNode tree)
-              cursor (TSTreeCursor. root-node)
-              ^TSNode
-              parent-coll-node
-              (loop [parent nil]
-                (let [idx (.gotoFirstChildForByte cursor cursor-byte)
-                      node (.currentNode cursor)]
-                  (if (or (= -1 idx)
-                          (> (.getStartByte node)
-                             cursor-byte))
-                    parent
-                    (if (contains? coll-node-types (.getType node))
-                      (recur node)
-                      (recur parent)))))]
-          (if (not parent-coll-node)
-            editor
-            (let [end-byte (.getEndByte parent-coll-node)
-                  diff-rope (.sliceBytes rope cursor-byte end-byte)
-                  diff-string (.toString diff-rope)
-                  diff-bytes (- end-byte cursor-byte)
-                  diff-char (.length diff-string)
-                  diff-points (.size diff-rope)
-                  point-offset (count-points diff-string)
+    (cond
+      (>= (:byte cursor) (.size rope)) editor
 
-                  new-cursor-row (+ cursor-row (:row point-offset))
-                  new-cursor-column (if (pos? (:row point-offset))
-                                      (:column point-offset)
-                                      (+ (:column point-offset) cursor-column))]
-              (assoc editor
-                     :cursor {:byte (+ cursor-byte diff-bytes)
-                              :char (+ cursor-char diff-char)
-                              :point (+ cursor-point diff-points)
-                              :row new-cursor-row
-                              :column new-cursor-column}))))))))
+      ;; check if we're at the end of line
+      (= \newline
+         (-> rope .toCharSequence (.charAt cursor-char)))
+      (editor-paredit-forward-delete editor)
+
+      :else
+      (let [root-node (.getRootNode tree)
+            cursor (TSTreeCursor. root-node)
+            ^TSNode
+            parent-coll-node
+            (loop [parent root-node]
+              (let [idx (.gotoFirstChildForByte cursor cursor-byte)
+                    node (.currentNode cursor)]
+                (if (or (= -1 idx)
+                        (>= (.getStartByte node)
+                            cursor-byte))
+                  parent
+                  (if (contains? coll-node-types (.getType node))
+                    (recur node)
+                    (recur parent)))))
+
+            end-byte-offset
+            ;; if parent ends on current line
+            ;; just kill everything to the end of the parent
+            (if (= (-> parent-coll-node .getEndPoint .getRow)
+                   cursor-row)
+              (-> parent-coll-node .getEndByte dec)
+
+              ;; else
+              ;; if there's an element that
+              ;; ends past the current line
+              ;; kill everything to the end of that node
+              ;; if all elements end before the end of the line
+              ;; just kill to the end of the line
+              (let [cursor (doto (TSTreeCursor. parent-coll-node)
+                             (.gotoFirstChild))
+
+                    ^TSNode
+                    last-node-spanning-a-line
+                    (loop []
+                      (let [current-node (.currentNode cursor)]
+                        (cond
+                          (.isNull current-node) nil
+
+                          ;; this node starts before cursor
+                          (< (-> current-node
+                                 .getStartByte)
+                             cursor-byte)
+                          (when (.gotoNextSibling cursor)
+                            (recur))
+
+                          ;; this node starts on a subsequent
+                          (> (-> current-node
+                                 .getStartPoint
+                                 .getRow)
+                             cursor-row)
+                          nil
+
+                          ;; this node ends on a subsequent line
+                          (> (-> current-node
+                                 .getEndPoint
+                                 .getRow)
+                             cursor-row)
+                          current-node
+
+                          :else (when (.gotoNextSibling cursor)
+                                  (recur)))))]
+                (if last-node-spanning-a-line
+                  (-> last-node-spanning-a-line
+                      .getEndByte)
+                  ;; just find the end of line
+                  (let [cs (.toCharSequence rope)
+                        bi (doto (BreakIterator/getCharacterInstance)
+                             (.setText cs))
+
+                        char-index (loop [char-index cursor-char]
+                                     (let [next-char (.following bi char-index)]
+                                       (cond
+                                         (= -1 next-char) char-index
+                                         (= \newline (.charAt cs char-index)) char-index
+                                         :else (recur next-char))))]
+                    (if (= char-index cursor-char)
+                      cursor-byte
+                      (let [diff-string (-> (.subSequence cs cursor-char char-index )
+                                            .toString)
+                            num-bytes (alength (.getBytes diff-string "utf-8"))]
+                        (+ cursor-byte num-bytes)))))))]
+        (if (= end-byte-offset cursor-byte)
+          editor
+          (let [new-tree (when-let [^TSTree
+                                    tree tree]
+                           (let [tree (.copy tree)]
+                             (.edit tree (TSInputEdit. cursor-byte end-byte-offset cursor-byte
+                                                       (TSPoint. cursor-row cursor-column)
+                                                       (TSPoint. cursor-row (+ cursor-column
+                                                                               (- end-byte-offset
+                                                                                  cursor-byte)))
+                                                       (TSPoint. cursor-row cursor-column)))
+                             tree))
+
+                new-rope (.concat (.sliceBytes rope 0 cursor-byte)
+                                  (.sliceBytes rope end-byte-offset (.numBytes rope)))
+
+                reader (->RopeReader new-rope)
+                new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
+
+            (assoc editor
+                   :tree new-tree
+                   :paragraph nil
+                   :rope new-rope)))))))
+
 (defn editor-set-mark-command [editor]
   editor)
 (defn editor-kill-region [editor]
