@@ -410,6 +410,8 @@
             p)]
     [p (max offset end-byte)]))
 
+(def builtin?
+  #{"def" "defn" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
 (defn highlighted-text [
                         ;;lang highlight-queries
                         ^TSQueryCursor qc
@@ -437,10 +439,10 @@
                             (if (and (not (.isNull first-child))
                                      (= "sym_lit" (.getType first-child)))
                               (let [s (node->str rope first-child)]
-                                (if (#{"def" "defn" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} s)
+                                (if (builtin? s)
                                   (let [[p end-byte] (add-node-to-paragraph rope p offset end-byte-offset first-child "defn")]
                                     (recur p end-byte))
-                                    (recur p offset)))
+                                  (recur p offset)))
                               ;; else
                               (recur p offset)))
                           ;; else
