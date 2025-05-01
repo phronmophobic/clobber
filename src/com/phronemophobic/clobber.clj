@@ -1216,6 +1216,23 @@
                              :row new-cursor-row
                              :column new-cursor-column}))))))))
 
+(defn editor-paredit-open-coll [editor open-char close-char]
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        cs (.toCharSequence rope)
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor]
+    (if (or (= (.numBytes rope)
+               cursor-byte)
+            (not= (.charAt cs cursor-char)
+                  open-char))
+      (-> editor
+          (editor-self-insert-command (str open-char close-char))
+          (editor-backward-char))
+      (editor-forward-char editor))))
+
 (defn editor-cider-eval-defun-at-point [editor]
   editor)
 (defn editor-cider-eval-last-sexp [editor]
@@ -1226,31 +1243,27 @@
   editor)
 
 (defn editor-paredit-doublequote [editor]
-  ;; need to check if inside string
-  (-> editor
-      (editor-self-insert-command "\"\"")
-      (editor-backward-char)))
+  (editor-paredit-open-coll editor \" \"))
+
 (defn editor-paredit-open-square [editor]
-  ;; need to check if inside string
-  (-> editor
-      (editor-self-insert-command "[]")
-      (editor-backward-char)))
+  (editor-paredit-open-coll editor \[ \]))
+
 (defn editor-paredit-close-square [editor]
   (editor-paredit-close-coll editor \]))
+
 (defn editor-paredit-open-round [editor]
-  (-> editor
-      (editor-self-insert-command "()")
-      (editor-backward-char)))
+  (editor-paredit-open-coll editor \( \)))
+
 (defn editor-paredit-close-round [editor]
   (editor-paredit-close-coll editor \)))
+
 (defn editor-paredit-open-curly [editor]
-  (-> editor
-      (editor-self-insert-command "{}")
-      (editor-backward-char)))
+  (editor-paredit-open-coll editor \{ \}))
+
 (defn editor-paredit-close-curly [editor]
   (editor-paredit-close-coll editor \}))
 
-
+(declare editor-paredit-forward-delete)
 (defn editor-paredit-kill [editor]
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
