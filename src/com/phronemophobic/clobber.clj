@@ -210,7 +210,45 @@
 
 (def highlight-queries
    ;; tree-sitter-clojure/queries/highlights.scm
-  ";; Literals\n\n(num_lit) @number\n\n[\n  (char_lit)\n  (str_lit)\n] @string\n\n[\n (bool_lit)\n (nil_lit)\n] @constant.builtin\n\n(kwd_lit) @constant\n\n;; Comments\n\n(comment) @comment\n\n;; Treat quasiquotation as operators for the purpose of highlighting.\n\n[\n \"'\"\n \"`\"\n \"~\"\n \"@\"\n \"~@\"\n] @operator\n"
+  "
+
+  (list_lit) @list
+
+;; Literals
+
+(num_lit) @number
+
+[
+  (char_lit)
+  (str_lit)
+] @string
+
+[
+ (bool_lit)
+ (nil_lit)
+] @constant.builtin
+
+(kwd_lit) @constant
+
+;; Comments
+
+(comment) @comment
+
+
+
+;; Treat quasiquotation as operators for the purpose of highlighting.
+
+[
+ \"'\"
+ \"`\"
+ \"~\"
+ \"@\"
+ \"~@\"
+] @operator
+"
+
+
+
   )
 
 (def json-highlight-queries
@@ -224,6 +262,7 @@
    "constant.builtin" [0.20000000298023224 0.0 0.6666666865348816]
    "constant" [0.46666666865348816 0.0 0.5333333611488342]
    "comment" [0.6666666865348816 0.3333333432674408 0.0]
+   "defn" [0.7019607843137254 0.050980392156862744 1.0]
 
    ;; json
    "string.special.key" [0.46666666865348816 0.0 0.5333333611488342]
@@ -273,6 +312,13 @@
                    (.getStartByte node)
                    (.getEndByte node))
       .toString))
+
+(defn byte-index->char-index [^Rope rope byte-index]
+  (let [rope (.sliceBytes rope 0 byte-index)
+        cs (.toCharSequence rope)]
+    (.length cs)))
+
+
 
 (defn find-byte-offset-for-line [^TSTree tree ^Rope rope target-line]
   (if (zero? target-line)
@@ -337,6 +383,33 @@
 
 
 
+(defn ^:private add-node-to-paragraph [rope p offset end-byte-offset ^TSNode node style]
+  (let [;; add any unmatched text as unadorned
+        start-byte (min end-byte-offset (.getStartByte node))
+        end-byte (min end-byte-offset (.getEndByte node))
+
+        p (if (> start-byte offset)
+            (conj p
+                  (rope->str rope offset start-byte))
+            p)
+
+        ;; add matched text
+        ;; ; matches can overlap
+        p (if (and (> end-byte offset)
+                   (> end-byte start-byte))
+            (let [color (get text-colors style)
+                  chunk-text (rope->str rope (max start-byte offset) end-byte)
+                  chunk (if color
+                          {:text chunk-text
+                           :style (assoc base-style
+                                         :text-style/color color)}
+                          chunk-text)
+                  p (conj p chunk)]
+              p)
+            ;; else already covered by previous overlapping match
+            p)]
+    [p (max offset end-byte)]))
+
 (defn highlighted-text [
                         ;;lang highlight-queries
                         ^TSQueryCursor qc
@@ -350,41 +423,55 @@
         _ (.exec qc query (.getRootNode tree))
         matches (.getCaptures qc)
         paragraph (loop [p []
-                         offset start-byte-offset
-                         matches matches]
+                         offset start-byte-offset]
                     (if (.hasNext matches)
                       (let [match (.next matches)
                             ^TSQueryCapture
                             capture (aget (.getCaptures match) (.getCaptureIndex match))
                             capture-name (.getCaptureNameForId query (.getIndex capture))
-                            node (.getNode capture)
+                            node (.getNode capture)]
+                        (if (= capture-name "list")
+                          ;; (recur p offset)
+                          (let [ ;; check if the first child is def or defn
+                                first-child (.getNamedChild node 0)]
+                            (if (and (not (.isNull first-child))
+                                     (= "sym_lit" (.getType first-child)))
+                              (let [s (node->str rope first-child)]
+                                (if (#{"def" "defn" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod"} s)
+                                  (let [[p end-byte] (add-node-to-paragraph rope p offset end-byte-offset first-child "defn")]
+                                    (recur p end-byte))
+                                    (recur p offset)))
+                              ;; else
+                              (recur p offset)))
+                          ;; else
+                          (let [
 
-                            ;; add any unmatched text as unadorned
-                            start-byte (.getStartByte node)
-                            end-byte (.getEndByte node)
+                                ;; add any unmatched text as unadorned
+                                start-byte (min end-byte-offset (.getStartByte node))
+                                end-byte (min end-byte-offset (.getEndByte node))
 
-                            p (if (> start-byte offset)
-                                (conj p
-                                      (rope->str rope offset start-byte))
-                                p)
+                                p (if (> start-byte offset)
+                                    (conj p
+                                          (rope->str rope offset start-byte))
+                                    p)
 
-                            ;; add matched text
-                            ;; ; matches can overlap
-                            p (if (> end-byte offset)
-                                (let [color (get text-colors capture-name)
-                                      chunk-text (rope->str rope (max start-byte offset) end-byte)
-                                      chunk (if color
-                                              {:text chunk-text
-                                               :style (assoc base-style
-                                                             :text-style/color color)}
-                                              chunk-text)
-                                      p (conj p chunk)]
-                                  p)
-                                ;; else already covered by previous overlapping match
-                                p)]
-                        (recur p
-                               end-byte
-                               matches))
+                                ;; add matched text
+                                ;; ; matches can overlap
+                                p (if (> end-byte offset)
+                                    (let [color (get text-colors capture-name)
+                                          chunk-text (rope->str rope (max start-byte offset) end-byte)
+                                          chunk (if color
+                                                  {:text chunk-text
+                                                   :style (assoc base-style
+                                                                 :text-style/color color)}
+                                                  chunk-text)
+                                          p (conj p chunk)]
+                                      p)
+                                    ;; else already covered by previous overlapping match
+                                    p)]
+                            (recur p
+                                   end-byte
+                                   ))))
                       ;; else
                       (let [p (if (< offset end-byte-offset)
                                 (conj p
@@ -1148,8 +1235,9 @@
       (editor-backward-char)))
 (defn editor-paredit-close-curly [editor]
   (editor-paredit-close-coll editor \}))
+
+
 (defn editor-paredit-kill [editor]
-  ;; find all siblings on the same line and remove them?
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
