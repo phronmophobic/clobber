@@ -1957,51 +1957,67 @@
                                      100 100)
                 body])
 
-        body (ui/on
+        body (ui/wrap-on
               :mouse-down
-              (fn [_]
-                [[:set $focus $editor]])
+              (fn [handler mpos]
+                (let [intents (handler mpos)]
+                  (cons [:set $focus $editor]
+                        intents)))
               body)
 
         structure-state (get extra :structure-state)]
     (ui/vertical-layout
      (ui/label (pr-str (:cursor editor)))
-     #_[(ui/spacer 100 100)
+     [(ui/spacer 100 100)
       (ui/label structure-state)]
-     (ui/on
+     (ui/wrap-on
       :mouse-move
-      (fn [[mx my]]
-        [[::do-structure {:editor editor
-                          :x mx
-                          :y my
-                          :$structure-state $structure-state}]])
+      (fn [handler [mx my]]
+        (let [intents (handler [mx my])]
+          (if (seq intents)
+            intents
+            [[::do-structure {:editor editor
+                              :x mx
+                              :y my
+                              :$structure-state $structure-state}]])))
       body))))
 
 (defeffect ::do-structure [{:keys [editor x y $structure-state]}]
   (future
-    (when (pos? (.size (:rope editor)))
-      (let [para (editor->paragraph editor)
-            [char-index affinity] (para/glyph-position-at-coordinate para x y)
-            cs (.toCharSequence (:rope editor))
-            bi (doto (BreakIterator/getCharacterInstance)
-                 (.setText cs))
-            char-index (if (zero? affinity)
-                         (.following cs char-index)
-                         char-index)
-            
-            byte-index (let [s (.toString (.subSequence cs 0 char-index))
-                             bs (.getBytes s "utf-8")]
-                         (alength bs))
+    (let [^Rope
+          rope (:rope editor)]
+      (when (pos? (.size rope))
+        (let [para (editor->paragraph editor)
+              [char-index affinity] (para/glyph-position-at-coordinate para x y)
+              rope (.sliceBytes rope
+                                (:start-byte-offset para)
+                                (:end-byte-offset para))
+              cs (.toCharSequence rope)
 
-            rope (:rope editor)
-            tree (:tree editor)
-            root-node (.getRootNode tree)
-            node (.getNamedDescendantForByteRange root-node byte-index byte-index)
-            node-start-byte (.getStartByte node)
-            node-end-byte (.getEndByte node)
-            node-str (.toString (.sliceBytes rope node-start-byte node-end-byte))]
-        (when (not= node-end-byte (.size rope))
-         (dispatch! :set $structure-state node-str))))))
+              bi (doto (BreakIterator/getCharacterInstance)
+                   (.setText cs))
+              char-index (if (zero? affinity)
+                           (.following bi char-index)
+                           char-index)
+              
+              byte-index (let [s (.toString (.subSequence cs 0 char-index))
+                               bs (.getBytes s "utf-8")]
+                           (alength bs))
+              byte-index (+ byte-index (:start-byte-offset para))
+
+              ^TSTree
+              tree (:tree editor)
+              root-node (.getRootNode tree)
+              node (.getNamedDescendantForByteRange root-node byte-index byte-index)
+              node-str (node->str (:rope editor) node)
+              node-str (str/join
+                        "\n"
+                        (cons
+                         (.getType node)
+                         (eduction
+                          (take 4)
+                          (str/split-lines node-str))))]
+          (dispatch! :set $structure-state node-str))))))
 
 (defui debug [{:keys [editor]}]
   (ui/vertical-layout
