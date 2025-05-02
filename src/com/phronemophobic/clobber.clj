@@ -2017,35 +2017,40 @@
                  (let [byte-start-index (find-byte-offset-for-line tree rope line)
                        byte-end-index (find-byte-offset-for-line tree rope (inc line))
                        char-offset (get para :char-offset 0)
-                       rect (first
-                             (para/get-rects-for-range para
+                       rects (para/get-rects-for-range para
                                                        (- (byte-index->char-index rope byte-start-index)
                                                           char-offset)
                                                        (- (byte-index->char-index rope byte-end-index)
                                                           char-offset)
                                                        :max
-                                                       :tight))]
-                   (when rect
-                     (let [{:keys [x y width height]} rect
+                                                       :tight)]
+                   (when (seq rects)
+                     (let [x (transduce (map (fn [{:keys [x width] :as r}]
+                                           (+ x width)))
+                                        max
+                                        0
+                                        rects)
+                           y (transduce (map :y) max (-> rects first :y) (rest rects))
+
                            offset 4]
-                       (if viscous?
-                         (ui/translate (- (+ x width 10) offset) (- y offset)
-                                       (let [inspector-extra (get extra [::inspector [line val]])]
-                                         (ui/vertical-layout
-                                          (viscous/inspector
-                                           {:obj val
-                                            :width (get inspector-extra :width 40)
-                                            :height (get inspector-extra :height 1)
-                                            :show-context? (get inspector-extra :show-context?)
-                                            :extra inspector-extra}))))
-                         (ui/translate (+ x width 10)  y 
-                                       (-> (make-editor)
-                                           (assoc :base-style base-style)
-                                           (editor-self-insert-command
-                                            "=> ")
-                                           (editor-self-insert-command
-                                            (pr-str @val))
-                                           (editor->paragraph)))))))))
+                         (if viscous?
+                           (ui/translate (- (+ x 10) offset) (- y offset)
+                                         (let [inspector-extra (get extra [::inspector [line val]])]
+                                           (ui/vertical-layout
+                                            (viscous/inspector
+                                             {:obj val
+                                              :width (get inspector-extra :width 40)
+                                              :height (get inspector-extra :height 1)
+                                              :show-context? (get inspector-extra :show-context?)
+                                              :extra inspector-extra}))))
+                           (ui/translate (+ x 10)  y 
+                                         (-> (make-editor)
+                                             (assoc :base-style base-style)
+                                             (editor-self-insert-command
+                                              "=> ")
+                                             (editor-self-insert-command
+                                              (pr-str @val))
+                                             (editor->paragraph)))))))))
           line-val)))
 
 
