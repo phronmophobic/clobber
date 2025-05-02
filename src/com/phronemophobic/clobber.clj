@@ -521,7 +521,7 @@
     [p (max offset end-byte)]))
 
 (def builtin?
-  #{"def" "defn" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
+  #{"def" "defn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
 (defn highlighted-text [
                         ;;lang highlight-queries
                         ^TSQueryCursor qc
