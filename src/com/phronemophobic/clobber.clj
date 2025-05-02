@@ -107,7 +107,9 @@
    '(do "asdf"
         1 2 #{}
         (def foo 42)))
-  (slurp (io/resource "com/phronemophobic/easel.clj")))
+  (slurp
+   #_(io/resource "com/phronemophobic/easel.clj")
+   (io/resource "com/phronemophobic/clobber.clj")))
 
 (defonce clojure-lang (TreeSitterClojure.))
 (defonce json-lang (TreeSitterJson.))
@@ -2510,9 +2512,37 @@
                    (assoc-in
                     [:base-style :text-style/font-size] (or font-size 12)))]
     (ui/flex-layout
-     [(ant/button {:text  "tap>"
-                   :on-click (fn []
-                               [[::tap editor]])})
+     [(ui/flex-layout
+       [(ant/button {:text  "tap>"
+                     :on-click (fn []
+                                 [[::tap editor]])})
+        (ant/button {:text  "clear"
+                     :on-click (fn []
+                                 [[:set $editor
+                                   (-> (make-editor clojure-lang)
+                                       (assoc :cursor {:byte 0
+                                                       :char 0
+                                                       :point 0
+                                                       :row 0
+                                                       :column 0})
+                                       (editor-update-viewport))
+                                   ]])})
+        (ant/button {:text  "load"
+                     :on-click (fn []
+                                 [[:set $editor
+                                   (-> (make-editor clojure-lang)
+                                       (editor-self-insert-command
+                                        (slurp (io/resource "com/phronemophobic/clobber.clj")))
+                                       (assoc :cursor {:byte 0
+                                                       :char 0
+                                                       :point 0
+                                                       :row 0
+                                                       :column 0})
+                                       (editor-update-viewport))
+                                   ]])})]
+       {:direction :row
+        :gap 4
+        :align :center})
       (ant/radio-bar
        {:options (into []
                        (map (fn [s]
@@ -2566,7 +2596,8 @@
 ;; break break break
 ;; break break break
 ;; break break break")
-                                            (editor-self-insert-command s)
+                                            (editor-self-insert-command
+                                             (slurp (io/resource "com/phronemophobic/clobber.clj")))
                                             (assoc :cursor {:byte 0
                                                             :char 0
                                                             :point 0
@@ -2705,23 +2736,5 @@
            (recur (conj ret match-info)))
          ;; else
          ret)))))
-
-(comment
-  (query "(defn foo [] )"
-           "((list_lit
-.
-(sym_lit) @call_name
-)
-
-
-
-        ) @funcall
-
-(vec_lit) @vec
-
-   ")
-  (first (:arglists (meta #'defn )))
-  [name doc-string? attr-map? [params*] prepost-map? body]
-  )
 
 
