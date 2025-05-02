@@ -2232,15 +2232,7 @@
                         [[::init-search-forward this]]
                         (handler key scancode action mods)))))
                 body))]
-    (ui/vertical-layout
-     body
-     (let [inspector-extra (get extra ::search-inspector)]
-       (viscous/inspector
-        {:obj (viscous/wrap search-state)
-         :width (get inspector-extra :width 40)
-         :height (get inspector-extra :height 1)
-         :show-context? (get inspector-extra :show-context?)
-         :extra inspector-extra})))))
+    body))
 
 
 (defui code-editor [{:keys [editor
