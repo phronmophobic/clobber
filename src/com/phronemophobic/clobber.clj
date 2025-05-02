@@ -1015,7 +1015,6 @@
                                 :point (+ cursor-point indent-diff)
                                 :row cursor-row
                                 :column (+ cursor-column indent-diff)})]
-
               (assoc editor
                      :tree new-tree
                      :paragraph nil
@@ -1283,7 +1282,7 @@
          cursor-row :row
          cursor-column :column} cursor]
     (cond
-      (>= (:byte cursor) (.size rope)) editor
+      (>= (:point cursor) (.size rope)) editor
 
       ;; check if we're at the end of line
       (= \newline
@@ -1403,9 +1402,10 @@
 (defn editor-paredit-backward-delete [editor]
   editor)
 
+
 (defn editor-paredit-forward-delete [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]
-    (if (>= (:byte cursor) (.size rope))
+    (if (>= (:point cursor) (.size rope))
       editor
       (let [{cursor-byte :byte
              cursor-char :char
