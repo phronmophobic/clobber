@@ -2056,7 +2056,7 @@
 
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
-                             focus]
+                            focus]
                      :as this}]
   (let [body (editor-view {:editor editor})
         focused? (= $editor focus)
