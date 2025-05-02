@@ -2069,6 +2069,177 @@
        line-vals])))
 
 
+(defeffect ::init-search-forward [{:keys [$editor]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (assoc editor
+                      ::search {:initial-cursor (:cursor editor)
+                                :initial-rope (:rope editor)}))))
+
+(defeffect ::cancel-search-forward [{:keys [$editor]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (let [initial-cursor (-> editor ::search :initial-cursor)
+                     editor (if initial-cursor
+                              (assoc editor :cursor initial-cursor)
+                              editor)]
+                 (dissoc editor ::search)))))
+
+(defeffect ::finish-search-forward [{:keys [$editor]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (dissoc editor ::search))))
+
+(defn editor-search-forward [editor query]
+  (let [search-state (::search editor)
+        _ (assert search-state)
+        
+        search-cursor (or (:cursor search-state)
+                          (:initial-cursor search-state))
+        search-index (:char search-cursor)
+        regexp (Pattern/compile query
+                                (bit-or
+                                 Pattern/CASE_INSENSITIVE
+                                 Pattern/LITERAL))
+        cs (.toCharSequence (:rope editor))
+        matcher (.matcher regexp cs)
+
+        match (if (.find matcher search-index)
+                (.start matcher)
+                (when (.find matcher 0)
+                  (.start matcher)))]
+    (if match
+      (let [ ;; calculate new cursor
+            s (-> (.subSequence cs 0 match)
+                  .toString)
+
+            {:keys [row column]} (count-points s)
+
+            cursor {:byte (alength (.getBytes s "utf-8"))
+                    :char (.length s)
+                    :point (num-points s)
+                    :row row
+                    :column column}]
+        (-> editor
+            (assoc-in [::search :query] query)
+            (assoc :cursor cursor)
+            (editor-update-viewport)))
+      (assoc-in editor
+                [::search :query] query))))
+
+(defn editor-repeat-search-forward [editor]
+  (let [search-state (::search editor)
+        _ (assert search-state)
+
+        query (:query search-state)
+        
+        search-cursor (:cursor editor)
+        search-index (:char search-cursor)
+        regexp (Pattern/compile query
+                                (bit-or
+                                 Pattern/CASE_INSENSITIVE
+                                 Pattern/LITERAL))
+        cs (.toCharSequence (:rope editor))
+        matcher (.matcher regexp cs)
+
+        match (if (.find matcher search-index)
+                (.start matcher)
+                (when (.find matcher 0)
+                  (.start matcher)))
+        ;; now do it again
+        match (when match
+                (if (.find matcher)
+                  (.start matcher)
+                  (when (.find matcher 0)
+                    (.start matcher))))]
+    (if match
+      (let [ ;; calculate new cursor
+            s (-> (.subSequence cs 0 match)
+                  .toString)
+
+            {:keys [row column]} (count-points s)
+
+            cursor {:byte (alength (.getBytes s "utf-8"))
+                    :char (.length s)
+                    :point (num-points s)
+                    :row row
+                    :column column}]
+        (-> editor
+            (assoc-in [::search :query] query)
+            (assoc :cursor cursor)
+            (editor-update-viewport)))
+      (assoc-in editor
+                [::search :query] query))))
+
+(defeffect ::append-search-forward [{:keys [$editor s]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (let [query (str (-> editor
+                                    ::search
+                                    :query)
+                                s)]
+                 (editor-search-forward editor query)))))
+
+(defeffect ::repeat-search-forward [{:keys [$editor s]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (editor-repeat-search-forward editor))))
+
+(defui wrap-search [{:keys [editor body]
+                     :as this}]
+  (let [search-state (::search editor)
+        body (if search-state
+               (ui/on
+                :key-event
+                (fn [key scancode action mods]
+                  (when (#{:press :repeat} action)
+                    (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
+                      (cond 
+
+                        (and ctrl?
+                             (= (char key) \G))
+                        [[::cancel-search-forward this]]
+
+                        (and ctrl?
+                             (= (char key) \S))
+                        [[::repeat-search-forward this]]))))
+                :key-press
+                (fn [s]
+                  (cond
+
+                    (= s :enter)
+                    [[::finish-search-forward this]]
+
+                    (string? s)
+                    [[::append-search-forward (assoc this :s s)]]))
+                (ui/vertical-layout
+                 body
+                 (ui/label (:query search-state))))
+               (ui/wrap-on
+                :key-event
+                (fn [handler key scancode action mods]
+                  (when (#{:press :repeat} action)
+                    (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
+                          super? (not (zero? (bit-and ui/SUPER-MASK mods)))
+                          shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
+                          ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))
+
+                          search? (and ctrl?
+                                       (= (char key) \S))]
+                      (if search?
+                        [[::init-search-forward this]]
+                        (handler key scancode action mods)))))
+                body))]
+    (ui/vertical-layout
+     body
+     (let [inspector-extra (get extra ::search-inspector)]
+       (viscous/inspector
+        {:obj (viscous/wrap search-state)
+         :width (get inspector-extra :width 40)
+         :height (get inspector-extra :height 1)
+         :show-context? (get inspector-extra :show-context?)
+         :extra inspector-extra})))))
+
 
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
@@ -2250,6 +2421,13 @@
                                      100 100)
                 body])
 
+        body (if focused?
+               (wrap-search
+                {:editor editor
+                 :$body nil
+                 :body body})
+               body)
+        
         body (ui/wrap-on
               :mouse-down
               (fn [handler mpos]
