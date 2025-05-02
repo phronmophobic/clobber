@@ -37,6 +37,7 @@
 (defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 ;; https://lacuna.io/docs/bifurcan/io/lacuna/bifurcan/Rope.html
 
+(def eval-ns *ns*)
 (def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit"})
 
 (defn dtap [& args]
@@ -1210,7 +1211,7 @@
           )
         ))))
 
-(def eval-ns *ns*)
+
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -2061,7 +2062,9 @@
     (let [lang (:language editor)
           rope (:rope editor)
           para (editor->paragraph editor)
-          line-vals (when-let [line-val (-> editor :line-val (get rope))]
+          line-vals (when-let [line-val (if (:instarepl? editor)
+                                          (-> editor :line-val first second)
+                                          (-> editor :line-val (get rope)))]
                       (line-val-view
                        {:editor editor
                         :para para
@@ -2232,6 +2235,74 @@
                         [[::init-search-forward this]]
                         (handler key scancode action mods)))))
                 body))]
+    body))
+
+(defeffect ::update-insta-repl [{:keys [editor $editor]}]
+  (future
+    (try
+      (let [ ;; insta-state (::insta editor)
+            line-val (:line-val editor)
+            rope (:rope editor)]
+        
+        (when (not= rope
+                    (-> line-val first first))
+          (let [tree (:tree editor)
+                root-node (.getRootNode tree)
+                cursor (TSTreeCursor. root-node)
+                
+                line-vals (when (.gotoFirstChild cursor)
+                            (binding [*ns* eval-ns]
+                              (loop [bindings {}
+                                     line-vals {}]
+                                (let [node (.currentNode cursor)
+                                      s (node->str rope node)
+                                      form (read-string s)
+                                      [binding-sym form] (if (list? form)
+                                                           (case (first form)
+
+                                                             def [(second form) (nth form 2)]
+                                                             defn [(second form) `(fn ~(second form) ~@(nthrest form 2))]
+                                                             ;; else
+                                                             [nil form])
+                                                           [nil form])
+                                      form `(fn [~@(keys bindings)]
+                                              ~form)
+                                      f (eval form)
+                                      result (apply f (vals bindings))
+                                      bindings (if binding-sym
+                                                 (assoc bindings binding-sym result)
+                                                 bindings)
+
+                                      line (-> node
+                                               .getEndPoint
+                                               .getRow)
+                                      line-vals (assoc line-vals line (viscous/wrap result))]
+                                  
+                                  (if (.gotoNextSibling cursor)
+                                    (recur bindings line-vals)
+                                    line-vals)))))]
+            (dispatch! :update $editor
+                       (fn [editor]
+                         (assoc editor :line-val {rope line-vals}))))))
+      (catch Exception e
+        #_(prn e)))))
+
+(defui wrap-instarepl [{:keys [editor body]
+                        :as this}]
+  (if (:instarepl? editor)
+    (let [body (ui/wrap-on
+                :key-event
+                (fn [handler key scancode action mods]
+                  (cons
+                   [::update-insta-repl this]
+                   (handler key scancode action mods)))
+                :key-press
+                (fn [handler s]
+                  (cons
+                   [::update-insta-repl this]
+                   (handler s)))
+                body)]
+      body)
     body))
 
 
@@ -2421,6 +2492,13 @@
                  :$body nil
                  :body body})
                body)
+
+        body (if focused?
+               (wrap-instarepl
+                {:editor editor
+                 :$body nil
+                 :body body})
+               body)
         
         body (ui/wrap-on
               :mouse-down
@@ -2491,11 +2569,13 @@
         font-family (get extra :font-family)
         font-size (get extra :font-size 12)
         viscous? (get extra :viscous?)
+        instarepl? (get extra :instarepl?)
         structure? (get extra :structure?)
 
         $editor $editor
         editor (-> editor
                    (assoc :viscous? viscous?)
+                   (assoc :instarepl? instarepl?)
                    (assoc :structure? structure?)
                    (assoc-in
                     [:base-style :text-style/font-families] (if font-family
@@ -2561,6 +2641,13 @@
        [(basic/checkbox
          {:checked? viscous?})
         (ui/label "viscous?")]
+       {:direction :row
+        :gap 4
+        :align :center})
+      (ui/flex-layout
+       [(basic/checkbox
+         {:checked? instarepl?})
+        (ui/label "instarepl?")]
        {:direction :row
         :gap 4
         :align :center})
