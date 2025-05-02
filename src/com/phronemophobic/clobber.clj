@@ -361,6 +361,19 @@
 
 
 
+(defn ^:private goto-next-dfs-node [^TSTreeCursor cursor]
+  (cond
+    (.gotoFirstChild cursor) true
+    (.gotoNextSibling cursor) true
+
+    :else
+    (loop []
+      (if (.gotoParent cursor)
+        (if (.gotoNextSibling cursor)
+          true
+          (recur))
+        false))))
+
 (defn tree-cursor-reducible [^TSTreeCursor cursor]
   (reify
     clojure.lang.IReduceInit
@@ -370,10 +383,7 @@
               result (f result node)]
           (if (reduced? result)
             @result
-            (if (or (.gotoFirstChild cursor)
-                    (.gotoNextSibling cursor)
-                    (and (.gotoParent cursor)
-                         (.gotoNextSibling cursor)))
+            (if (goto-next-dfs-node cursor)
               (recur result)
               result)))))))
 
