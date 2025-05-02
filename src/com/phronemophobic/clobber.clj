@@ -3,10 +3,12 @@
             [clojure.datafy :as d]
             [clojure.core.protocols :as p]
             [clojure.string :as str]
+            [membrane.basic-components :as basic]
             [membrane.ui :as ui]
             [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
+            [com.phronemophobic.membrandt :as ant]
             [ropes.core :as ropes]
             [com.phronemophobic.viscous :as viscous])
   (:import (org.treesitter TSLanguage
@@ -383,7 +385,7 @@
 
 
 
-(defn ^:private add-node-to-paragraph [rope p offset end-byte-offset ^TSNode node style]
+(defn ^:private add-node-to-paragraph [rope p offset end-byte-offset ^TSNode node base-style style]
   (let [;; add any unmatched text as unadorned
         start-byte (min end-byte-offset (.getStartByte node))
         end-byte (min end-byte-offset (.getEndByte node))
@@ -440,7 +442,7 @@
                                      (= "sym_lit" (.getType first-child)))
                               (let [s (node->str rope first-child)]
                                 (if (builtin? s)
-                                  (let [[p end-byte] (add-node-to-paragraph rope p offset end-byte-offset first-child "defn")]
+                                  (let [[p end-byte] (add-node-to-paragraph rope p offset end-byte-offset first-child base-style "defn")]
                                     (recur p end-byte))
                                   (recur p offset)))
                               ;; else
@@ -1741,47 +1743,43 @@
     para))
 
 
-(defui line-val-view [{:keys [tree rope para line-val]}]
-  (into []
-        (map (fn [[line val]]
-               (let [byte-start-index (find-byte-offset-for-line tree rope line)
-                     byte-end-index (find-byte-offset-for-line tree rope (inc line))
-                     char-offset (get para :char-offset 0)
-                     rect (first
-                           (para/get-rects-for-range para
-                                                     (- (byte-index->char-index rope byte-start-index)
-                                                        char-offset)
-                                                     (- (byte-index->char-index rope byte-end-index)
-                                                        char-offset)
-                                                     :max
-                                                     :tight))]
-                 (when rect
-                   (let [{:keys [x y width height]} rect
-                         offset 4]
-                     
-                     #_(ui/translate (- (+ x width 10) offset) (- y offset)
-                                   (let [inspector-extra (get extra [::inspector [line val]])]
-                                     (ui/vertical-layout
-                                      (viscous/inspector
-                                       {:obj val
-                                        :width (get inspector-extra :width 40)
-                                        :height (get inspector-extra :height 1)
-                                        :show-context? (get inspector-extra :show-context?)
-                                        :extra inspector-extra})))
-                                   #_(-> (make-editor)
-                                       (editor-self-insert-command
-                                        "=> ")
-                                       (editor-self-insert-command
-                                        (pr-str val))
-                                       (editor->paragraph)))
-                     (ui/translate (+ x width 10)  y 
-                                   (-> (make-editor)
-                                       (editor-self-insert-command
-                                        "=> ")
-                                       (editor-self-insert-command
-                                        (pr-str @val))
-                                       (editor->paragraph))))))))
-        line-val))
+(defui line-val-view [{:keys [line-val editor para]}]
+  (let [{:keys [tree rope base-style viscous?]} editor]
+    (into []
+          (map (fn [[line val]]
+                 (let [byte-start-index (find-byte-offset-for-line tree rope line)
+                       byte-end-index (find-byte-offset-for-line tree rope (inc line))
+                       char-offset (get para :char-offset 0)
+                       rect (first
+                             (para/get-rects-for-range para
+                                                       (- (byte-index->char-index rope byte-start-index)
+                                                          char-offset)
+                                                       (- (byte-index->char-index rope byte-end-index)
+                                                          char-offset)
+                                                       :max
+                                                       :tight))]
+                   (when rect
+                     (let [{:keys [x y width height]} rect
+                           offset 4]
+                       (if viscous?
+                         (ui/translate (- (+ x width 10) offset) (- y offset)
+                                       (let [inspector-extra (get extra [::inspector [line val]])]
+                                         (ui/vertical-layout
+                                          (viscous/inspector
+                                           {:obj val
+                                            :width (get inspector-extra :width 40)
+                                            :height (get inspector-extra :height 1)
+                                            :show-context? (get inspector-extra :show-context?)
+                                            :extra inspector-extra}))))
+                         (ui/translate (+ x width 10)  y 
+                                       (-> (make-editor)
+                                           (assoc :base-style base-style)
+                                           (editor-self-insert-command
+                                            "=> ")
+                                           (editor-self-insert-command
+                                            (pr-str @val))
+                                           (editor->paragraph)))))))))
+          line-val)))
 
 
 (defui editor-view [{:keys [editor]}]
@@ -1791,8 +1789,7 @@
           para (editor->paragraph editor)
           line-vals (when-let [line-val (-> editor :line-val (get rope))]
                       (line-val-view
-                       {:tree tree
-                        :rope rope
+                       {:editor editor
                         :para para
                         :line-val line-val}))]
       [(cursor-view rope para (:cursor editor))
@@ -1989,8 +1986,9 @@
         structure-state (get extra :structure-state)]
     (ui/vertical-layout
      (ui/label (pr-str (:cursor editor)))
-     [(ui/spacer 100 100)
-      (ui/label structure-state)]
+     (when (:structure? editor)
+       [(ui/spacer 100 100)
+        (ui/label structure-state)])
      (ui/wrap-on
       :mouse-move
       (fn [handler [mx my]]
@@ -2041,11 +2039,69 @@
           (dispatch! :set $structure-state node-str))))))
 
 (defui debug [{:keys [editor]}]
-  (ui/vertical-layout
-   (ui/button "tap>"
-              (fn []
-                [[::tap editor]]))
-   (code-editor {:editor editor})))
+  (let [
+        
+        font-family (get extra :font-family)
+        font-size (get extra :font-size 12)
+        viscous? (get extra :viscous?)
+        structure? (get extra :structure?)
+
+        $editor $editor
+        editor (-> editor
+                   (assoc :viscous? viscous?)
+                   (assoc :structure? structure?)
+                   (assoc-in
+                    [:base-style :text-style/font-families] (if font-family
+                                                              [font-family]
+                                                              ["Menlo"]))
+                   (assoc-in
+                    [:base-style :text-style/font-size] (or font-size 12)))]
+    (ui/flex-layout
+     [(ant/button {:text  "tap>"
+                   :on-click (fn []
+                               [[::tap editor]])})
+      (ant/radio-bar
+       {:options (into []
+                       (map (fn [s]
+                              {:text s
+                               :value s}))
+                       ["Menlo"
+                        "Webdings"
+                        "Savoye LET"
+                        "Comic Sans MS"])
+        :selection font-family})
+      (ui/flex-layout
+       [(ui/label "font-size")
+        (ant/number-slider
+         {:integer? true
+          :width 200
+          :min 8
+          :max 40
+          :value font-size})
+        ]
+       {:direction :row
+        :gap 4
+        :align :center})
+      (ui/flex-layout
+       [(basic/checkbox
+         {:checked? viscous?})
+        (ui/label "viscous?")]
+       {:direction :row
+        :gap 4
+        :align :center})
+      (ui/flex-layout
+       [(basic/checkbox
+         {:checked? structure?})
+        (ui/label "structure?")]
+       {:direction :row
+        :gap 4
+        :align :center})
+      (code-editor {:editor editor
+                    :$editor $editor})]
+     
+     
+     {:direction :column
+      :gap 8})))
 
 
 (comment
