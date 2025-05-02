@@ -696,6 +696,7 @@
 
       :else editor)))
 
+(declare editor-self-insert-command)
 (defn editor-paredit-wrap-round [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
