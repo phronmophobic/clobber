@@ -1414,39 +1414,43 @@
              cursor-column :column} cursor
             ;; s (String. (rope->bytes rope) "utf-8")
             cs (.toCharSequence rope)
-            bi (doto (BreakIterator/getCharacterInstance)
-                 (.setText cs))
-            next-char (.following bi cursor-char)
-            
-            diff-string (-> (.subSequence cs cursor-char next-char)
-                            .toString)
-            diff-bytes (alength (.getBytes diff-string "utf-8"))
-            ;; prev-byte (- cursor-byte (alength (.getBytes (subs s prev cursor-char) "utf-8")))
-            next-byte (+ cursor-byte diff-bytes)
-            next-point (+ cursor-point (num-points diff-string))
+]
+        (case (.charAt cs cursor-char)
+          (\( \) \[ \] \{ \} \")
+          (editor-forward-char editor)
 
-            newline? (= \newline (.charAt cs cursor-char))
+          ;; else
+          (let [bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText cs))
+                next-char (.following bi cursor-char)
+              
+                diff-string (-> (.subSequence cs cursor-char next-char)
+                                .toString)
+                diff-bytes (alength (.getBytes diff-string "utf-8"))
+                next-byte (+ cursor-byte diff-bytes)
+                next-point (+ cursor-point (num-points diff-string))
 
-            new-tree (when-let [^TSTree tree tree]
-                       (let [tree (.copy tree)]
-                         (.edit tree (TSInputEdit. cursor-byte next-byte cursor-byte 
-                                                   (TSPoint. cursor-row cursor-column)
-                                                   (if newline?
-                                                     (TSPoint. (inc cursor-row) 0)
-                                                     (TSPoint. cursor-row (inc cursor-column)))
-                                                   (TSPoint. cursor-row cursor-column)))
-                         tree))
+                newline? (= \newline (.charAt cs cursor-char))
 
-            new-rope (.concat (.slice rope 0 cursor-point)
-                              (.slice rope next-point (.size rope)))
-            reader (->RopeReader new-rope)
-            new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-        (assoc editor
-               :tree new-tree
-               :cursor cursor
-               :paragraph nil
-               :rope new-rope)))))
+                new-tree (when-let [^TSTree tree tree]
+                           (let [tree (.copy tree)]
+                             (.edit tree (TSInputEdit. cursor-byte next-byte cursor-byte
+                                                       (TSPoint. cursor-row cursor-column)
+                                                       (if newline?
+                                                         (TSPoint. (inc cursor-row) 0)
+                                                         (TSPoint. cursor-row (inc cursor-column)))
+                                                       (TSPoint. cursor-row cursor-column)))
+                             tree))
 
+                new-rope (.concat (.slice rope 0 cursor-point)
+                                  (.slice rope next-point (.size rope)))
+                reader (->RopeReader new-rope)
+                new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
+            (assoc editor
+                   :tree new-tree
+                   :cursor cursor
+                   :paragraph nil
+                   :rope new-rope)))))))
 
 
 
@@ -1462,55 +1466,61 @@
                cursor-column :column} cursor
               ;; s (String. (rope->bytes rope) "utf-8")
               cs (.toCharSequence rope)
+
               bi (doto (BreakIterator/getCharacterInstance)
                    (.setText cs))
-              prev (.preceding bi cursor-char)
-              diff-string (-> (.subSequence cs prev cursor-char)
-                              .toString)
-              diff-bytes (alength (.getBytes diff-string "utf-8"))
-              ;; prev-byte (- cursor-byte (alength (.getBytes (subs s prev cursor-char) "utf-8")))
-              prev-byte (- cursor-byte diff-bytes)
-              prev-char (.charAt cs prev)
-              prev-point (- cursor-point (num-points diff-string))
-              newline? (= prev-char \newline)
-            
+              prev (.preceding bi cursor-char)]
+          (case (.charAt cs prev)
+            (\[ \] \" \{ \}  \( \))
+            (editor-backward-char editor)
 
-              new-cursor-row (if newline?
-                               (dec cursor-row)
-                               cursor-row)
-              new-cursor-column (if newline?
-                                  (loop [n 0]
-                                    (let [start (.previous bi)]
-                                      (if (or (= BreakIterator/DONE start)
-                                              (= \newline (.charAt cs start)))
-                                        n
-                                        (recur (inc n)))))
-                                  (dec cursor-column))
+            ;;else
+            (let [diff-string (-> (.subSequence cs prev cursor-char)
+                                  .toString)
+                  diff-bytes (alength (.getBytes diff-string "utf-8"))
+
+                  prev-byte (- cursor-byte diff-bytes)
+                  prev-char (.charAt cs prev)
+                  prev-point (- cursor-point (num-points diff-string))
+                  newline? (= prev-char \newline)
+                
+
+                  new-cursor-row (if newline?
+                                   (dec cursor-row)
+                                   cursor-row)
+                  new-cursor-column (if newline?
+                                      (loop [n 0]
+                                        (let [start (.previous bi)]
+                                          (if (or (= BreakIterator/DONE start)
+                                                  (= \newline (.charAt cs start)))
+                                            n
+                                            (recur (inc n)))))
+                                      (dec cursor-column))
 
 
-              new-tree (when-let [^TSTree tree tree]
-                         (let [tree (.copy tree)]
-                           (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
-                                                     (TSPoint. cursor-row cursor-column)
-                                                     (TSPoint. cursor-row cursor-column)
-                                                     (TSPoint. new-cursor-row new-cursor-column)))
-                           tree))
+                  new-tree (when-let [^TSTree tree tree]
+                             (let [tree (.copy tree)]
+                               (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
+                                                         (TSPoint. cursor-row cursor-column)
+                                                         (TSPoint. cursor-row cursor-column)
+                                                         (TSPoint. new-cursor-row new-cursor-column)))
+                               tree))
 
-              new-rope (.concat (.slice rope 0 prev-point)
-                                (.slice rope cursor-point (.size rope)))
+                  new-rope (.concat (.slice rope 0 prev-point)
+                                    (.slice rope cursor-point (.size rope)))
 
-              reader (->RopeReader new-rope)
-              new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-          (editor-update-viewport
-           (assoc editor
-                  :tree new-tree
-                  :cursor {:byte prev-byte
-                           :char prev
-                           :point prev-point
-                           :row new-cursor-row
-                           :column new-cursor-column}
-                  :paragraph nil
-                  :rope new-rope))))))
+                  reader (->RopeReader new-rope)
+                  new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
+              (editor-update-viewport
+               (assoc editor
+                      :tree new-tree
+                      :cursor {:byte prev-byte
+                               :char prev
+                               :point prev-point
+                               :row new-cursor-row
+                               :column new-cursor-column}
+                      :paragraph nil
+                      :rope new-rope))))))))
 
 
 (defn editor-goto-line [editor n]
