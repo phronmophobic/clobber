@@ -321,6 +321,104 @@
     (.length cs)))
 
 
+(defn next-named-child-for-byte
+  "Depth first search for the first named node that *starts on or after* byte."
+  [^TSTree tree byte-offset]
+  ;; It seems like all tree searches are linear
+  ;; so this doesn't seem worse than any other method.
+  ;; the builtin methods for TSNode and TSTreeCursor
+  ;; seem awkard for this purpose, so we implement our own.
+  ;; It's possible that using queries for _ or (_)
+  ;; to find unnamed and named nodes respectively
+  ;; might be faster, but I'm just assuming they're not.
+  (let [;; The docs say
+        ;; "You can access every node in a syntax tree using the
+        ;;  TSNode APIs described earlier, but if you need to access
+        ;;  a large number of nodes, the fastest way to do so is with a tree cursor."
+        ;; I'm not sure I believe them, but we'll use a cursor over the TSNode API.
+        cursor (TSTreeCursor. (.getRootNode tree))
+
+        node (when (.gotoFirstChild cursor)
+               (loop []
+                 (let [current-node (.currentNode cursor)]
+                   (if (and (>= (-> current-node .getStartByte)
+                                byte-offset)
+                            (.isNamed current-node))
+                     current-node
+                     (if (> (-> current-node .getEndByte)
+                            byte-offset)
+                       (if (.gotoFirstChild cursor)
+                         (recur)
+                         (when (and (.gotoParent cursor)
+                                    (.gotoNextSibling cursor))
+                           (recur)))
+                       (if (.gotoNextSibling cursor)
+                         (recur)
+                         (when (and (.gotoParent cursor)
+                                    (.gotoNextSibling cursor))
+                           (recur))))))))]
+    node))
+
+
+
+(defn tree-cursor-reducible [^TSTreeCursor cursor]
+  (reify
+    clojure.lang.IReduceInit
+    (reduce [this f init]
+      (loop [result init]
+        (let [node (.currentNode cursor)
+              result (f result node)]
+          (if (reduced? result)
+            @result
+            (if (or (.gotoFirstChild cursor)
+                    (.gotoNextSibling cursor)
+                    (and (.gotoParent cursor)
+                         (.gotoNextSibling cursor)))
+              (recur result)
+              result)))))))
+
+(defn node-reducible [^TSNode node]
+  (tree-cursor-reducible (TSTreeCursor. node)))
+
+(defn tree-reducible [^TSTree tree]
+  (let [cursor (TSTreeCursor. (.getRootNode tree))]
+    (if (.gotoFirstChild cursor)
+      (tree-cursor-reducible cursor)
+      (reify
+        clojure.lang.IReduceInit
+        (reduce [this f init]
+          init)))))
+
+(defn first-by [xf coll]
+  (transduce xf (completing (fn [_ x] (reduced x))) nil coll))
+
+(def atom-lit-types #{"char_lit" "str_lit" "bool_lit" "nil_lit" "kwd_lit" "num_lit" "sym_lit"})
+(defn atom-lit? [^TSNode node]
+  (contains? atom-lit-types (.getType node)))
+
+(defn named-child-for-byte
+  "Depth first search for the smallest named atom node that contains `byte-offset` 
+  or the next named node after byte."
+  [^TSTree tree byte-offset]
+  (transduce
+   (filter (fn [^TSNode node]
+             (> (-> node .getEndByte)
+                byte-offset)))
+   (completing
+    (fn [^TSNode best-match ^TSNode node]
+      (if (>= (-> node .getStartByte)
+              byte-offset)
+        (if best-match
+          (reduced best-match)
+          (if (.isNamed node)
+            (reduced node)
+            nil))
+        (if (and (.isNamed node)
+                 (atom-lit? node))
+          node
+          best-match))))
+   nil
+   (tree-reducible tree)))
 
 (defn find-byte-offset-for-line [^TSTree tree ^Rope rope target-line]
   (if (zero? target-line)
@@ -587,6 +685,82 @@
        (assoc-in editor [:viewport :start-line] new-start-line))
 
       :else editor)))
+
+(defn editor-paredit-wrap-round [editor]
+  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
+
+        ^TSNode
+        wrap-node (named-child-for-byte tree cursor-byte)]
+    (if wrap-node
+      (let [;; first, insert ")" add end of node
+
+            target-byte (.getEndByte wrap-node)
+            diff-rope (.sliceBytes rope cursor-byte target-byte)
+            diff-string (.toString diff-rope)
+            diff-points (.size diff-rope)
+            point-offset (count-points diff-string)
+
+            new-cursor-row (+ cursor-row (:row point-offset))
+            new-cursor-column (if (pos? (:row point-offset))
+                                (:column point-offset)
+                                (+ (:column point-offset) cursor-column))
+
+            new-tree (when-let [^TSTree
+                                tree tree]
+                       (let [tree (.copy tree)]
+                         (.edit tree (TSInputEdit. target-byte target-byte (inc target-byte)
+                                                   (TSPoint. cursor-row cursor-column)
+                                                   (TSPoint. cursor-row cursor-column)
+                                                   (TSPoint. new-cursor-row new-cursor-column)))
+                         tree))
+
+            new-rope (.insert rope (+ cursor-point diff-points) ")")
+
+            ;; next, insert "(" at start of node
+            target-byte (.getStartByte wrap-node)
+            diff-rope (.sliceBytes rope cursor-byte target-byte)
+            diff-string (.toString diff-rope)
+            diff-bytes (- target-byte cursor-byte)
+            diff-char (.length diff-string)
+            diff-points (.size diff-rope)
+            point-offset (count-points diff-string)
+
+            new-cursor-row (+ cursor-row (:row point-offset))
+            new-cursor-column (if (pos? (:row point-offset))
+                                (:column point-offset)
+                                (+ (:column point-offset) cursor-column))
+
+            new-tree (do
+                       (.edit new-tree (TSInputEdit. target-byte target-byte (inc target-byte)
+                                                     (TSPoint. cursor-row cursor-column)
+                                                     (TSPoint. cursor-row cursor-column)
+                                                     (TSPoint. new-cursor-row new-cursor-column)))
+                       new-tree)
+
+            new-rope (.insert new-rope (+ cursor-point diff-points) "(")
+
+            reader (->RopeReader new-rope)
+            new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )
+
+            new-cursor {:byte (inc (+ cursor-byte diff-bytes))
+                        :char (inc (+ cursor-char diff-char))
+                        :point (inc (+ cursor-point diff-points))
+                        :row new-cursor-row
+                        :column (inc new-cursor-column)}]
+        (editor-update-viewport
+         (assoc editor
+                     :tree new-tree
+                     :rope new-rope
+                     :cursor new-cursor)))
+      
+      (editor-self-insert-command editor "()"))))
+
 
 (defn editor-recenter-top-bottom [editor]
   (let [row (-> editor :cursor :row)
@@ -1891,111 +2065,114 @@
                 :key-event
                 (fn [key scancode action mods]
                   (when (#{:press :repeat} action)
-                   (let [ ;; ctrl? (not (zero? (bit-and 2r10 mods)))
-                         alt? (not (zero? (bit-and ui/ALT-MASK mods)))
-                         super? (not (zero? (bit-and ui/SUPER-MASK mods)))
-                         shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-                         ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-                     (cond
+                    (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
+                          super? (not (zero? (bit-and ui/SUPER-MASK mods)))
+                          shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
+                          ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
+                      (cond
 
-                       (and ctrl?
-                            alt?)
-                       (case (char key)
-                         \X
-                         [[::editor-eval-top-form this]]
+                        (and ctrl?
+                             alt?)
+                        (case (char key)
+                          \X
+                          [[::editor-eval-top-form this]]
 
-                         nil)
+                          nil)
 
-                       ctrl?
-                       (case (char key)
-                         \A
-                         [[:update $editor #(editor-move-beginning-of-line %)]]
+                        ctrl?
+                        (case (char key)
+                          \A
+                          [[:update $editor #(editor-move-beginning-of-line %)]]
 
-                         \D
-                         [[:update $editor #(editor-paredit-forward-delete %)]]
+                          \D
+                          [[:update $editor #(editor-paredit-forward-delete %)]]
 
-                         \E
-                         [[:update $editor #(editor-move-end-of-line %)]]
-                        
-                         \F
-                         [[:update $editor #(editor-forward-char %)]]
+                          \E
+                          [[:update $editor #(editor-move-end-of-line %)]]
+                          
+                          \F
+                          [[:update $editor #(editor-forward-char %)]]
 
-                         \B
-                         [[:update $editor #(editor-backward-char %)]]
+                          \B
+                          [[:update $editor #(editor-backward-char %)]]
 
-                         \J
-                         [[:update $editor #(-> %
-                                                (editor-self-insert-command "\n")
-                                                (editor-indent))]]
+                          \J
+                          [[:update $editor #(-> %
+                                                 (editor-self-insert-command "\n")
+                                                 (editor-indent))]]
 
-                         \K
-                         [[:update $editor #(editor-paredit-kill %)]]
+                          \K
+                          [[:update $editor #(editor-paredit-kill %)]]
 
-                         \L
-                         [[:update $editor #(editor-recenter-top-bottom %)]]
+                          \L
+                          [[:update $editor #(editor-recenter-top-bottom %)]]
 
-                         \N
-                         [[:update $editor #(editor-next-line %)]]
+                          \N
+                          [[:update $editor #(editor-next-line %)]]
 
-                         \O
-                         [[:update $editor #(editor-open-line %)]]
+                          \O
+                          [[:update $editor #(editor-open-line %)]]
 
-                         \P
-                         [[:update $editor #(editor-previous-line %)]]
+                          \P
+                          [[:update $editor #(editor-previous-line %)]]
 
-                         \V
-                         [[:update $editor #(editor-scroll-down %)]]
+                          \V
+                          [[:update $editor #(editor-scroll-down %)]]
 
-                         ;; else
-                         nil)
+                          ;; else
+                          nil)
 
-                       alt?
-                       (case (char key)
+                        alt?
+                        (case (char key)
 
-                         \B
-                         [[:update $editor #(editor-backward-word %)]]
-                         
-                         \F
-                         [[:update $editor #(editor-forward-word %)]]
+                          \B
+                          [[:update $editor #(editor-backward-word %)]]
+                          
+                          \F
+                          [[:update $editor #(editor-forward-word %)]]
 
-                         \V
-                         [[:update $editor #(editor-scroll-up %)]]
+                          \V
+                          [[:update $editor #(editor-scroll-up %)]]
 
-                         
-                         \,
-                         (when shift?
-                           [[:update $editor #(editor-beginning-of-buffer %)]])
+                          
+                          \,
+                          (when shift?
+                            [[:update $editor #(editor-beginning-of-buffer %)]])
 
-                         \.
-                         (when shift?
-                           [[:update $editor #(editor-end-of-buffer %)]])
+                          \.
+                          (when shift?
+                            [[:update $editor #(editor-end-of-buffer %)]])
 
-                         ;; else
-                         nil)
+                          \9
+                          (when shift?
+                            [[:update $editor #(editor-paredit-wrap-round %)]])
 
-                       :else
-                       nil
-                       #_(case (char key)
+                          ;; else
+                          nil)
 
-                         
-                           (case key
-                             (39 262) ;; right
-                             [[:update $editor editor-forward-char ]]
+                        :else
+                        nil
+                        #_(case (char key)
 
-                             #_left (37 263)
-                             [[:update $editor editor-backward-char ]]
+                            
+                            (case key
+                              (39 262) ;; right
+                              [[:update $editor editor-forward-char ]]
 
-                           
-                           
-                             ;; (40 264)
-                             ;; ;; down
+                              #_left (37 263)
+                              [[:update $editor editor-backward-char ]]
 
-                             ;; ;; up
-                             ;; (38 265)
-                           
-                             ;; else
-                             nil
-                             #_[[::tap key (char key)]]))))))
+                              
+                              
+                              ;; (40 264)
+                              ;; ;; down
+
+                              ;; ;; up
+                              ;; (38 265)
+                              
+                              ;; else
+                              nil
+                              #_[[::tap key (char key)]]))))))
                 :key-press
                 (fn [s]
                   ;; (tap> s)
