@@ -1597,7 +1597,10 @@
             ;; just kill everything to the end of the parent
             (if (= (-> parent-coll-node .getEndPoint .getRow)
                    cursor-row)
-              (-> parent-coll-node .getEndByte dec)
+              (if (= "source" (.getType parent-coll-node))
+                (-> parent-coll-node .getEndByte)
+                ;; else some coll type node
+                (-> parent-coll-node .getEndByte dec))
 
               ;; else
               ;; if there's an element that
