@@ -852,8 +852,6 @@
                                                      (TSPoint. new-cursor-row new-cursor-column)
                                                      ))
                        new-tree)
-            _ (dtap {:new-row new-cursor-row
-                     :new-col new-cursor-column})
 
             new-rope (.concat (.sliceBytes new-rope 0 target-byte)
                               (.sliceBytes new-rope (inc target-byte) (.numBytes new-rope)))
