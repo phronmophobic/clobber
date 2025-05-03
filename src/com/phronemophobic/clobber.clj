@@ -776,29 +776,40 @@
                      :cursor new-cursor)))
       
       (editor-self-insert-command editor "()"))))
-            new-cursor-row (+ cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (+ (:column point-offset) cursor-column))
 
-            new-tree (when-let [^TSTree
-                                tree tree]
-                       (let [tree (.copy tree)]
-                         (.edit tree (TSInputEdit. target-byte target-byte (inc target-byte)
-                                                   (TSPoint. cursor-row cursor-column)
-                                                   (TSPoint. cursor-row cursor-column)
-                                                   (TSPoint. new-cursor-row new-cursor-column)))
-                         tree))
+(defn editor-paredit-splice-sexp [editor]
+  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
 
-            ^Rope
-            new-rope (.insert rope ^int (+ cursor-point diff-points) ^CharSequence '")")
+        ^TSNode
+        wrap-node (transduce
+                   (comp
+                    (filter (fn [^TSNode node]
+                              (> (-> node .getEndByte)
+                                 cursor-byte)))
+                    (filter (fn [^TSNode node]
+                              (let [type (.getType node)]
+                                (and (.isNamed node)
+                                     (or (= "str_lit" type)
+                                         (contains? coll-node-types type))))))
+                    (take-while (fn [^TSNode node]
+                                  (< (-> node .getStartByte)
+                                     cursor-byte))))
+                   (completing
+                    (fn [best-match node]
+                      node))
+                   nil
+                   (tree-reducible tree))]
+    (if wrap-node
+      (let [;; first, delete ")" add end of node
 
-            ;; next, insert "(" at start of node
-            target-byte (.getStartByte wrap-node)
+            target-byte (.getEndByte wrap-node)
             diff-rope (.sliceBytes rope cursor-byte target-byte)
             diff-string (.toString diff-rope)
-            diff-bytes (- target-byte cursor-byte)
-            diff-char (.length diff-string)
             diff-points (.size diff-rope)
             point-offset (count-points diff-string)
 
@@ -807,30 +818,63 @@
                                 (:column point-offset)
                                 (+ (:column point-offset) cursor-column))
 
+            new-tree (when-let [^TSTree
+                                tree tree]
+                       (let [tree (.copy tree)]
+                         (.edit tree (TSInputEdit. (dec target-byte) (dec target-byte) target-byte
+                                                   (TSPoint. new-cursor-row (dec new-cursor-column))
+                                                   (TSPoint. new-cursor-row (dec new-cursor-column))
+                                                   (TSPoint. new-cursor-row new-cursor-column)))
+                         tree))
+
+            ^Rope
+            new-rope (.concat (.sliceBytes rope 0 (dec target-byte))
+                              (.sliceBytes rope target-byte (.numBytes rope)))
+
+            ;; next, delete "(" at start of node
+            target-byte (.getStartByte wrap-node)
+            diff-rope (.sliceBytes rope target-byte cursor-byte)
+            diff-string (.toString diff-rope)
+            ;; diff-bytes (- cursor-byte target-byte)
+            ;; diff-char (.length diff-string)
+            ;; diff-points (.size diff-rope)
+            point-offset (count-points diff-string)
+
+            new-cursor-row (- cursor-row (:row point-offset))
+            new-cursor-column (if (pos? (:row point-offset))
+                                (:column point-offset)
+                                (- cursor-column (:column point-offset)))
+
             new-tree (do
-                       (.edit new-tree (TSInputEdit. target-byte target-byte (inc target-byte)
-                                                     (TSPoint. cursor-row cursor-column)
-                                                     (TSPoint. cursor-row cursor-column)
-                                                     (TSPoint. new-cursor-row new-cursor-column)))
+                       (.edit new-tree (TSInputEdit. target-byte (inc target-byte) target-byte 
+                                                     (TSPoint. new-cursor-row new-cursor-column)
+                                                     (TSPoint. new-cursor-row (inc new-cursor-column))
+                                                     (TSPoint. new-cursor-row new-cursor-column)
+                                                     ))
                        new-tree)
+            _ (dtap {:new-row new-cursor-row
+                     :new-col new-cursor-column})
 
-            new-rope (.insert new-rope ^int (+ cursor-point diff-points) ^CharSequence '"(")
-
+            new-rope (.concat (.sliceBytes new-rope 0 target-byte)
+                              (.sliceBytes new-rope (inc target-byte) (.numBytes new-rope)))
+            
             reader (->RopeReader new-rope)
             new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )
 
-            new-cursor {:byte (inc (+ cursor-byte diff-bytes))
-                        :char (inc (+ cursor-char diff-char))
-                        :point (inc (+ cursor-point diff-points))
-                        :row new-cursor-row
-                        :column (inc new-cursor-column)}]
+            new-cursor {:byte (dec cursor-byte)
+                        :char (dec cursor-char)
+                        :point (dec cursor-point)
+                        :row cursor-row
+                        :column (if (pos? (:row point-offset))
+                                  cursor-column
+                                  (dec cursor-column))}]
         (editor-update-viewport
          (assoc editor
-                     :tree new-tree
-                     :rope new-rope
-                     :cursor new-cursor)))
+                :tree new-tree
+                :rope new-rope
+                :cursor new-cursor)))
       
-      (editor-self-insert-command editor "()"))))
+      editor)))
 
 
 (defn editor-recenter-top-bottom [editor]
@@ -2489,6 +2533,9 @@
                           \9
                           (when shift?
                             [[:update $editor #(editor-paredit-wrap-round %)]])
+
+                          \S
+                          [[:update $editor #(editor-paredit-splice-sexp %)]]
 
                           ;; else
                           nil)
