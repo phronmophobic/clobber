@@ -2089,7 +2089,8 @@
                      editor (if initial-cursor
                               (assoc editor :cursor initial-cursor)
                               editor)]
-                 (dissoc editor ::search)))))
+                 (editor-update-viewport
+                  (dissoc editor ::search))))))
 
 (defeffect ::finish-search-forward [{:keys [$editor]}]
   (dispatch! :update $editor
