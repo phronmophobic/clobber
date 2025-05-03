@@ -10,7 +10,8 @@
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
             [ropes.core :as ropes]
-            [com.phronemophobic.viscous :as viscous])
+            [com.phronemophobic.viscous :as viscous]
+            [clojure.tools.analyzer.jvm :as ana.jvm])
   (:import (org.treesitter TSLanguage
                            TSQuery
                            TSParser
@@ -2311,6 +2312,28 @@
                             focus]
                      :as this}]
   (let [body (editor-view {:editor editor})
+
+        structure-state (get editor ::structure-state)
+        body (ui/wrap-on
+              :mouse-down
+              (fn [handler [mx my :as mpos]]
+                (cons
+                 [::do-structure-click {:editor editor
+                                        :x mx
+                                        :y my
+                                        :$structure-state $structure-state}]
+                 (handler mpos)))
+              :mouse-move
+              (fn [handler [mx my]]
+                (let [intents (handler [mx my])]
+                  (if (seq intents)
+                    intents
+                    [[::do-structure {:editor editor
+                                      :x mx
+                                      :y my
+                                      :$structure-state $structure-state}]])))
+              body)
+
         focused? (= $editor focus)
         body (if focused?
                (ui/on
@@ -2508,60 +2531,210 @@
                         intents)))
               body)
 
-        structure-state (get extra :structure-state)]
+        ]
     (ui/vertical-layout
      (ui/label (pr-str (:cursor editor)))
      (when (:structure? editor)
-       [(ui/spacer 100 100)
-        (ui/label structure-state)])
-     (ui/wrap-on
-      :mouse-move
-      (fn [handler [mx my]]
-        (let [intents (handler [mx my])]
-          (if (seq intents)
-            intents
-            [[::do-structure {:editor editor
-                              :x mx
-                              :y my
-                              :$structure-state $structure-state}]])))
-      body))))
+       [(ui/spacer 100 200)
+        (ui/vertical-layout
+         (ant/button {:text "make-fn"
+                      :on-click (fn []
+                                  [[::make-fn
+                                    {:$editor $editor
+                                     :editor editor
+                                     :structure-state structure-state}]])})
+         (when-let [args (:args structure-state)]
+           (ui/on
+            :mouse-down
+            (fn [_]
+              [[:update $structure-state assoc :args #{}]])
+            (ui/label (:args structure-state))))         
+         (ui/label (:node-str structure-state)))])
+     body)))
+
+(def var-ast
+  {:op :var,
+   :assignable? false,
+   ;; :var #'com.phronemophobic.membrane.spreadsheet/a,
+   :o-tag java.lang.Object})
+(defn free-variables [form]
+  (let [free (volatile! #{})]
+    (ana.jvm/analyze
+     form
+     (ana.jvm/empty-env)
+     {:passes-opts
+      (assoc ana.jvm/default-passes-opts
+             :validate/unresolvable-symbol-handler
+             (fn [_ sym _]
+               (vswap! free conj sym)
+               (assoc var-ast :form sym)))})
+    @free))
+
+(defeffect ::make-fn [{:keys [$editor editor structure-state]}]
+  (future
+    (try
+      (let [tree (:tree editor)
+            rope (:rope editor)
+            root-node (.getRootNode tree)
+            cursor (TSTreeCursor. root-node)
+
+            cursor-byte (-> editor :cursor :byte)
+            
+
+            ^TSNode
+            result-node (named-child-for-byte tree cursor-byte)
+            result-str (node->str rope result-node )
+            result-form (binding [*ns* eval-ns]
+                          (read-string result-str))
+            
+            forms (when (.gotoFirstChild cursor)
+                    (binding [*ns* eval-ns]
+                      (loop [forms []]
+                        (let [node (.currentNode cursor)]
+                          (if (< (.getEndByte node)
+                                 cursor-byte)
+                            (let [node-str (node->str rope node)
+                                  form (read-string node-str)
+                                  def? (and (list? form)
+                                            (= 'def (first form))
+                                            (= 3 (count form)))
+                                  forms (if def?
+                                          (conj forms [(second form)
+                                                       (nth form 2)])
+                                          forms)]
+                              (if (.gotoNextSibling cursor)
+                                (recur forms)
+                                forms))
+                            forms)))))
+
+            args (:args structure-state)
+
+            bindings (loop [forms (-> forms reverse seq)
+                            deps (free-variables result-form)
+                            bindings []]
+                       (if forms
+                         (let [[name form] (first forms)
+                               [bindings deps]
+                               (if (and (contains? deps name)
+                                        (not (contains? args name)))
+                                 (let [deps (into deps(free-variables form))
+                                       bindings (conj bindings
+                                                      [name form])]
+                                   [bindings deps])
+                                 [bindings deps])]
+
+                           (recur (next forms)
+                                  deps
+                                  bindings))
+                         bindings))
+            fn-form `(~'defn ~'foo [~@args]
+                       (~'let ~(into []
+                                   cat
+                                   (reverse bindings))
+                         ~result-form))
+
+            ]
+
+        (dispatch! :update $editor
+                     (fn [editor]
+                       (-> editor
+                           editor-move-end-of-line
+                           (editor-self-insert-command "\n")
+                           (editor-indent)
+                           (editor-self-insert-command
+                            (with-out-str
+                              (clojure.pprint/pprint fn-form)))))))
+      (catch Exception e
+        (prn e))))
+  )
 
 (defeffect ::do-structure [{:keys [editor x y $structure-state]}]
   (future
-    (let [^Rope
-          rope (:rope editor)]
-      (when (pos? (.size rope))
-        (let [para (editor->paragraph editor)
-              [char-index affinity] (para/glyph-position-at-coordinate para x y)
-              rope (.sliceBytes rope
-                                (:start-byte-offset para)
-                                (:end-byte-offset para))
-              cs (.toCharSequence rope)
+    (try
+      (let [^Rope
+            rope (:rope editor)]
+        (when (pos? (.size rope))
+          (let [para (editor->paragraph editor)
+                [char-index affinity] (para/glyph-position-at-coordinate para x y)
+                rope (.sliceBytes rope
+                                  (:start-byte-offset para)
+                                  (:end-byte-offset para))
+                cs (.toCharSequence rope)
 
-              bi (doto (BreakIterator/getCharacterInstance)
-                   (.setText cs))
-              char-index (if (zero? affinity)
-                           (.following bi char-index)
-                           char-index)
+                bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText cs))
+
+                char-index (if (zero? affinity)
+                             (.preceding bi char-index)
+                             char-index)
               
-              byte-index (let [s (.toString (.subSequence cs 0 char-index))
-                               bs (.getBytes s "utf-8")]
-                           (alength bs))
-              byte-index (+ byte-index (:start-byte-offset para))
+                byte-index (let [s (.toString (.subSequence cs 0 char-index))
+                                 bs (.getBytes s "utf-8")]
 
-              ^TSTree
-              tree (:tree editor)
-              root-node (.getRootNode tree)
-              node (.getNamedDescendantForByteRange root-node byte-index byte-index)
-              node-str (node->str (:rope editor) node)
-              node-str (str/join
-                        "\n"
-                        (cons
-                         (.getType node)
-                         (eduction
-                          (take 4)
-                          (str/split-lines node-str))))]
-          (dispatch! :set $structure-state node-str))))))
+                             (alength bs))
+                byte-index (+ byte-index (:start-byte-offset para))
+
+
+                ^TSTree
+                tree (:tree editor)
+                root-node (.getRootNode tree)
+                node (.getNamedDescendantForByteRange root-node byte-index byte-index)
+                node-str (node->str (:rope editor) node)
+                node-str (str/join
+                          "\n"
+                          (cons
+                           (.getType node)
+                           (eduction
+                            (take 4)
+                            (str/split-lines
+                             node-str))))]
+            (dispatch! :update $structure-state assoc :node-str node-str))))
+      (catch Exception e
+        (prn e)))))
+
+(defeffect ::do-structure-click [{:keys [editor x y $structure-state]}]
+  (future
+    (try
+      (let [^Rope
+            rope (:rope editor)]
+        (when (pos? (.size rope))
+          (let [para (editor->paragraph editor)
+                [char-index affinity] (para/glyph-position-at-coordinate para x y)
+                rope (.sliceBytes rope
+                                  (:start-byte-offset para)
+                                  (:end-byte-offset para))
+                cs (.toCharSequence rope)
+
+                bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText cs))
+
+                char-index (if (zero? affinity)
+                             (.preceding bi char-index)
+                             char-index)
+              
+                byte-index (let [s (.toString (.subSequence cs 0 char-index))
+                                 bs (.getBytes s "utf-8")]
+
+                             (alength bs))
+                byte-index (+ byte-index (:start-byte-offset para))
+
+
+                ^TSTree
+                tree (:tree editor)
+                root-node (.getRootNode tree)
+                node (.getNamedDescendantForByteRange root-node byte-index byte-index)]
+            (when (= "sym_name" (.getType node))
+              (let [node-str (node->str (:rope editor) node)
+                    sym (symbol node-str)]
+                (dispatch! :update $structure-state update :args
+                           (fn [args]
+                             (if args
+                               (if (contains? args sym)
+                                 (disj args sym)
+                                 (conj args sym))
+                               #{sym}))))))))
+      (catch Exception e
+        (prn e)))))
 
 (defui debug [{:keys [editor]}]
   (let [
@@ -2597,6 +2770,7 @@
                                                        :point 0
                                                        :row 0
                                                        :column 0})
+                                       (dissoc :structure-state )
                                        (editor-update-viewport))
                                    ]])})
         (ant/button {:text  "load"
