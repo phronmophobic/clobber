@@ -2243,7 +2243,7 @@
                 body))]
     body))
 
-(defeffect ::update-insta-repl [{:keys [editor $editor]}]
+(defeffect ::update-instarepl [{:keys [editor $editor]}]
   (future
     (try
       (let [ ;; insta-state (::insta editor)
@@ -2274,8 +2274,14 @@
                                                            [nil form])
                                       form `(fn [~@(keys bindings)]
                                               ~form)
-                                      f (eval form)
-                                      result (apply f (vals bindings))
+                                      [success result]
+                                      (try
+                                        (let [f (eval form)
+                                              result (apply f (vals bindings))]
+                                          [true result])
+                                        (catch Exception e
+                                          [false e]))
+
                                       bindings (if binding-sym
                                                  (assoc bindings binding-sym result)
                                                  bindings)
@@ -2284,10 +2290,11 @@
                                                .getEndPoint
                                                .getRow)
                                       line-vals (assoc line-vals line (viscous/wrap result))]
-                                  
-                                  (if (.gotoNextSibling cursor)
-                                    (recur bindings line-vals)
-                                    line-vals)))))]
+                                  (if (not success)
+                                    line-vals
+                                    (if (.gotoNextSibling cursor)
+                                      (recur bindings line-vals)
+                                      line-vals))))))]
             (dispatch! :update $editor
                        (fn [editor]
                          (assoc editor :line-val {rope line-vals}))))))
@@ -2301,12 +2308,12 @@
                 :key-event
                 (fn [handler key scancode action mods]
                   (cons
-                   [::update-insta-repl this]
+                   [::update-instarepl this]
                    (handler key scancode action mods)))
                 :key-press
                 (fn [handler s]
                   (cons
-                   [::update-insta-repl this]
+                   [::update-instarepl this]
                    (handler s)))
                 body)]
       body)
