@@ -735,7 +735,8 @@
                                                    (TSPoint. new-cursor-row new-cursor-column)))
                          tree))
 
-            new-rope (.insert rope (+ cursor-point diff-points) ")")
+            ^Rope
+            new-rope (.insert rope ^int (+ cursor-point diff-points) ^CharSequence '")")
 
             ;; next, insert "(" at start of node
             target-byte (.getStartByte wrap-node)
@@ -758,7 +759,7 @@
                                                      (TSPoint. new-cursor-row new-cursor-column)))
                        new-tree)
 
-            new-rope (.insert new-rope (+ cursor-point diff-points) "(")
+            new-rope (.insert new-rope ^int (+ cursor-point diff-points) ^CharSequence '"(")
 
             reader (->RopeReader new-rope)
             new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )
@@ -1227,7 +1228,6 @@
             idx (.gotoFirstChildForByte cursor cursor-byte)]
         (if (= -1 idx)
           editor
-          ;; do indent
           (try
             (let [node (.currentNode cursor)
                   line-number (-> node
@@ -1618,7 +1618,7 @@
             (cond
               (= -1 prev-char-offset) (editor-forward-char editor)
 
-              (= (get {\) \(, \] \[, \} \{, \" \"} current-char)
+              (= ^char (get {\) \(, \] \[, \} \{, \" \"} current-char)
                  (.charAt cs prev-char-offset))
               ;; delete whole coll
               (let [new-tree (when-let [^TSTree tree tree]
@@ -1707,7 +1707,7 @@
             (cond
               (= (.length cs) cursor-char) (editor-backward-char editor)
 
-              (= (get {\( \), \[ \], \{ \}, \" \"} prev-char)
+              (= ^char (get {\( \), \[ \], \{ \}, \" \"} prev-char)
                  (.charAt cs cursor-char))
               ;; delete whole coll
               (let [new-tree (when-let [^TSTree tree tree]
@@ -2108,7 +2108,9 @@
                                 (bit-or
                                  Pattern/CASE_INSENSITIVE
                                  Pattern/LITERAL))
-        cs (.toCharSequence (:rope editor))
+        ^Rope
+        rope (:rope editor)
+        cs (.toCharSequence rope)
         matcher (.matcher regexp cs)
 
         match (if (.find matcher search-index)
@@ -2146,7 +2148,9 @@
                                 (bit-or
                                  Pattern/CASE_INSENSITIVE
                                  Pattern/LITERAL))
-        cs (.toCharSequence (:rope editor))
+        ^Rope
+        rope (:rope editor)
+        cs (.toCharSequence rope)
         matcher (.matcher regexp cs)
 
         match (if (.find matcher search-index)
@@ -2248,7 +2252,8 @@
         
         (when (not= rope
                     (-> line-val first first))
-          (let [tree (:tree editor)
+          (let [^TSTree
+                tree (:tree editor)
                 root-node (.getRootNode tree)
                 cursor (TSTreeCursor. root-node)
                 
@@ -2576,7 +2581,8 @@
 (defeffect ::make-fn [{:keys [$editor editor structure-state]}]
   (future
     (try
-      (let [tree (:tree editor)
+      (let [^TSTree
+            tree (:tree editor)
             rope (:rope editor)
             root-node (.getRootNode tree)
             cursor (TSTreeCursor. root-node)
