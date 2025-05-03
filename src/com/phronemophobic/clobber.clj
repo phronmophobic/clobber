@@ -2768,6 +2768,7 @@
                      :on-click (fn []
                                  [[:set $editor
                                    (-> (make-editor clojure-lang)
+                                       (editor-self-insert-command "\n\n\n\n\n\n")
                                        (assoc :cursor {:byte 0
                                                        :char 0
                                                        :point 0
