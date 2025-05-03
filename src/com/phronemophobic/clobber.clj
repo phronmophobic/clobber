@@ -2506,9 +2506,11 @@
                           nil)))
                   )
                 body)
-               [(ui/filled-rectangle [1 0 1 0.1]
-                                     100 100)
-                body])
+               (let [[w h] (ui/bounds body)
+                     gray 0.98]
+                 [(ui/filled-rectangle [gray gray gray]
+                                       (max 800 w) (max 100 h))
+                  body]))
 
         body (if focused?
                (wrap-search
