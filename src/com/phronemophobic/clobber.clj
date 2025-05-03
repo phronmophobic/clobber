@@ -1587,7 +1587,8 @@
                         (>= (.getStartByte node)
                             cursor-byte))
                   parent
-                  (if (contains? coll-node-types (.getType node))
+                  (if (or (contains? coll-node-types (.getType node))
+                          (= "str_lit" (.getType node)))
                     (recur node)
                     (recur parent)))))
 
