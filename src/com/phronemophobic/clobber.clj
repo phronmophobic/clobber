@@ -2808,7 +2808,7 @@
         (ant/number-slider
          {:integer? true
           :width 200
-          :min 8
+          :min 12
           :max 40
           :value font-size})
         ]
