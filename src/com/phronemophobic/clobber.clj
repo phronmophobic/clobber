@@ -1414,16 +1414,19 @@
 
          ;; find newline
          [lines char-index] (loop [char-index cursor-char
-                                   lines 0]
+                                   lines 0
+                                   ;; only used when hitting
+                                   ;; end of buffer
+                                   last-line-char nil]
                               (let [next-char (.following bi char-index)]
                                 (cond
-                                  ;; last line. don't move
-                                  (= -1 next-char) [lines cursor-char]
+                                  ;; last line. go to last line char
+                                  (= -1 next-char) [lines last-line-char]
                                   (= \newline (.charAt cs char-index)) (let [lines (inc lines)]
                                                                          (if (= lines n)
                                                                            [lines next-char]
-                                                                           (recur next-char lines)))
-                                  :else (recur next-char lines))))
+                                                                           (recur next-char lines next-char)))
+                                  :else (recur next-char lines last-line-char))))
 
          ;; keep going until target column
          [char-index column]
