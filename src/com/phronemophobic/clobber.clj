@@ -2798,17 +2798,18 @@
                 ^TSTree
                 tree (:tree editor)
                 root-node (.getRootNode tree)
-                node (.getNamedDescendantForByteRange root-node byte-index byte-index)
-                node-str (node->str (:rope editor) node)
-                node-str (str/join
-                          "\n"
-                          (cons
-                           (.getType node)
-                           (eduction
-                            (take 4)
-                            (str/split-lines
-                             node-str))))]
-            (dispatch! :update $structure-state assoc :node-str node-str))))
+                node (.getNamedDescendantForByteRange root-node byte-index byte-index)]
+            (when node
+              (let [node-str (node->str (:rope editor) node)
+                    node-str (str/join
+                              "\n"
+                              (cons
+                               (.getType node)
+                               (eduction
+                                (take 4)
+                                (str/split-lines
+                                 node-str))))]
+                (dispatch! :update $structure-state assoc :node-str node-str))))))
       (catch Exception e
         (prn e)))))
 
