@@ -325,8 +325,58 @@
     (.length cs)))
 
 
-(defn next-named-child-for-byte
+
+
+(defn ^:private goto-next-dfs-node [^TSTreeCursor cursor]
+  (cond
+    (.gotoFirstChild cursor) true
+    (.gotoNextSibling cursor) true
+
+    :else
+    (loop []
+      (if (.gotoParent cursor)
+        (if (.gotoNextSibling cursor)
+          true
+          (recur))
+        false))))
+
+(defn tree-cursor-reducible
+  ([cursor]
+   (tree-cursor-reducible cursor goto-next-dfs-node))
+  ([^TSTreeCursor cursor next-node]
+   (reify
+     clojure.lang.IReduceInit
+     (reduce [this f init]
+       (loop [result init]
+         (let [node (.currentNode cursor)
+               result (f result node)]
+           (if (reduced? result)
+             @result
+             (if (next-node cursor)
+               (recur result)
+               result))))))))
+
+(defn node-reducible [^TSNode node]
+  (tree-cursor-reducible (TSTreeCursor. node)))
+
+(defn tree-reducible
+  ([tree]
+   (tree-reducible tree goto-next-dfs-node))
+  ([^TSTree tree next-node]
+   (let [cursor (TSTreeCursor. (.getRootNode tree))]
+     (if (.gotoFirstChild cursor)
+       (tree-cursor-reducible cursor next-node)
+       (reify
+         clojure.lang.IReduceInit
+         (reduce [this f init]
+           init))))))
+
+(defn first-by [xf coll]
+  (transduce xf (completing (fn [_ x] (reduced x))) nil coll))
+
+#_(defn next-named-child-for-byte
   "Depth first search for the first named node that *starts on or after* byte."
+  ^TSNode
   [^TSTree tree byte-offset]
   ;; It seems like all tree searches are linear
   ;; so this doesn't seem worse than any other method.
@@ -363,48 +413,63 @@
                            (recur))))))))]
     node))
 
-
-
-(defn ^:private goto-next-dfs-node [^TSTreeCursor cursor]
-  (cond
-    (.gotoFirstChild cursor) true
-    (.gotoNextSibling cursor) true
-
-    :else
-    (loop []
-      (if (.gotoParent cursor)
-        (if (.gotoNextSibling cursor)
-          true
-          (recur))
-        false))))
-
-(defn tree-cursor-reducible [^TSTreeCursor cursor]
-  (reify
-    clojure.lang.IReduceInit
-    (reduce [this f init]
-      (loop [result init]
-        (let [node (.currentNode cursor)
-              result (f result node)]
-          (if (reduced? result)
-            @result
-            (if (goto-next-dfs-node cursor)
-              (recur result)
-              result)))))))
-
-(defn node-reducible [^TSNode node]
-  (tree-cursor-reducible (TSTreeCursor. node)))
-
-(defn tree-reducible [^TSTree tree]
+(defn next-named-child-for-byte
+  ^TSNode
+  [^TSTree tree byte-offset]
   (let [cursor (TSTreeCursor. (.getRootNode tree))]
-    (if (.gotoFirstChild cursor)
-      (tree-cursor-reducible cursor)
-      (reify
-        clojure.lang.IReduceInit
-        (reduce [this f init]
-          init)))))
+    (.gotoFirstChild cursor)
+    (loop []
+      (when (< (.getEndByte (.currentNode cursor))
+               byte-offset)
+        (.gotoNextSibling cursor)
+        (recur)))
 
-(defn first-by [xf coll]
-  (transduce xf (completing (fn [_ x] (reduced x))) nil coll))
+    (transduce
+     (comp
+      (filter (fn [^TSNode node]
+                (.isNamed node)))
+      (filter (fn [^TSNode node]
+                (> (.getEndByte node)
+                   byte-offset))))
+     (completing
+      (fn [^TSNode result ^TSNode node]
+        (if (> (.getStartByte node)
+               byte-offset)
+          (reduced
+           (if (and result
+                    (or (< (.getEndByte result)
+                           (.getEndByte node))
+                        (= (.getStartByte result)
+                           byte-offset)))
+             result
+             node))
+          node)))
+     nil
+     (tree-cursor-reducible cursor))))
+
+(defn previous-named-child-for-byte
+  ^TSNode
+  [^TSTree tree byte-offset]
+  (transduce
+   (comp
+    (filter (fn [^TSNode node]
+              (.isNamed node))))
+   (completing
+    (fn [^TSNode best-match ^TSNode node]
+      (if (>= (.getStartByte node)
+              byte-offset)
+        (reduced best-match)
+        node)))
+   nil
+   (tree-reducible
+    tree
+    (fn [^TSTreeCursor cursor]
+      (if (<= (.getEndByte (.currentNode cursor))
+              byte-offset)
+        (.gotoNextSibling cursor)
+        (goto-next-dfs-node cursor))))))
+
+
 
 (def atom-lit-types #{"char_lit" "str_lit" "bool_lit" "nil_lit" "kwd_lit" "num_lit" "sym_lit"})
 (defn atom-lit? [^TSNode node]
@@ -1537,9 +1602,67 @@
 (defn editor-cider-eval-last-sexp [editor]
   editor)
 (defn editor-paredit-forward [editor]
-  editor)
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
+        next-node (next-named-child-for-byte tree cursor-byte)]
+
+    (if (not next-node)
+      editor
+      (let [target-byte (.getEndByte next-node)
+
+            diff-rope (.sliceBytes rope cursor-byte target-byte)
+            diff-string (.toString diff-rope)
+            diff-points (.size diff-rope)
+            point-offset (count-points diff-string)
+
+            new-cursor-row (+ cursor-row (:row point-offset))
+            new-cursor-column (if (pos? (:row point-offset))
+                                (:column point-offset)
+                                (+ (:column point-offset) cursor-column))
+
+            new-cursor {:byte target-byte
+                        :char (+ cursor-char (.length diff-string))
+                        :point (+ cursor-point diff-points)
+                        :row new-cursor-row
+                        :column new-cursor-column}]
+        (editor-update-viewport
+         (assoc editor
+                :cursor new-cursor))))))
+
 (defn editor-paredit-backward [editor]
-  editor)
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
+        previous-node (previous-named-child-for-byte tree cursor-byte)]
+    (if (not previous-node)
+      editor
+      (let [target-byte (.getStartByte previous-node)
+
+            diff-rope (.sliceBytes rope target-byte cursor-byte)
+            diff-string (.toString diff-rope)
+            diff-points (.size diff-rope)
+            point-offset (count-points diff-string)
+
+            new-cursor-row (- cursor-row (:row point-offset))
+            new-cursor-column (if (pos? (:row point-offset))
+                                (:column point-offset)
+                                (- cursor-column (:column point-offset)))
+
+            new-cursor {:byte target-byte
+                        :char (- cursor-char (.length diff-string))
+                        :point (- cursor-point diff-points)
+                        :row new-cursor-row
+                        :column new-cursor-column}]
+        (editor-update-viewport
+         (assoc editor
+                :cursor new-cursor))))))
 
 (defn editor-paredit-doublequote [editor]
   (editor-paredit-open-coll editor \" \"))
@@ -2469,6 +2592,13 @@
                         (case (char key)
                           \X
                           [[::editor-eval-top-form this]]
+
+                          \F
+                          [[:update $editor #(editor-paredit-forward %)]]
+
+                          \B
+                          [[:update $editor #(editor-paredit-backward %)]]
+
 
                           nil)
 
