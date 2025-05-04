@@ -821,10 +821,10 @@
             new-tree (when-let [^TSTree
                                 tree tree]
                        (let [tree (.copy tree)]
-                         (.edit tree (TSInputEdit. (dec target-byte) (dec target-byte) target-byte
+                         (.edit tree (TSInputEdit. (dec target-byte) target-byte (dec target-byte)
                                                    (TSPoint. new-cursor-row (dec new-cursor-column))
-                                                   (TSPoint. new-cursor-row (dec new-cursor-column))
-                                                   (TSPoint. new-cursor-row new-cursor-column)))
+                                                   (TSPoint. new-cursor-row new-cursor-column)
+                                                   (TSPoint. new-cursor-row (dec new-cursor-column))))
                          tree))
 
             ^Rope
