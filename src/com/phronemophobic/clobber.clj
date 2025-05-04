@@ -327,7 +327,11 @@
 
 
 
-(defn ^:private goto-next-dfs-node [^TSTreeCursor cursor]
+(defn ^:private goto-next-dfs-node
+  "Navigates `cursor` to the next node availble in dfs order.
+
+  Returns `true` if another node is available, false otherwise."
+  [^TSTreeCursor cursor]
   (cond
     (.gotoFirstChild cursor) true
     (.gotoNextSibling cursor) true
@@ -360,6 +364,13 @@
   (tree-cursor-reducible (TSTreeCursor. node)))
 
 (defn tree-reducible
+  "Returns an instance of IReduce init for the nodes of tree.
+
+  The (source) node is skipped.
+
+  `next-node`: if provided, should be a function
+               that takes a TSTreeCursor and navigates
+               to the next node. defaults to `goto-next-dfs-node`."
   ([tree]
    (tree-reducible tree goto-next-dfs-node))
   ([^TSTree tree next-node]
