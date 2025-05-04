@@ -413,6 +413,7 @@
 (defn named-child-for-byte
   "Depth first search for the smallest named atom node that contains `byte-offset` 
   or the next named node after byte."
+  ^TSNode
   [^TSTree tree byte-offset]
   (transduce
    (filter (fn [^TSNode node]
