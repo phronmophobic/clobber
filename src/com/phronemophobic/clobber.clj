@@ -104,14 +104,19 @@
 
 
 (def s "👻👩‍👩‍👦‍👦")
+(count-points s)
+(-> (Rope/from s) .size)
+(.length s)
+(alength (.getBytes s "utf-8"))
+
 #_(def s
-  #_(pr-str
-   '(do "asdf"
-        1 2 #{}
-        (def foo 42)))
-  (slurp
-   #_(io/resource "com/phronemophobic/easel.clj")
-   (io/resource "com/phronemophobic/clobber.clj")))
+    #_(pr-str
+       '(do "asdf"
+            1 2 #{}
+            (def foo 42)))
+    (slurp
+     #_(io/resource "com/phronemophobic/easel.clj")
+     (io/resource "com/phronemophobic/clobber.clj")))
 
 (defonce clojure-lang (TreeSitterClojure.))
 (defonce json-lang (TreeSitterJson.))
@@ -3052,6 +3057,20 @@
                                                        :row 0
                                                        :column 0})
                                        (editor-update-viewport))
+                                   ]])})
+        (ant/button {:text  "load-json"
+                     :on-click (fn []
+                                 [[:set $editor
+                                   (-> (make-editor json-lang)
+                                       (editor-self-insert-command
+                                        (slurp (io/as-url
+                                                "https://raw.githubusercontent.com/sogaiu/tree-sitter-clojure/refs/heads/master/src/grammar.json")))
+                                       (assoc :cursor {:byte 0
+                                                       :char 0
+                                                       :point 0
+                                                       :row 0
+                                                       :column 0})
+                                       (editor-update-viewport))
                                    ]])})]
        {:direction :row
         :gap 4
@@ -3106,16 +3125,9 @@
      {:direction :column
       :gap 8})))
 
-
-(comment
+(defn dev []
   (dev/add-component-as-applet #'debug
                                {:editor (-> (make-editor clojure-lang)
-                                            #_(editor-self-insert-command
-                                               #_(slurp (io/resource "com/phronemophobic/easel.clj"))
-                                               ";; break break break
-;; break break break
-;; break break break
-;; break break break")
                                             (editor-self-insert-command
                                              (slurp (io/resource "com/phronemophobic/clobber.clj")))
                                             (assoc :cursor {:byte 0
@@ -3124,6 +3136,26 @@
                                                             :row 0
                                                             :column 0})
                                             (editor-update-viewport))})
+  ,)
+
+
+(defn dev-json []
+  (dev/add-component-as-applet #'debug
+                               {:editor (-> (make-editor json-lang)
+                                            (editor-self-insert-command
+                                             (slurp (io/as-url
+                                                     "https://raw.githubusercontent.com/sogaiu/tree-sitter-clojure/refs/heads/master/src/grammar.json")))
+                                            (assoc :cursor {:byte 0
+                                                            :char 0
+                                                            :point 0
+                                                            :row 0
+                                                            :column 0})
+                                            (editor-update-viewport))})
+  ,)
+
+
+(comment
+  
 
 
   (require '[clj-async-profiler.core :as prof])
