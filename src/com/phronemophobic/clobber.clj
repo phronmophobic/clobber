@@ -58,6 +58,30 @@
           (recur (inc i) (inc point-count)))
         point-count))))
 
+(defn count-points
+  "Counts the number or rows and columns of s.
+
+  returns {:row row :column column}."
+  [^String s]
+  (let [bi (doto (BreakIterator/getCharacterInstance)
+             (.setText s))]
+    (loop [row 0
+           column 0
+           start (.first bi)]
+      (let [end (.next bi)]
+        (if (not= end BreakIterator/DONE)
+          (let [newline? (and (= 1 (- end start))
+                              (= (.charAt s start) \newline))]
+            (if newline?
+              (recur (inc row)
+                     0
+                     end)
+              (recur row
+                     (inc column)
+                     end)))
+          {:row row
+           :column column})))))
+
 (extend-protocol p/Datafiable
   TSTree
   (datafy [^TSTree tree]
@@ -726,29 +750,7 @@
 
   )
 
-(defn count-points
-  "Counts the number or rows and columns of s.
 
-  returns {:row row :column column}."
-  [^String s]
-  (let [bi (doto (BreakIterator/getCharacterInstance)
-             (.setText s))]
-    (loop [row 0
-           column 0
-           start (.first bi)]
-      (let [end (.next bi)]
-        (if (not= end BreakIterator/DONE)
-          (let [newline? (and (= 1 (- end start))
-                              (= (.charAt s start) \newline))]
-            (if newline?
-              (recur (inc row)
-                     0
-                     end)
-              (recur row
-                     (inc column)
-                     end)))
-          {:row row
-           :column column})))))
 
 (defn editor-update-viewport [editor]
   (let [row (-> editor :cursor :row)
@@ -3138,20 +3140,6 @@
                                             (editor-update-viewport))})
   ,)
 
-
-(defn dev-json []
-  (dev/add-component-as-applet #'debug
-                               {:editor (-> (make-editor json-lang)
-                                            (editor-self-insert-command
-                                             (slurp (io/as-url
-                                                     "https://raw.githubusercontent.com/sogaiu/tree-sitter-clojure/refs/heads/master/src/grammar.json")))
-                                            (assoc :cursor {:byte 0
-                                                            :char 0
-                                                            :point 0
-                                                            :row 0
-                                                            :column 0})
-                                            (editor-update-viewport))})
-  ,)
 
 
 (comment
