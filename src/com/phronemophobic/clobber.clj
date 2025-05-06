@@ -520,25 +520,33 @@
   or the next named node after byte."
   ^TSNode
   [^TSTree tree byte-offset]
-  (transduce
-   (filter (fn [^TSNode node]
-             (> (-> node .getEndByte)
-                byte-offset)))
-   (completing
-    (fn [^TSNode best-match ^TSNode node]
-      (if (>= (-> node .getStartByte)
-              byte-offset)
-        (if best-match
-          (reduced best-match)
-          (if (.isNamed node)
-            (reduced node)
-            nil))
-        (if (and (.isNamed node)
-                 (atom-lit? node))
-          node
-          best-match))))
-   nil
-   (tree-reducible tree)))
+  (let [cursor (TSTreeCursor. (.getRootNode tree))]
+    (.gotoFirstChild cursor)
+    (loop []
+      (when (< (.getEndByte (.currentNode cursor))
+               byte-offset)
+        (.gotoNextSibling cursor)
+        (recur)))
+
+    (transduce
+     (filter (fn [^TSNode node]
+               (> (-> node .getEndByte)
+                  byte-offset)))
+     (completing
+      (fn [^TSNode best-match ^TSNode node]
+        (if (>= (-> node .getStartByte)
+                byte-offset)
+          (if best-match
+            (reduced best-match)
+            (if (.isNamed node)
+              (reduced node)
+              nil))
+          (if (and (.isNamed node)
+                   (atom-lit? node))
+            node
+            best-match))))
+     nil
+     (tree-cursor-reducible cursor))))
 
 (defn find-byte-offset-for-line [^TSTree tree ^Rope rope target-line]
   (if (zero? target-line)
