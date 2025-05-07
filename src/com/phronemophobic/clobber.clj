@@ -1511,7 +1511,10 @@
                               (let [next-char (.following bi char-index)]
                                 (cond
                                   ;; last line. go to last line char
-                                  (= -1 next-char) [lines last-line-char]
+                                  (= -1 next-char) (if (nil? last-line-char)
+                                                     ;; started on last line
+                                                     [0 cursor-char]
+                                                     [lines last-line-char])
                                   (= \newline (.charAt cs char-index)) (let [lines (inc lines)]
                                                                          (if (= lines n)
                                                                            [lines next-char]
