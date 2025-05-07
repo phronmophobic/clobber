@@ -1354,13 +1354,13 @@
             (let [new-rope (if (pos? indent-diff)
                              (.concat (.sliceBytes rope 0 byte-index)
                                       (.concat (Rope/from (str/join (repeat indent-diff " ")))
-                                               (.sliceBytes rope byte-index (.size rope))))
+                                               (.sliceBytes rope byte-index (.numBytes rope))))
 
                              ;; else 
                              (.concat (.sliceBytes rope 0 byte-index)
                                       (.sliceBytes rope
                                                    (- byte-index indent-diff)
-                                                   (.size rope))))
+                                                   (.numBytes rope))))
 
                   
                   
