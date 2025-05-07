@@ -1308,8 +1308,6 @@
               ;;    first non-whitespace
 
               cs (.toCharSequence rope)
-
-              cs (.toCharSequence rope)
               bi (doto (BreakIterator/getCharacterInstance)
                    (.setText cs))
 
@@ -3093,6 +3091,7 @@
                        ["Menlo"
                         "Webdings"
                         "Savoye LET"
+                        "Fira Code"
                         "Comic Sans MS"])
         :selection font-family})
       (ui/flex-layout
