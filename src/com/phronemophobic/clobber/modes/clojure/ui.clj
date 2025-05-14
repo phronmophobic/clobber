@@ -163,6 +163,7 @@
      :eval-ns *ns*
      :rope Rope/EMPTY
      :language lang
+     :viscous? true
      :parser (doto (TSParser.)
                (.setLanguage lang))
      :buf (byte-array 4096)})))
@@ -1229,13 +1230,12 @@
         
         font-family (get extra :font-family)
         font-size (get extra :font-size 12)
-        viscous? (get extra :viscous?)
+        viscous? (get editor :viscous?)
         instarepl? (get extra :instarepl?)
         structure? (get extra :structure?)
 
         $editor $editor
         editor (-> editor
-                   (assoc :viscous? viscous?)
                    (assoc :instarepl? instarepl?)
                    (assoc :structure? structure?)
                    (assoc-in
