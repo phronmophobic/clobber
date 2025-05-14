@@ -228,6 +228,115 @@
                          :row new-cursor-row
                          :column new-cursor-column}))))))
 
+(defn editor-delete-backward-char [editor]
+  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]
+    (if (<= (:byte cursor) 0)
+      editor
+      (let [{cursor-byte :byte
+             cursor-char :char
+             cursor-row :row
+             cursor-point :point
+             cursor-column :column} cursor
+            bi (doto (BreakIterator/getCharacterInstance)
+                 (.setText rope))
+            prev (.preceding bi cursor-char)
+            diff-string (-> (.subSequence rope prev cursor-char)
+                            .toString)
+            diff-bytes (alength (.getBytes diff-string "utf-8"))
+
+            prev-byte (- cursor-byte diff-bytes)
+            prev-char (.charAt rope prev)
+            prev-point (- cursor-point (util/num-points diff-string))
+            newline? (= prev-char \newline)
+            
+            new-cursor-row (if newline?
+                             (dec cursor-row)
+                             cursor-row)
+            new-cursor-column (if newline?
+                                (loop [n 0]
+                                  (let [start (.previous bi)]
+                                    (if (or (= BreakIterator/DONE start)
+                                            (= \newline (.charAt rope start)))
+                                      n
+                                      (recur (inc n)))))
+                                (dec cursor-column))
+
+            new-tree (when-let [^TSTree tree tree]
+                       (let [tree (.copy tree)]
+                         (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
+                                                   (TSPoint. cursor-row cursor-column)
+                                                   (TSPoint. cursor-row cursor-column)
+                                                   (TSPoint. new-cursor-row new-cursor-column)))
+                         tree))
+
+            new-rope (.concat (.slice rope 0 prev-point)
+                              (.slice rope cursor-point (.size rope)))
+
+            reader (util/->RopeReader new-rope)
+            new-tree (when parser
+                       (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 ))]
+        (editor-update-viewport
+         (assoc editor
+                :tree new-tree
+                :cursor {:byte prev-byte
+                         :char prev
+                         :point prev-point
+                         :row new-cursor-row
+                         :column new-cursor-column}
+                :paragraph nil
+                :rope new-rope))))))
+
+(defn editor-delete-char
+  ([editor]
+   (editor-delete-char editor 1))
+  ([editor n]
+   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+         {cursor-byte :byte
+          cursor-char :char
+          cursor-row :row
+          cursor-point :point
+          cursor-column :column} cursor
+         
+         bi (doto (BreakIterator/getCharacterInstance)
+              (.setText rope))
+
+         [char-index old-end-row old-end-column]
+         (loop [char-index cursor-char
+                row cursor-row
+                column cursor-column
+                n n]
+           (if (zero? n)
+             [char-index row column]
+             (cond
+               (= -1 next) char-index
+               (= \newline (.charAt rope char-index)) (recur (.following bi char-index) (inc row) 0 (dec n))
+               :else (recur (.following bi char-index) row (inc column) (dec n)))))
+
+         diff-string (-> (.subSequence rope cursor-char char-index)
+                         .toString)
+         diff-bytes (alength (.getBytes diff-string "utf-8"))
+
+         end-byte (+ cursor-byte diff-bytes)
+         new-tree (when-let [^TSTree tree tree]
+                    (let [tree (.copy tree)]
+                      (.edit tree (TSInputEdit. cursor-byte end-byte cursor-byte
+                                                (TSPoint. cursor-row cursor-column)
+                                                (TSPoint. old-end-row old-end-column)
+                                                (TSPoint. cursor-row cursor-column)))
+                      tree))
+
+         new-rope (.concat (.sliceBytes rope 0 cursor-byte)
+                           (.slice rope end-byte (.size rope)))
+         
+         reader (util/->RopeReader new-rope)
+         new-tree (when parser
+                    (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 ))]
+     (editor-update-viewport
+      (assoc editor
+             :tree new-tree
+             :paragraph nil
+             :rope new-rope)))))
+
 
 
 (defn editor-backward-char [editor]

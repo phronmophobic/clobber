@@ -617,9 +617,6 @@
                    :rope new-rope)))))))
 
 
-(defn editor-paredit-backward-delete [editor]
-  editor)
-
 
 (defn editor-paredit-forward-delete [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]
@@ -709,7 +706,7 @@
 
 
 
-(defn editor-delete-backward-char [editor]
+(defn editor-paredit-backward-delete [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]
     (if (<= (:byte cursor) 0)
       editor
@@ -819,6 +816,7 @@
    "C-M-f" #'editor-paredit-forward
    "C-M-b" #'editor-paredit-backward
    "C-a" #'text-mode/editor-move-beginning-of-line
+   "C-u C-d" #'text-mode/editor-delete-char
    "C-d" #'editor-paredit-forward-delete
    "C-e" #'text-mode/editor-move-end-of-line
    "C-f" #'text-mode/editor-forward-char
@@ -850,7 +848,8 @@
    "(" #'editor-paredit-open-round
    ")" #'editor-paredit-close-round
 
-   "DEL" #'editor-delete-backward-char
+   "C-u DEL" #'text-mode/editor-delete-backward-char
+   "DEL" #'editor-paredit-backward-delete
    "RET" #'paredit-newline
    "<right>" #'text-mode/editor-forward-char
    "<up>" #'text-mode/editor-previous-line
