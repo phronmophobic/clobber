@@ -232,8 +232,7 @@
                             capture-name (.getCaptureNameForId query (.getIndex capture))
                             node (.getNode capture)]
                         (if (= capture-name "list")
-                          ;; (recur p offset)
-                          (let [ ;; check if the first child is def or defn
+                          (let [;; check if the first child is def or defn
                                 first-child (.getNamedChild node 0)]
                             (if (and (not (.isNull first-child))
                                      (= "sym_lit" (.getType first-child)))
