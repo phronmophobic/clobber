@@ -20,7 +20,7 @@
 
 
 (def highlight-queries
-   ;; tree-sitter-clojure/queries/highlights.scm
+  ;; tree-sitter-clojure/queries/highlights.scm
   "
 
   (list_lit) @list
@@ -147,9 +147,9 @@
                         :column (inc new-cursor-column)}]
         (text-mode/editor-update-viewport
          (assoc editor
-                     :tree new-tree
-                     :rope new-rope
-                     :cursor new-cursor)))
+                :tree new-tree
+                :rope new-rope
+                :cursor new-cursor)))
       
       (text-mode/editor-self-insert-command editor "()"))))
 
@@ -300,28 +300,27 @@
               ;; 3. add or remove spaces until
               ;;    first non-whitespace
 
-              cs (.toCharSequence rope)
               bi (doto (BreakIterator/getCharacterInstance)
-                   (.setText cs))
+                   (.setText rope))
 
               ;; 1. find start of line
               char-index
               (loop [idx cursor-char]
                 (let [prev-idx (.preceding bi idx)]
                   (if (or (= -1 prev-idx)
-                          (= \newline (.charAt cs prev-idx)))
+                          (= \newline (.charAt rope prev-idx)))
                     idx
                     (recur prev-idx))))
 
               
-              diff-string (.toString (.subSequence cs char-index cursor-char))
+              diff-string (.toString (.subSequence rope char-index cursor-char))
               
               byte-index (- cursor-byte (alength (.getBytes diff-string "utf-8")))
               point-index (- cursor-point (util/num-points diff-string))
 
               ;; move forward until newline or non whitespace
               num-spaces (loop [idx char-index]
-                           (let [c (.charAt cs idx)]
+                           (let [c (.charAt rope idx)]
                              (if (= \space c)
                                (recur (inc idx))
                                (- idx char-index))))
@@ -331,7 +330,7 @@
 
               ;; measure indent in bytes for now
               indent-diff (- indent num-spaces)
-]
+              ]
           (if (zero? indent-diff)
             ;; need to also move cursor, even if
             ;; spaces aren't added or removed
@@ -442,7 +441,6 @@
 
 (defn editor-paredit-open-coll [editor open-char close-char]
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-        cs (.toCharSequence rope)
         {cursor-byte :byte
          cursor-char :char
          cursor-point :point
@@ -450,7 +448,7 @@
          cursor-column :column} cursor]
     (if (or (= (.numBytes rope)
                cursor-byte)
-            (not= (.charAt cs cursor-char)
+            (not= (.charAt rope cursor-char)
                   open-char))
       (-> editor
           (text-mode/editor-self-insert-command (str open-char close-char))
@@ -559,7 +557,7 @@
 
       ;; check if we're at the end of line
       (= \newline
-         (-> rope .toCharSequence (.charAt cursor-char)))
+         (-> rope (.charAt cursor-char)))
       (editor-paredit-forward-delete editor)
 
       :else
@@ -632,19 +630,18 @@
                   (-> last-node-spanning-a-line
                       .getEndByte)
                   ;; just find the end of line
-                  (let [cs (.toCharSequence rope)
-                        bi (doto (BreakIterator/getCharacterInstance)
-                             (.setText cs))
+                  (let [bi (doto (BreakIterator/getCharacterInstance)
+                             (.setText rope))
 
                         char-index (loop [char-index cursor-char]
                                      (let [next-char (.following bi char-index)]
                                        (cond
                                          (= -1 next-char) char-index
-                                         (= \newline (.charAt cs char-index)) char-index
+                                         (= \newline (.charAt rope char-index)) char-index
                                          :else (recur next-char))))]
                     (if (= char-index cursor-char)
                       cursor-byte
-                      (let [diff-string (-> (.subSequence cs cursor-char char-index )
+                      (let [diff-string (-> (.subSequence rope cursor-char char-index )
                                             .toString)
                             num-bytes (alength (.getBytes diff-string "utf-8"))]
                         (+ cursor-byte num-bytes)))))))]
@@ -687,8 +684,7 @@
              cursor-point :point
              cursor-column :column} cursor
             ;; s (String. (rope->bytes rope) "utf-8")
-            cs (.toCharSequence rope)
-            current-char (.charAt cs cursor-char)]
+            current-char (.charAt rope cursor-char)]
         (case current-char
           (\( \[ \{)
           (text-mode/editor-forward-char editor)
@@ -697,14 +693,14 @@
           (let [ ;; check if empty and delete whole coll
 
                 bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText cs))
+                     (.setText rope))
 
                 prev-char-offset (.preceding bi cursor-char)]
             (cond
               (= -1 prev-char-offset) (text-mode/editor-forward-char editor)
 
               (= ^char (get {\) \(, \] \[, \} \{, \" \"} current-char)
-                 (.charAt cs prev-char-offset))
+                 (.charAt rope prev-char-offset))
               ;; delete whole coll
               (let [new-tree (when-let [^TSTree tree tree]
                                (let [tree (.copy tree)]
@@ -733,16 +729,16 @@
 
           ;; else
           (let [bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText cs))
+                     (.setText rope))
                 next-char (.following bi cursor-char)
 
-                diff-string (-> (.subSequence cs cursor-char next-char)
+                diff-string (-> (.subSequence rope cursor-char next-char)
                                 .toString)
                 diff-bytes (alength (.getBytes diff-string "utf-8"))
                 next-byte (+ cursor-byte diff-bytes)
                 next-point (+ cursor-point (util/num-points diff-string))
 
-                newline? (= \newline (.charAt cs cursor-char))
+                newline? (= \newline (.charAt rope cursor-char))
 
                 new-tree (when-let [^TSTree tree tree]
                            (let [tree (.copy tree)]
@@ -769,109 +765,106 @@
 
 (defn editor-delete-backward-char [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]
-      (if (<= (:byte cursor) 0)
-        editor
-        (let [{cursor-byte :byte
-               cursor-char :char
-               cursor-row :row
-               cursor-point :point
-               cursor-column :column} cursor
-              ;; s (String. (rope->bytes rope) "utf-8")
-              cs (.toCharSequence rope)
+    (if (<= (:byte cursor) 0)
+      editor
+      (let [{cursor-byte :byte
+             cursor-char :char
+             cursor-row :row
+             cursor-point :point
+             cursor-column :column} cursor
+            bi (doto (BreakIterator/getCharacterInstance)
+                 (.setText rope))
+            prev (.preceding bi cursor-char)
+            prev-char (.charAt rope prev)]
+        (case prev-char
+          (\) \] \})
+          (text-mode/editor-backward-char editor)
 
-              bi (doto (BreakIterator/getCharacterInstance)
-                   (.setText cs))
-              prev (.preceding bi cursor-char)
-              prev-char (.charAt cs prev)]
-          (case prev-char
-            (\) \] \})
-            (text-mode/editor-backward-char editor)
+          (\[ \" \{ \()
+          ;; check if empty and delete whole coll
+          (cond
+            (= (.length rope) cursor-char) (text-mode/editor-backward-char editor)
 
-            (\[ \" \{ \()
-            ;; check if empty and delete whole coll
-            (cond
-              (= (.length cs) cursor-char) (text-mode/editor-backward-char editor)
-
-              (= ^char (get {\( \), \[ \], \{ \}, \" \"} prev-char)
-                 (.charAt cs cursor-char))
-              ;; delete whole coll
-              (let [new-tree (when-let [^TSTree tree tree]
-                               (let [tree (.copy tree)]
-                                 (.edit tree (TSInputEdit. (dec cursor-byte) (inc cursor-byte) (dec cursor-byte)
-                                                           (TSPoint. cursor-row (dec cursor-column))
-                                                           (TSPoint. cursor-row (inc cursor-column))
-                                                           (TSPoint. cursor-row (dec cursor-column))))
-                                 tree))
-
-                    new-rope (.concat (.slice rope 0 (dec cursor-point))
-                                      (.slice rope (inc cursor-point) (.size rope)))
-                    reader (util/->RopeReader new-rope)
-                    new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8)
-
-                    new-cursor {:byte (dec cursor-byte)
-                                :char (dec cursor-char)
-                                :point (dec cursor-point)
-                                :row cursor-row
-                                :column (dec cursor-column)}]
-                (assoc editor
-                       :tree new-tree
-                       :cursor new-cursor
-                       :rope new-rope))
-
-              :else (text-mode/editor-backward-char editor))
-
-            ;;else
-            (let [diff-string (-> (.subSequence cs prev cursor-char)
-                                  .toString)
-                  diff-bytes (alength (.getBytes diff-string "utf-8"))
-
-                  prev-byte (- cursor-byte diff-bytes)
-                  prev-char (.charAt cs prev)
-                  prev-point (- cursor-point (util/num-points diff-string))
-                  newline? (= prev-char \newline)
-                
-
-                  new-cursor-row (if newline?
-                                   (dec cursor-row)
-                                   cursor-row)
-                  new-cursor-column (if newline?
-                                      (loop [n 0]
-                                        (let [start (.previous bi)]
-                                          (if (or (= BreakIterator/DONE start)
-                                                  (= \newline (.charAt cs start)))
-                                            n
-                                            (recur (inc n)))))
-                                      (dec cursor-column))
-
-
-                  new-tree (when-let [^TSTree tree tree]
+            (= ^char (get {\( \), \[ \], \{ \}, \" \"} prev-char)
+               (.charAt rope cursor-char))
+            ;; delete whole coll
+            (let [new-tree (when-let [^TSTree tree tree]
                              (let [tree (.copy tree)]
-                               (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
-                                                         (TSPoint. cursor-row cursor-column)
-                                                         (TSPoint. cursor-row cursor-column)
-                                                         (TSPoint. new-cursor-row new-cursor-column)))
+                               (.edit tree (TSInputEdit. (dec cursor-byte) (inc cursor-byte) (dec cursor-byte)
+                                                         (TSPoint. cursor-row (dec cursor-column))
+                                                         (TSPoint. cursor-row (inc cursor-column))
+                                                         (TSPoint. cursor-row (dec cursor-column))))
                                tree))
 
-                  new-rope (.concat (.slice rope 0 prev-point)
-                                    (.slice rope cursor-point (.size rope)))
-
+                  new-rope (.concat (.slice rope 0 (dec cursor-point))
+                                    (.slice rope (inc cursor-point) (.size rope)))
                   reader (util/->RopeReader new-rope)
-                  new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-              (text-mode/editor-update-viewport
-               (assoc editor
-                      :tree new-tree
-                      :cursor {:byte prev-byte
-                               :char prev
-                               :point prev-point
-                               :row new-cursor-row
-                               :column new-cursor-column}
-                      :paragraph nil
-                      :rope new-rope))))))))
+                  new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8)
+
+                  new-cursor {:byte (dec cursor-byte)
+                              :char (dec cursor-char)
+                              :point (dec cursor-point)
+                              :row cursor-row
+                              :column (dec cursor-column)}]
+              (assoc editor
+                     :tree new-tree
+                     :cursor new-cursor
+                     :rope new-rope))
+
+            :else (text-mode/editor-backward-char editor))
+
+          ;;else
+          (let [diff-string (-> (.subSequence rope prev cursor-char)
+                                .toString)
+                diff-bytes (alength (.getBytes diff-string "utf-8"))
+
+                prev-byte (- cursor-byte diff-bytes)
+                prev-char (.charAt rope prev)
+                prev-point (- cursor-point (util/num-points diff-string))
+                newline? (= prev-char \newline)
+                
+
+                new-cursor-row (if newline?
+                                 (dec cursor-row)
+                                 cursor-row)
+                new-cursor-column (if newline?
+                                    (loop [n 0]
+                                      (let [start (.previous bi)]
+                                        (if (or (= BreakIterator/DONE start)
+                                                (= \newline (.charAt rope start)))
+                                          n
+                                          (recur (inc n)))))
+                                    (dec cursor-column))
+
+
+                new-tree (when-let [^TSTree tree tree]
+                           (let [tree (.copy tree)]
+                             (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
+                                                       (TSPoint. cursor-row cursor-column)
+                                                       (TSPoint. cursor-row cursor-column)
+                                                       (TSPoint. new-cursor-row new-cursor-column)))
+                             tree))
+
+                new-rope (.concat (.slice rope 0 prev-point)
+                                  (.slice rope cursor-point (.size rope)))
+
+                reader (util/->RopeReader new-rope)
+                new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
+            (text-mode/editor-update-viewport
+             (assoc editor
+                    :tree new-tree
+                    :cursor {:byte prev-byte
+                             :char prev
+                             :point prev-point
+                             :row new-cursor-row
+                             :column new-cursor-column}
+                    :paragraph nil
+                    :rope new-rope))))))))
 
 (defn paredit-newline [editor]
   (-> editor
-       (text-mode/editor-self-insert-command "\n")
-       (editor-indent)))
+      (text-mode/editor-self-insert-command "\n")
+      (editor-indent)))
 
 
 

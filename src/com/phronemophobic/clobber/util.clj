@@ -213,9 +213,8 @@
       .toString))
 
 (defn byte-index->char-index [^Rope rope byte-index]
-  (let [rope (.sliceBytes rope 0 byte-index)
-        cs (.toCharSequence rope)]
-    (.length cs)))
+  (let [rope (.sliceBytes rope 0 byte-index)]
+    (.length rope)))
 
 (defn ^:private goto-next-dfs-node
   "Navigates `cursor` to the next node availble in dfs order.
@@ -407,15 +406,15 @@
       (if (> target-line line)
         (.numBytes rope)
         (let [;; now backtrack
-              cs (.toCharSequence (.sliceBytes rope 0 byte-offset))
+              rope (.sliceBytes rope 0 byte-offset)
               bi (doto (BreakIterator/getCharacterInstance)
-                   (.setText cs))
+                   (.setText rope))
 
               char-index (loop [char-index (.last bi)
                                 line line]
                            (let [prev-char-index (.preceding bi char-index)]
 
-                             (if (= (.charAt cs prev-char-index)
+                             (if (= (.charAt rope prev-char-index)
                                     \newline)
                                (if (= line target-line)
                                  char-index
@@ -425,7 +424,7 @@
                                       line))
                              ))
               byte-offset (- byte-offset
-                             (-> (.subSequence cs char-index (.length cs))
+                             (-> (.subSequence rope char-index (.length rope))
                                  (.toString)
                                  (.getBytes "utf-8")
                                  alength))]
@@ -433,35 +432,35 @@
 
 
 #_(defn ^:private query
-  "Simple helper for testing tree sitter queries."
-  ([s query]
-   (com.phronemophobic.clobber.util/query s query nil nil))
-  ([s query start-byte-offset]
-   (com.phronemophobic.clobber.util/query s query start-byte-offset nil))
-  ([s query start-byte-offset end-byte-offset]
-   (let [rope (Rope/from s)
-         qc (TSQueryCursor.)
-         q (TSQuery. clojure-lang query)
-         ^TSTree
-         tree (parse clojure-lang s)
-         _ (when start-byte-offset
-             (let [end-byte-offset (or end-byte-offset (.numBytes rope))]
-               (.setByteRange qc start-byte-offset end-byte-offset)))
-         _ (.exec qc q (.getRootNode tree))
-         matches (.getCaptures qc)]
-     (loop [ret []
-            ]
-       (if (.hasNext matches)
-         (let [match (.next matches)
-               ^TSQueryCapture
-               capture (aget (.getCaptures match) (.getCaptureIndex match))
-               capture-name (.getCaptureNameForId q (.getIndex capture))
-               node (.getNode capture)
+    "Simple helper for testing tree sitter queries."
+    ([s query]
+     (com.phronemophobic.clobber.util/query s query nil nil))
+    ([s query start-byte-offset]
+     (com.phronemophobic.clobber.util/query s query start-byte-offset nil))
+    ([s query start-byte-offset end-byte-offset]
+     (let [rope (Rope/from s)
+           qc (TSQueryCursor.)
+           q (TSQuery. clojure-lang query)
+           ^TSTree
+           tree (parse clojure-lang s)
+           _ (when start-byte-offset
+               (let [end-byte-offset (or end-byte-offset (.numBytes rope))]
+                 (.setByteRange qc start-byte-offset end-byte-offset)))
+           _ (.exec qc q (.getRootNode tree))
+           matches (.getCaptures qc)]
+       (loop [ret []
+              ]
+         (if (.hasNext matches)
+           (let [match (.next matches)
+                 ^TSQueryCapture
+                 capture (aget (.getCaptures match) (.getCaptureIndex match))
+                 capture-name (.getCaptureNameForId q (.getIndex capture))
+                 node (.getNode capture)
 
-               match-info {:name capture-name
-                           :named (.isNamed node)
-                           :type (.getType node)
-                           :s (node->str rope node)}]
-           (recur (conj ret match-info)))
-         ;; else
-         ret)))))
+                 match-info {:name capture-name
+                             :named (.isNamed node)
+                             :type (.getType node)
+                             :s (node->str rope node)}]
+             (recur (conj ret match-info)))
+           ;; else
+           ret)))))

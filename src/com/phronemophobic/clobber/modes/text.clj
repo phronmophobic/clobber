@@ -82,14 +82,13 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
-        cs (.toCharSequence rope)
         bi (doto (BreakIterator/getCharacterInstance)
-             (.setText cs))
+             (.setText rope))
 
         next-char (.following bi cursor-char)]
     (if (= -1 next-char)
       editor
-      (let [diff-string (-> (.subSequence cs cursor-char next-char)
+      (let [diff-string (-> (.subSequence rope cursor-char next-char)
                             .toString)
             newline? (= "\n" diff-string)
             new-cursor-row (if newline?
@@ -116,14 +115,13 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
-        cs (.toCharSequence rope)
         bi (doto (BreakIterator/getCharacterInstance)
-             (.setText cs))
+             (.setText rope))
 
         prev-char (.preceding bi cursor-char)]
     (if (= -1 prev-char)
       editor
-      (let [diff-string (-> (.subSequence cs prev-char cursor-char)
+      (let [diff-string (-> (.subSequence rope prev-char cursor-char)
                             .toString)
             newline? (= "\n" diff-string)
             new-cursor-row (if newline?
@@ -134,7 +132,7 @@
                                 (loop [column 0
                                        index (.previous bi)]
                                   (if (>= index 0)
-                                    (let [c (.charAt cs index)]
+                                    (let [c (.charAt rope index)]
                                       (if (= \newline c)
                                         column
                                         (recur (inc column)
@@ -157,14 +155,13 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
-        cs (.toCharSequence rope)
         bi (doto (BreakIterator/getWordInstance)
-             (.setText cs))
+             (.setText rope))
 
         next-char (.following bi cursor-char)]
     (if (= -1 next-char)
       editor
-      (let [diff-string (-> (.subSequence cs cursor-char next-char)
+      (let [diff-string (-> (.subSequence rope cursor-char next-char)
                             .toString)
             newline? (= "\n" diff-string)
             new-cursor-row (if newline?
@@ -188,14 +185,13 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
-        cs (.toCharSequence rope)
         bi (doto (BreakIterator/getWordInstance)
-             (.setText cs))
+             (.setText rope))
 
         prev-char (.preceding bi cursor-char)]
     (if (= -1 prev-char)
       editor
-      (let [diff-string (-> (.subSequence cs prev-char cursor-char )
+      (let [diff-string (-> (.subSequence rope prev-char cursor-char )
                             .toString)
             newline? (= "\n" diff-string)
             new-cursor-row (if newline?
@@ -223,19 +219,18 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
-        cs (.toCharSequence rope)
         bi (doto (BreakIterator/getCharacterInstance)
-             (.setText cs))
+             (.setText rope))
 
         char-index (loop [char-index cursor-char]
                      (let [prev-char (.preceding bi char-index)]
                        (if (or (= -1 prev-char)
-                               (= \newline (.charAt cs prev-char)))
+                               (= \newline (.charAt rope prev-char)))
                          char-index
                          (recur prev-char))))]
     (if (= char-index cursor-char)
       editor
-      (let [diff-string (-> (.subSequence cs char-index cursor-char)
+      (let [diff-string (-> (.subSequence rope char-index cursor-char)
                             .toString)
             num-bytes (alength (.getBytes diff-string "utf-8"))
             new-cursor-column (- cursor-column num-bytes)]
@@ -255,19 +250,18 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
-        cs (.toCharSequence rope)
         bi (doto (BreakIterator/getCharacterInstance)
-             (.setText cs))
+             (.setText rope))
 
         char-index (loop [char-index cursor-char]
                      (let [next-char (.following bi char-index)]
                        (cond
                          (= -1 next-char) char-index
-                         (= \newline (.charAt cs char-index)) char-index
+                         (= \newline (.charAt rope char-index)) char-index
                          :else (recur next-char))))]
     (if (= char-index cursor-char)
       editor
-      (let [diff-string (-> (.subSequence cs cursor-char char-index )
+      (let [diff-string (-> (.subSequence rope cursor-char char-index )
                             .toString)
             num-bytes (alength (.getBytes diff-string "utf-8"))
             new-cursor-column (+ cursor-column num-bytes)]
@@ -294,9 +288,8 @@
          target-column (or cursor-target-column
                            cursor-column)
 
-         cs (.toCharSequence rope)
          bi (doto (BreakIterator/getCharacterInstance)
-              (.setText cs))
+              (.setText rope))
 
          ;; find previous newline twice
          [lines char-index] (loop [char-index cursor-char
@@ -304,9 +297,9 @@
                               (let [prev-char (.preceding bi char-index)]
                                 (cond
                                   (= -1 prev-char) [lines char-index]
-                                  (= \newline (.charAt cs prev-char)) (if (= n lines)
-                                                                        [lines char-index]
-                                                                        (recur prev-char (inc lines)))
+                                  (= \newline (.charAt rope prev-char)) (if (= n lines)
+                                                                          [lines char-index]
+                                                                          (recur prev-char (inc lines)))
                                   :else (recur prev-char lines))))
 
          ;; keep going until target column
@@ -316,12 +309,12 @@
            (let [next-char (.following bi char-index)]
              (cond
                (= -1 next-char) [char-index column]
-               (= \newline (.charAt cs char-index)) [char-index column]
+               (= \newline (.charAt rope char-index)) [char-index column]
                (= column target-column) [char-index column]
                :else (recur next-char (inc column)))))]
      (if (= char-index cursor-char)
        editor
-       (let [diff-string (-> (.subSequence cs char-index cursor-char)
+       (let [diff-string (-> (.subSequence rope char-index cursor-char)
                              .toString)
              num-bytes (alength (.getBytes diff-string "utf-8"))
              new-cursor-row (- cursor-row lines)]
@@ -397,9 +390,8 @@
          target-column (or cursor-target-column
                            cursor-column)
 
-         cs (.toCharSequence rope)
          bi (doto (BreakIterator/getCharacterInstance)
-              (.setText cs))
+              (.setText rope))
 
          ;; find newline
          [lines char-index] (loop [char-index cursor-char
@@ -414,10 +406,10 @@
                                                      ;; started on last line
                                                      [0 cursor-char]
                                                      [lines last-line-char])
-                                  (= \newline (.charAt cs char-index)) (let [lines (inc lines)]
-                                                                         (if (= lines n)
-                                                                           [lines next-char]
-                                                                           (recur next-char lines next-char)))
+                                  (= \newline (.charAt rope char-index)) (let [lines (inc lines)]
+                                                                           (if (= lines n)
+                                                                             [lines next-char]
+                                                                             (recur next-char lines next-char)))
                                   :else (recur next-char lines last-line-char))))
 
          ;; keep going until target column
@@ -430,12 +422,12 @@
                (cond
 
                  (= -1 next-char) [char-index column]
-                 (= \newline (.charAt cs char-index)) [char-index column]
+                 (= \newline (.charAt rope char-index)) [char-index column]
                  (= column target-column) [char-index column]
                  :else (recur next-char (inc column))))))]
      (if (= char-index cursor-char)
        editor
-       (let [diff-string (-> (.subSequence cs cursor-char char-index )
+       (let [diff-string (-> (.subSequence rope cursor-char char-index )
                              .toString)
              num-bytes (alength (.getBytes diff-string "utf-8"))
              new-cursor-column (+ cursor-column num-bytes)

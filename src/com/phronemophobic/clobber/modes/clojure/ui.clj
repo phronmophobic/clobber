@@ -117,7 +117,7 @@
                                    (when (= (seq s)
                                             (take (count s) cs))
                                      [s key]))
-                               special-keys)]
+                                 special-keys)]
             (recur (seq (drop (count s) cs))
                    chord
                    (assoc press :key key))
@@ -289,7 +289,6 @@
         rope (.sliceBytes rope
                           (:start-byte-offset para)
                           (:end-byte-offset para))
-        cs (.toCharSequence rope)
         {:keys [x y width height] :as rect}
         (cond
 
@@ -300,7 +299,7 @@
                                      :max
                                      :tight))
 
-          (>= cursor-char (.length cs))
+          (>= cursor-char (.length rope))
           (first
            (para/get-rects-for-range (assoc para :paragraph [(:paragraph para)
                                                              " "])
@@ -311,16 +310,16 @@
           :else
           (let [
                 bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText cs))
+                     (.setText rope))
 
                 next-char (.following bi cursor-char)
-                diff-string (-> (.subSequence cs cursor-char next-char)
+                diff-string (-> (.subSequence rope cursor-char next-char)
                                 .toString)]
             (first
              (para/get-rects-for-range para cursor-char (+ cursor-char (.length diff-string))
                                        :max
                                        :tight))))
-]
+        ]
     (if (not rect)
       (println "no cursor rect!")
       (let [width (if (zero? width)
@@ -386,31 +385,31 @@
                                                        :tight)]
                    (when (seq rects)
                      (let [x (transduce (map (fn [{:keys [x width] :as r}]
-                                           (+ x width)))
+                                               (+ x width)))
                                         max
                                         0
                                         rects)
                            y (transduce (map :y) max (-> rects first :y) (rest rects))
 
                            offset 4]
-                         (if viscous?
-                           (ui/translate (- (+ x 10) offset) (- y offset)
-                                         (let [inspector-extra (get extra [::inspector [line val]])]
-                                           (ui/vertical-layout
-                                            (viscous/inspector
-                                             {:obj val
-                                              :width (get inspector-extra :width 40)
-                                              :height (get inspector-extra :height 1)
-                                              :show-context? (get inspector-extra :show-context?)
-                                              :extra inspector-extra}))))
-                           (ui/translate (+ x 10)  y 
-                                         (-> (make-editor)
-                                             (assoc :base-style base-style)
-                                             (text-mode/editor-self-insert-command
-                                              "=> ")
-                                             (text-mode/editor-self-insert-command
-                                              (pr-str @val))
-                                             (editor->paragraph)))))))))
+                       (if viscous?
+                         (ui/translate (- (+ x 10) offset) (- y offset)
+                                       (let [inspector-extra (get extra [::inspector [line val]])]
+                                         (ui/vertical-layout
+                                          (viscous/inspector
+                                           {:obj val
+                                            :width (get inspector-extra :width 40)
+                                            :height (get inspector-extra :height 1)
+                                            :show-context? (get inspector-extra :show-context?)
+                                            :extra inspector-extra}))))
+                         (ui/translate (+ x 10) y 
+                                       (-> (make-editor)
+                                           (assoc :base-style base-style)
+                                           (text-mode/editor-self-insert-command
+                                            "=> ")
+                                           (text-mode/editor-self-insert-command
+                                            (pr-str @val))
+                                           (editor->paragraph)))))))))
           line-val)))
 
 
@@ -437,11 +436,11 @@
                    :initial-rope (:rope editor)}))
 
 #_(defeffect ::init-search-forward [{:keys [$editor]}]
-  (dispatch! :update $editor
-             (fn [editor]
-               (assoc editor
-                      ::search {:initial-cursor (:cursor editor)
-                                :initial-rope (:rope editor)}))))
+    (dispatch! :update $editor
+               (fn [editor]
+                 (assoc editor
+                        ::search {:initial-cursor (:cursor editor)
+                                  :initial-rope (:rope editor)}))))
 
 (defn cancel-search-forward [editor]
   (let [initial-cursor (-> editor ::search :initial-cursor)
@@ -490,8 +489,7 @@
                                  Pattern/LITERAL))
         ^Rope
         rope (:rope editor)
-        cs (.toCharSequence rope)
-        matcher (.matcher regexp cs)
+        matcher (.matcher regexp rope)
 
         match (if (.find matcher search-index)
                 (.start matcher)
@@ -499,7 +497,7 @@
                   (.start matcher)))]
     (if match
       (let [ ;; calculate new cursor
-            s (-> (.subSequence cs 0 match)
+            s (-> (.subSequence rope 0 match)
                   .toString)
 
             {:keys [row column]} (util/count-points s)
@@ -530,8 +528,7 @@
                                  Pattern/LITERAL))
         ^Rope
         rope (:rope editor)
-        cs (.toCharSequence rope)
-        matcher (.matcher regexp cs)
+        matcher (.matcher regexp rope)
 
         match (if (.find matcher search-index)
                 (.start matcher)
@@ -545,7 +542,7 @@
                     (.start matcher))))]
     (if match
       (let [ ;; calculate new cursor
-            s (-> (.subSequence cs 0 match)
+            s (-> (.subSequence rope 0 match)
                   .toString)
 
             {:keys [row column]} (util/count-points s)
@@ -609,20 +606,20 @@
 
                body
                #_(ui/wrap-on
-                :key-event
-                (fn [handler key scancode action mods]
-                  (when (#{:press :repeat} action)
-                    (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
-                          super? (not (zero? (bit-and ui/SUPER-MASK mods)))
-                          shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-                          ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))
+                  :key-event
+                  (fn [handler key scancode action mods]
+                    (when (#{:press :repeat} action)
+                      (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
+                            super? (not (zero? (bit-and ui/SUPER-MASK mods)))
+                            shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
+                            ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))
 
-                          search? (and ctrl?
-                                       (= (char key) \S))]
-                      (if search?
-                        [[::init-search-forward this]]
-                        (handler key scancode action mods)))))
-                body))]
+                            search? (and ctrl?
+                                         (= (char key) \S))]
+                        (if search?
+                          [[::init-search-forward this]]
+                          (handler key scancode action mods)))))
+                  body))]
     body))
 
 (defeffect ::update-instarepl [{:keys [editor $editor]}]
@@ -773,7 +770,7 @@
            (when (or alt?
                      super?
                      ctrl?)
-            (find-match key-press)))))
+             (find-match key-press)))))
      body)))
 
 (defui code-editor [{:keys [editor
@@ -843,7 +840,7 @@
 
                               \E
                               [[:update $editor #(editor-move-end-of-line %)]]
-                          
+                              
                               \F
                               [[:update $editor #(editor-forward-char %)]]
 
@@ -881,14 +878,14 @@
 
                               \B
                               [[:update $editor #(editor-backward-word %)]]
-                          
+                              
                               \F
                               [[:update $editor #(editor-forward-word %)]]
 
                               \V
                               [[:update $editor #(editor-scroll-up %)]]
 
-                          
+                              
                               \,
                               (when shift?
                                 [[:update $editor #(editor-beginning-of-buffer %)]])
@@ -911,7 +908,7 @@
                             nil
                             #_(case (char key)
 
-                            
+                                
                                 (case key
                                   (39 262) ;; right
                                   [[:update $editor editor-forward-char ]]
@@ -919,14 +916,14 @@
                                   #_left (37 263)
                                   [[:update $editor editor-backward-char ]]
 
-                              
-                              
+                                  
+                                  
                                   ;; (40 264)
                                   ;; ;; down
 
                                   ;; ;; up
                                   ;; (38 265)
-                              
+                                  
                                   ;; else
                                   nil
                                   #_[[::tap key (char key)]]))))))
@@ -952,7 +949,7 @@
                         [[:update $editor #(editor-paredit-close-round %)]]
 
                         (cond
-                      
+                          
 
                           (and (string? s)
                                (-> (.getBytes ^String s)
@@ -979,7 +976,7 @@
 
                           (= :tab s)
                           [[:update $editor editor-indent]]
-                      
+                          
                           (= :left s)
                           [[:update $editor #(editor-backward-char %)]]
 
@@ -1114,22 +1111,22 @@
                                   bindings))
                          bindings))
             fn-form `(~'defn ~'foo [~@args]
-                       (~'let ~(into []
-                                   cat
-                                   (reverse bindings))
-                         ~result-form))
+                      (~'let ~(into []
+                                    cat
+                                    (reverse bindings))
+                       ~result-form))
 
             ]
 
         (dispatch! :update $editor
-                     (fn [editor]
-                       (-> editor
-                           text-mode/editor-move-end-of-line
-                           (text-mode/editor-self-insert-command "\n")
-                           (clojure-mode/editor-indent)
-                           (text-mode/editor-self-insert-command
-                            (with-out-str
-                              (clojure.pprint/pprint fn-form)))))))
+                   (fn [editor]
+                     (-> editor
+                         text-mode/editor-move-end-of-line
+                         (text-mode/editor-self-insert-command "\n")
+                         (clojure-mode/editor-indent)
+                         (text-mode/editor-self-insert-command
+                          (with-out-str
+                            (clojure.pprint/pprint fn-form)))))))
       (catch Exception e
         (prn e))))
   )
@@ -1145,16 +1142,15 @@
                 rope (.sliceBytes rope
                                   (:start-byte-offset para)
                                   (:end-byte-offset para))
-                cs (.toCharSequence rope)
 
                 bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText cs))
+                     (.setText rope))
 
                 char-index (if (zero? affinity)
                              (.preceding bi char-index)
                              char-index)
-              
-                byte-index (let [s (.toString (.subSequence cs 0 char-index))
+                
+                byte-index (let [s (.toString (.subSequence rope 0 char-index))
                                  bs (.getBytes s "utf-8")]
 
                              (alength bs))
@@ -1190,16 +1186,14 @@
                 rope (.sliceBytes rope
                                   (:start-byte-offset para)
                                   (:end-byte-offset para))
-                cs (.toCharSequence rope)
-
                 bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText cs))
+                     (.setText rope))
 
                 char-index (if (zero? affinity)
                              (.preceding bi char-index)
                              char-index)
-              
-                byte-index (let [s (.toString (.subSequence cs 0 char-index))
+                
+                byte-index (let [s (.toString (.subSequence rope 0 char-index))
                                  bs (.getBytes s "utf-8")]
 
                              (alength bs))
