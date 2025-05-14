@@ -10,6 +10,129 @@
 #_(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 (import 'io.lacuna.bifurcan.Rope)
 
+(defn editor-goto-byte
+  "Moves the :cursor of editor to `byte-index`. Does not change anything else."
+  [editor byte-index]
+  (let [cursor (:cursor editor)
+        ^Rope
+        rope (:rope editor)
+        {cursor-byte :byte} cursor
+
+        cursor
+        (cond
+          (= cursor-byte byte-index) cursor
+
+          (> byte-index cursor-byte)
+          (let [diff-rope (.sliceBytes rope cursor-byte byte-index)
+                diff-string (.toString diff-rope)
+                point-offset (util/count-points diff-string)
+                new-char (+ (:char cursor)
+                            (.length diff-string))
+                new-point (+ (:point cursor)
+                             (util/num-points diff-string))
+                new-cursor-row (+ (:row cursor) (:row point-offset))
+                new-cursor-column (if (pos? (:row point-offset))
+                                    (:column point-offset)
+                                    (+ (:column point-offset) (:column cursor)))]
+            {:byte byte-index
+             :char new-char
+             :point new-point
+             :row new-cursor-row
+             :column new-cursor-column})
+
+          ;; byte-index before cursor
+          :else
+          (let [diff-rope (.sliceBytes rope byte-index cursor-byte)
+                diff-string (.toString diff-rope)
+                new-char (- (:char cursor)
+                            (.length diff-string))
+                new-point (- (:point cursor)
+                             (util/num-points diff-string))
+
+                point-offset (util/count-points diff-string)
+                new-cursor-row (- (:row cursor)
+                              (:row point-offset))
+
+                bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText rope))
+                new-cursor-column
+                (loop [char-index new-char
+                       column 0]
+                  (let [prev-char-index (.preceding bi char-index)]
+                    (cond
+                      (= -1 prev-char-index) column
+                      (= \newline (.charAt rope prev-char-index)) column
+                      :else (recur prev-char-index (inc column)))))]
+            {:byte byte-index
+             :char new-char
+             :point new-point
+             :row new-cursor-row
+             :column new-cursor-column}))]
+    (assoc editor
+           :cursor cursor)))
+
+(defn editor-insert
+  "Inserts `s` at `byte-index`.
+
+  If `row` and `column` are not provided. Calculate the row and column automatically"
+  ([editor ^String s byte-index]
+   (let [cursor (:cursor editor)
+         ^Rope
+         rope (:rope editor)
+         {cursor-byte :byte} cursor
+
+         {:keys [row column]} (if (= cursor-byte byte-index)
+                                [(:row cursor) (:column cursor)]
+                                (let [diff-rope (if (> byte-index cursor-byte)
+                                                  (.sliceBytes rope cursor-byte byte-index)
+                                                  (.sliceBytes rope byte-index cursor-byte))
+                                      diff-string (.toString diff-rope)
+
+                                      point-offset (util/count-points diff-string)
+
+                                      new-cursor-row (+ (:row cursor) (:row point-offset))
+                                      new-cursor-column (if (pos? (:row point-offset))
+                                                          (:column point-offset)
+                                                          (+ (:column point-offset) (:column cursor)))]
+                                  {:row new-cursor-row
+                                   :column new-cursor-column}))]
+     (editor-insert editor s byte-index row column)))
+  ([editor ^String s byte-index row column]
+   (let [sbytes (.getBytes s "utf-8")
+         point-offset (util/count-points s)
+         delta-rows (:row point-offset)
+         
+         new-row (+ row delta-rows)
+         new-column (if (pos? delta-rows)
+                      (:column point-offset)
+                      (+ (:column point-offset) column))
+
+         tree (:tree editor)
+         new-tree (when-let [^TSTree
+                             tree tree]
+                    (let [tree (.copy tree)]
+                      (.edit tree (TSInputEdit. byte-index byte-index (+ byte-index (alength sbytes))
+                                                (TSPoint. row column)
+                                                (TSPoint. row column)
+                                                (TSPoint. new-row new-column)))
+                      tree))
+
+         ^Rope
+         rope (:rope editor)
+         new-rope (.insertAtByte rope ^int byte-index s)
+
+         ^TSParser
+         parser (:parser editor)
+         new-tree (when parser
+                    (let [reader (util/->RopeReader new-rope)]
+                      (.parse parser (:buf editor) new-tree reader TSInputEncoding/TSInputEncodingUTF8)))]
+     (assoc editor
+            :rope new-rope
+            :tree new-tree))))
+
+;; (defn editor-snip [editor])
+;; (defn editor-slice [editor])
+;; (defn editor-concat [editor])
 
 (defn editor-update-viewport [editor]
   (let [row (-> editor :cursor :row)
@@ -330,45 +453,25 @@
 
 (defn editor-self-insert-command [editor ^String s]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-        
-        ;; cursor is { :byte, :row, :column }
-        sbytes (.getBytes s "utf-8")
-        
-        point-offset (util/count-points s)
         {cursor-byte :byte
          cursor-char :char
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor
+
+        point-offset (util/count-points s)
         new-cursor-row (+ cursor-row (:row point-offset))
         new-cursor-column (if (pos? (:row point-offset))
                             (:column point-offset)
-                            (+ (:column point-offset) cursor-column))
-
-
-        new-tree (when-let [^TSTree
-                            tree tree]
-                   (let [tree (.copy tree)]
-                     (.edit tree (TSInputEdit. cursor-byte cursor-byte (+ cursor-byte (alength sbytes))
-                                               (TSPoint. cursor-row cursor-column)
-                                               (TSPoint. cursor-row cursor-column)
-                                               (TSPoint. new-cursor-row new-cursor-column)))
-                     tree))
-
-        new-rope (.insert rope ^int cursor-point s)
-        
-        reader (util/->RopeReader new-rope)
-        new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
+                            (+ (:column point-offset) cursor-column))]
     (editor-update-viewport
-     (assoc editor
-            :tree new-tree
-            :cursor {:byte (+ cursor-byte (alength sbytes))
-                     :char (+ cursor-char (.length s))
-                     :point (+ cursor-point (util/num-points s))
-                     :row new-cursor-row
-                     :column new-cursor-column}
-            :paragraph nil
-            :rope new-rope))))
+     (-> editor
+         (assoc :cursor {:byte (+ cursor-byte (util/num-bytes s))
+                         :char (+ cursor-char (.length s))
+                         :point (+ cursor-point (util/num-points s))
+                         :row new-cursor-row
+                         :column new-cursor-column})
+         (editor-insert s cursor-byte cursor-row cursor-column)))))
 
 (defn editor-open-line [editor]
   (-> editor

@@ -100,6 +100,9 @@
           (recur (inc i) (inc point-count)))
         point-count))))
 
+(defn num-bytes [^String s]
+  (-> s (.getBytes "utf-8") alength))
+
 (defn count-points
   "Counts the number or rows and columns of s.
 

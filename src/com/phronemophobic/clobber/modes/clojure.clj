@@ -90,66 +90,13 @@
         wrap-node (util/named-child-for-byte tree cursor-byte)]
     (if wrap-node
       (let [;; first, insert ")" add end of node
+            editor (text-mode/editor-insert editor ")" (.getEndByte wrap-node))
 
-            target-byte (.getEndByte wrap-node)
-            diff-rope (.sliceBytes rope cursor-byte target-byte)
-            diff-string (.toString diff-rope)
-            diff-points (.size diff-rope)
-            point-offset (util/count-points diff-string)
-
-            new-cursor-row (+ cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (+ (:column point-offset) cursor-column))
-
-            new-tree (when-let [^TSTree
-                                tree tree]
-                       (let [tree (.copy tree)]
-                         (.edit tree (TSInputEdit. target-byte target-byte (inc target-byte)
-                                                   (TSPoint. new-cursor-row new-cursor-column)
-                                                   (TSPoint. new-cursor-row new-cursor-column)
-                                                   (TSPoint. new-cursor-row (inc new-cursor-column))))
-                         tree))
-
-            ^Rope
-            new-rope (.insert rope ^int (+ cursor-point diff-points) ^CharSequence '")")
-
-            ;; next, insert "(" at start of node
+            ;; next goto and insert "("
             target-byte (.getStartByte wrap-node)
-            diff-rope (.sliceBytes rope cursor-byte target-byte)
-            diff-string (.toString diff-rope)
-            diff-bytes (- target-byte cursor-byte)
-            diff-char (.length diff-string)
-            diff-points (.size diff-rope)
-            point-offset (util/count-points diff-string)
-
-            new-cursor-row (+ cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (+ (:column point-offset) cursor-column))
-
-            new-tree (do
-                       (.edit new-tree (TSInputEdit. target-byte target-byte (inc target-byte)
-                                                     (TSPoint. new-cursor-row new-cursor-column)
-                                                     (TSPoint. new-cursor-row new-cursor-column)
-                                                     (TSPoint. new-cursor-row (inc new-cursor-column))))
-                       new-tree)
-
-            new-rope (.insert new-rope ^int (+ cursor-point diff-points) ^CharSequence '"(")
-
-            reader (util/->RopeReader new-rope)
-            new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )
-
-            new-cursor {:byte (inc (+ cursor-byte diff-bytes))
-                        :char (inc (+ cursor-char diff-char))
-                        :point (inc (+ cursor-point diff-points))
-                        :row new-cursor-row
-                        :column (inc new-cursor-column)}]
-        (text-mode/editor-update-viewport
-         (assoc editor
-                :tree new-tree
-                :rope new-rope
-                :cursor new-cursor)))
+            editor (text-mode/editor-goto-byte editor target-byte)
+            editor (text-mode/editor-self-insert-command editor "(")]
+        (text-mode/editor-update-viewport editor))
       
       (text-mode/editor-self-insert-command editor "()"))))
 
@@ -683,7 +630,6 @@
              cursor-row :row
              cursor-point :point
              cursor-column :column} cursor
-            ;; s (String. (rope->bytes rope) "utf-8")
             current-char (.charAt rope cursor-char)]
         (case current-char
           (\( \[ \{)
