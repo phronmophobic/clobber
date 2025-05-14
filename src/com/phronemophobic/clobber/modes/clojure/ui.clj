@@ -698,7 +698,7 @@
       body)
     body))
 
-(def uppercase {\, \>
+(def uppercase {\, \<
                 \. \>
                 \/ \?
                 \; \:
