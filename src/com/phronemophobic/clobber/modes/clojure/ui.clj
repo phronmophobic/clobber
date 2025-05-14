@@ -1349,7 +1349,8 @@
   (dev/add-component-as-applet #'debug
                                {:editor (-> (make-editor)
                                             (text-mode/editor-self-insert-command
-                                             (slurp (io/resource "com/phronemophobic/clobber.clj")))
+                                             (slurp (io/resource "com/phronemophobic/easel.clj")))
+                                            (assoc :eval-ns (the-ns 'com.phronemophobic.easel))
                                             (assoc :cursor {:byte 0
                                                             :char 0
                                                             :point 0
