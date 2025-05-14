@@ -215,12 +215,14 @@
                         ;;lang highlight-queries
                         ^TSQueryCursor qc
                         ^TSQuery query
-                        base-style ^TSTree tree
-                        ^Rope
-                        rope
+                        editor
                         start-byte-offset
                         end-byte-offset]
-  (let [_ (.setByteRange qc start-byte-offset end-byte-offset)
+  (let [base-style (:base-style editor)
+        ^TSTree tree (:tree editor)
+        ^Rope rope (:rope editor)
+
+        _ (.setByteRange qc start-byte-offset end-byte-offset)
         _ (.exec qc query (.getRootNode tree))
         matches (.getCaptures qc)
         paragraph (loop [p []
@@ -352,12 +354,11 @@
         char-offset (-> (.sliceBytes rope 0 start-byte-offset)
                         .toCharSequence
                         .length)
+
         para (para/paragraph (highlighted-text (TSQueryCursor.)
                                                (TSQuery. lang
                                                          clojure-mode/highlight-queries)
-                                               (:base-style editor)
-                                               tree
-                                               (:rope editor)
+                                               editor
                                                start-byte-offset
                                                end-byte-offset)
                              nil
