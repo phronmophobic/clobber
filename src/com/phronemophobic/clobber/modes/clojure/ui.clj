@@ -208,6 +208,53 @@
             p)]
     [p (max offset end-byte)]))
 
+(defn paren-highlight [editor para]
+  (let [cursor-byte (-> editor :cursor :byte)
+
+        byte-index
+        (let [cursor (TSTreeCursor. (.getRootNode ^TSTree (:tree editor)))]
+          (when (.gotoFirstChild cursor)
+            (when (loop []
+                    (if (< (.getEndByte (.currentNode cursor))
+                             cursor-byte)
+                      (when (.gotoNextSibling cursor)
+                        (recur))
+                      true))
+              (loop []
+                (let [node (.currentNode cursor)
+                      start-byte (.getStartByte node)
+                      end-byte (.getEndByte node)]
+                  (cond
+
+                    (> start-byte cursor-byte) nil
+                    (= start-byte cursor-byte) (if (clojure-mode/coll-node-types (.getType node))
+                                                 (dec end-byte)
+                                                 nil)
+
+                    (and (= end-byte cursor-byte)
+                         (clojure-mode/coll-node-types (.getType node)))
+                    start-byte
+
+                    :else (when (util/goto-next-dfs-node cursor)
+                            (recur))))))))
+        ]
+    (when (and byte-index
+               (>= byte-index (:start-byte-offset para))
+               (< byte-index (:end-byte-offset para)))
+      (let [^Rope rope (:rope editor)
+            diff-rope (.sliceBytes rope (:start-byte-offset para) byte-index)
+            char-index (.length diff-rope)
+            {:keys [x y width height] :as rect}
+            (first
+             (para/get-rects-for-range para char-index (inc char-index)
+                                       :max
+                                       :tight))]
+        (if (not rect)
+          (println "no paren rect!")
+          (ui/translate x y
+                        (ui/filled-rectangle
+                         [0.3725490196078431 0.8431372549019608 0.8431372549019608]
+                         width height)))))))
 
 (def builtin?
   #{"def" "defn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
@@ -419,6 +466,7 @@
     (let [lang (:language editor)
           rope (:rope editor)
           para (editor->paragraph editor)
+          paren-highlight-view (paren-highlight editor para)
           line-vals (when-let [line-val (if (:instarepl? editor)
                                           (-> editor :line-val first second)
                                           (-> editor :line-val (get rope)))]
@@ -427,6 +475,7 @@
                         :para para
                         :line-val line-val}))]
       [(cursor-view rope para (:cursor editor))
+       paren-highlight-view
        para
        line-vals])))
 

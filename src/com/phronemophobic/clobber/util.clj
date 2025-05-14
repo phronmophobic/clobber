@@ -219,7 +219,7 @@
   (let [rope (.sliceBytes rope 0 byte-index)]
     (.length rope)))
 
-(defn ^:private goto-next-dfs-node
+(defn goto-next-dfs-node
   "Navigates `cursor` to the next node availble in dfs order.
 
   Returns `true` if another node is available, false otherwise."
