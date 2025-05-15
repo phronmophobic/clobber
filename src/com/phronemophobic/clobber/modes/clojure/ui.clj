@@ -459,7 +459,7 @@
                     text)))
           p)))))
 
-(defn selection-style [editor start-byte-offset end-byte-offset]
+(defn selection-style [editor viewport]
   (let [cursor (:cursor editor)]
     {[(:byte cursor) (+ 20 (:byte cursor))] {:text-style/background-color {:color [1 0 0 0.2]}}}))
 
@@ -470,7 +470,7 @@
                     ;; editor
                     ;; start-byte-offset
                     ;; end-byte-offset
-                    start-byte-offset end-byte-offset]
+                    {:keys [start-byte-offset end-byte-offset]}]
   (let [^TSQueryCursor qc (TSQueryCursor.)
         ^TSQuery query (TSQuery. (:language editor)
                                  clojure-mode/highlight-queries)
@@ -524,6 +524,22 @@
                    styles))]
     styles))
 
+(defn highlight-search [editor {:keys [char-offset start-byte-offset end-byte-offset]}]
+  (when-let [^java.util.regex.MatchResult
+             match (-> editor ::search :match)]
+    (when (>= (.start match)
+              char-offset)
+      (let [^Rope
+            rope (:rope editor)
+            diff-string (.toString
+                         (.subSequence rope char-offset (.start match)))
+            diff-bytes (alength (.getBytes diff-string "utf-8"))
+
+            start-byte (+ start-byte-offset diff-bytes)
+            end-byte (+ start-byte (alength (.getBytes (.group match) "utf-8")))]
+        {[start-byte end-byte] {:text-style/background-color {:color [0 0 1 0.2]}}})))
+  )
+
 (defn editor->paragraph [editor]
   (let [tree (:tree editor)
         lang (:language editor)
@@ -538,9 +554,13 @@
         char-offset (-> (.sliceBytes rope 0 start-byte-offset)
                         .toCharSequence
                         .length)
+        viewport {:start-byte-offset start-byte-offset
+                  :char-offset char-offset
+                  :end-byte-offset end-byte-offset}
 
-        p (styled-text rope [(syntax-style editor start-byte-offset end-byte-offset)
+        p (styled-text rope [(syntax-style editor viewport)
                              ;;(selection-style editor start-byte-offset end-byte-offset)
+                             (highlight-search editor viewport)
                              ]
                        start-byte-offset
                        end-byte-offset)
@@ -677,12 +697,13 @@
         matcher (.matcher regexp rope)
 
         match (if (.find matcher search-index)
-                (.start matcher)
+                (.toMatchResult matcher)
                 (when (.find matcher 0)
-                  (.start matcher)))]
+                  (.toMatchResult matcher)))]
     (if match
-      (let [ ;; calculate new cursor
-            s (-> (.subSequence rope 0 match)
+      (let [
+            ;; calculate new cursor
+            s (-> (.subSequence rope 0 (.start match))
                   .toString)
 
             {:keys [row column]} (util/count-points s)
@@ -694,10 +715,12 @@
                     :column column}]
         (-> editor
             (assoc-in [::search :query] query)
+            (assoc-in [::search :match] match)
             (assoc :cursor cursor)
             (text-mode/editor-update-viewport)))
-      (assoc-in editor
-                [::search :query] query))))
+      (-> editor
+          (assoc-in [::search :query] query)
+          (assoc-in [::search :match] nil)))))
 
 (defn editor-repeat-search-forward [editor]
   (let [search-state (::search editor)
@@ -716,18 +739,18 @@
         matcher (.matcher regexp rope)
 
         match (if (.find matcher search-index)
-                (.start matcher)
+                (.toMatchResult matcher)
                 (when (.find matcher 0)
-                  (.start matcher)))
+                  (.toMatchResult matcher)))
         ;; now do it again
         match (when match
                 (if (.find matcher)
-                  (.start matcher)
+                  (.toMatchResult matcher)
                   (when (.find matcher 0)
-                    (.start matcher))))]
+                    (.toMatchResult matcher))))]
     (if match
       (let [ ;; calculate new cursor
-            s (-> (.subSequence rope 0 match)
+            s (-> (.subSequence rope 0 (.start match))
                   .toString)
 
             {:keys [row column]} (util/count-points s)
@@ -740,9 +763,11 @@
         (-> editor
             (assoc-in [::search :query] query)
             (assoc :cursor cursor)
+            (assoc-in [::search :match] match)
             (text-mode/editor-update-viewport)))
-      (assoc-in editor
-                [::search :query] query))))
+      (-> editor
+          (assoc-in [::search :query] query)
+          (assoc-in [::search :match] nil)))))
 
 (defeffect ::append-search-forward [{:keys [$editor s]}]
   (dispatch! :update $editor
