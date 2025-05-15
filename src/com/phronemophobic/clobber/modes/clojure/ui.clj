@@ -387,6 +387,143 @@
                         0.4]
                        width height))))))
 
+(defn merge-styles [styles]
+  (apply merge-with
+         (fn [s1 s2]
+           (if (map? s1)
+             (merge-styles [s1 s2])
+             s2))
+         styles))
+
+(defn styles-by-index [styles]
+  (let [all-styles
+        (into []
+              (comp
+               (map-indexed
+                (fn [i m]
+                  (eduction
+                   (map-indexed
+                    (fn [j [[start end] style]]
+                      [{:op :start
+                        :index start
+                        :style style
+                        :id [i j]}
+                       {:op :end
+                        :index end
+                        :style style
+                        :id [i j]}]))
+                   cat
+                   m)))
+               cat)
+              styles)
+        by-index (sort-by :index all-styles)]
+    by-index))
+
+(defn styled-text [rope styles start-byte-offset end-byte-offset]
+  (let [by-index (styles-by-index styles)]
+    (loop [offset start-byte-offset
+           by-index (seq by-index)
+           ;; unprioritized for now
+           active-styles {}
+           p []]
+      (if (and by-index
+               (< offset end-byte-offset))
+        (let [event (first by-index)
+              end-offset (min (:index event) end-byte-offset)
+              p (if (> end-offset offset)
+                  (let [text (util/rope->str rope offset end-offset)]
+                    (conj p
+                          (if (seq active-styles)
+                            (let [style (merge-styles (cons base-style (vals active-styles)))]
+                              {:text text
+                               :style style})
+                            text)))
+                  ;; else
+                  p)
+
+              active-styles (if (= :start (:op event))
+                              (assoc active-styles (:id event) (:style event))
+                              (dissoc active-styles (:id event)))]
+          (recur (max end-offset offset)
+                 (next by-index)
+                 active-styles
+                 p))
+        ;;else
+        (if (< offset end-byte-offset)
+          (let [text (util/rope->str rope offset end-byte-offset)]
+            (conj p
+                  (if (seq active-styles)
+                    (let [style (merge-styles (cons base-style (vals active-styles)))]
+                      {:text text
+                       :style style})
+                    text)))
+          p)))))
+
+(defn selection-style [editor start-byte-offset end-byte-offset]
+  (let [cursor (:cursor editor)]
+    {[(:byte cursor) (+ 20 (:byte cursor))] {:text-style/background-color {:color [1 0 0 0.2]}}}))
+
+(defn syntax-style [editor
+                    ;; ;;lang highlight-queries
+                    ;; ^TSQueryCursor qc
+                    ;; ^TSQuery query
+                    ;; editor
+                    ;; start-byte-offset
+                    ;; end-byte-offset
+                    start-byte-offset end-byte-offset]
+  (let [^TSQueryCursor qc (TSQueryCursor.)
+        ^TSQuery query (TSQuery. (:language editor)
+                                 clojure-mode/highlight-queries)
+
+
+        base-style (:base-style editor)
+        ^TSTree tree (:tree editor)
+        ^Rope rope (:rope editor)
+
+        _ (.setByteRange qc start-byte-offset end-byte-offset)
+        _ (.exec qc query (.getRootNode tree))
+        matches (.getCaptures qc)
+        styles (loop [offset start-byte-offset
+                      styles {}]
+                 (if (.hasNext matches)
+                   (let [match (.next matches)
+                         ^TSQueryCapture
+                         capture (aget (.getCaptures match) (.getCaptureIndex match))
+                         capture-name (.getCaptureNameForId query (.getIndex capture))
+                         node (.getNode capture)]
+                     (if (= capture-name "list")
+                       (let [;; check if the first child is def or defn
+                             first-child (.getNamedChild node 0)]
+                         (if (and (not (.isNull first-child))
+                                  (= "sym_lit" (.getType first-child)))
+                           (let [s (util/node->str rope first-child)]
+                             (if (builtin? s)
+                               (let [start-byte (min end-byte-offset (.getStartByte first-child))
+                                     end-byte (min end-byte-offset (.getEndByte first-child))
+                                     color (get clojure-mode/text-colors "defn")
+                                     style {:text-style/color color}]
+                                 (recur end-byte
+                                        (if (> end-byte start-byte)
+                                          (assoc styles [start-byte end-byte] style)
+                                          styles)))
+                               (recur offset styles)))
+                           ;; else
+                           (recur offset styles)))
+                       ;; else
+                       (let [start-byte (min end-byte-offset (.getStartByte node))
+                             end-byte (min end-byte-offset (.getEndByte node))
+
+                             styles (if (> end-byte start-byte)
+                                      (let [color (get clojure-mode/text-colors capture-name)]
+                                        (assoc styles [start-byte end-byte] {:text-style/color color}))
+                                      ;; else
+                                      styles)]
+                         (recur end-byte
+                                styles))))
+                   ;; else
+                   styles))]
+    styles))
+
 (defn editor->paragraph [editor]
   (let [tree (:tree editor)
         lang (:language editor)
@@ -402,14 +539,12 @@
                         .toCharSequence
                         .length)
 
-        para (para/paragraph (highlighted-text (TSQueryCursor.)
-                                               (TSQuery. lang
-                                                         clojure-mode/highlight-queries)
-                                               editor
-                                               start-byte-offset
-                                               end-byte-offset)
-                             nil
-                             {:paragraph-style/text-style (:base-style editor)})
+        p (styled-text rope [(syntax-style editor start-byte-offset end-byte-offset)
+                             ;;(selection-style editor start-byte-offset end-byte-offset)
+                             ]
+                       start-byte-offset
+                       end-byte-offset)
+        para (para/paragraph p nil {:paragraph-style/text-style (:base-style editor)})
         para (assoc para
                     :char-offset char-offset
                     :start-byte-offset start-byte-offset
