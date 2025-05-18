@@ -76,6 +76,7 @@
 
 (def special-keys {"DEL" :backspace
                    "RET" :enter
+                   "SPC" \space
                    "<right>" :right
                    "<left>" :left
                    "<up>" :up
@@ -387,8 +388,14 @@
           p)))))
 
 (defn selection-style [editor viewport]
-  (let [cursor (:cursor editor)]
-    {[(:byte cursor) (+ 20 (:byte cursor))] {:text-style/background-color {:color [1 0 0 0.2]}}}))
+  (when-let [select-cursor (:select-cursor editor)]
+    (let [cursor (:cursor editor)
+          cursor-byte (:byte cursor)
+          select-cursor-byte (:byte select-cursor)
+
+          start-byte (min cursor-byte select-cursor-byte)
+          end-byte (max cursor-byte select-cursor-byte)]
+      {[start-byte end-byte] {:text-style/background-color {:color [1 0 0 0.2]}}})))
 
 (defn syntax-style [editor
                     ;; ;;lang highlight-queries
@@ -486,7 +493,7 @@
                   :end-byte-offset end-byte-offset}
 
         p (styled-text rope [(syntax-style editor viewport)
-                             ;;(selection-style editor start-byte-offset end-byte-offset)
+                             (selection-style editor viewport)
                              (highlight-search editor viewport)
                              ]
                        start-byte-offset

@@ -864,7 +864,8 @@
    "C-c b" identity
 
    "C-y" #'text-mode/editor-yank
-
+   "C-SPC" #'text-mode/editor-set-mark
+   "C-w" #'text-mode/editor-kill-region
    ;; "C-x C-s" editor-save-buffer
 
    })

@@ -107,7 +107,7 @@
   "Counts the number or rows and columns of s.
 
   returns {:row row :column column}."
-  [^String s]
+  [^CharSequence s]
   (let [bi (doto (BreakIterator/getCharacterInstance)
              (.setText s))]
     (loop [row 0

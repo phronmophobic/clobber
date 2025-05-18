@@ -130,6 +130,63 @@
             :rope new-rope
             :tree new-tree))))
 
+(defn editor-snip
+  "Removes bytes between [`start-byte`, `end-byte`)."
+  ([editor start-byte end-byte]
+   (let [cursor (:cursor editor)
+         ^Rope
+         rope (:rope editor)
+         {cursor-byte :byte} cursor
+
+         {:keys [row column]} (if (= cursor-byte start-byte)
+                                {:row (:row cursor)
+                                 :column (:column cursor)}
+                                (let [diff-rope (if (> start-byte cursor-byte)
+                                                  (.sliceBytes rope cursor-byte start-byte)
+                                                  (.sliceBytes rope start-byte cursor-byte))
+
+                                      point-offset (util/count-points diff-rope)
+
+                                      new-cursor-row (+ (:row cursor) (:row point-offset))
+                                      new-cursor-column (if (pos? (:row point-offset))
+                                                          (:column point-offset)
+                                                          (+ (:column point-offset) (:column cursor)))]
+                                  {:row new-cursor-row
+                                   :column new-cursor-column}))
+
+         diff-rope (.sliceBytes rope start-byte end-byte)
+         point-offset (util/count-points diff-rope)
+         delta-rows (:row point-offset)
+         
+         end-row (+ row delta-rows)
+         end-column (if (pos? delta-rows)
+                      (:column point-offset)
+                      (+ (:column point-offset) column))
+
+         ^TSTree
+         tree (:tree editor)
+         new-tree (when-let [tree tree]
+                    (let [tree (.copy tree)]
+                      (.edit tree (TSInputEdit. start-byte end-byte start-byte
+                                                (TSPoint. row column)
+                                                (TSPoint. end-row end-column)
+                                                (TSPoint. row column)))
+                      tree))
+
+
+         new-rope (.concat (.sliceBytes rope 0 start-byte)
+                           (.sliceBytes rope end-byte (.numBytes rope)))
+
+         ^TSParser
+         parser (:parser editor)
+         new-tree (when parser
+                    (let [reader (util/->RopeReader new-rope)]
+                      (.parse parser (:buf editor) new-tree reader TSInputEncoding/TSInputEncodingUTF8)))]
+     (assoc editor
+            :rope new-rope
+            :tree new-tree)))
+)
+
 ;; (defn editor-snip [editor])
 ;; (defn editor-slice [editor])
 ;; (defn editor-concat [editor])
@@ -601,6 +658,35 @@
       ;; converting from rope to string is unnecessary
       (editor-self-insert-command editor (.toString rope))
       editor)))
+
+(defn editor-set-mark [editor]
+  (if (:select-cursor editor)
+    (dissoc editor :select-cursor)
+    (assoc editor :select-cursor (:cursor editor))))
+
+(defn editor-kill-region [editor]
+  (if-let [select-cursor (:select-cursor editor)]
+    (let [cursor (:cursor editor)
+          cursor-byte (:byte cursor)
+          select-cursor-byte (:byte select-cursor)
+
+          start-byte (min cursor-byte select-cursor-byte)
+          end-byte (max cursor-byte select-cursor-byte)
+
+          ^Rope
+          rope (:rope editor)
+          clip (.sliceBytes rope start-byte end-byte)
+
+          editor (-> editor
+                     (editor-goto-byte start-byte)
+                     (editor-snip start-byte end-byte)
+                     (editor-append-clipboard clip))]
+      editor)
+    ;; else
+    editor))
+
+(defn editor-exchange-point-and-mark [editor]
+  editor)
 
 (defn editor-open-line [editor]
   (-> editor
