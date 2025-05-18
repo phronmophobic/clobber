@@ -82,7 +82,8 @@
          {cursor-byte :byte} cursor
 
          {:keys [row column]} (if (= cursor-byte byte-index)
-                                [(:row cursor) (:column cursor)]
+                                {:row (:row cursor)
+                                 :column (:column cursor)}
                                 (let [diff-rope (if (> byte-index cursor-byte)
                                                   (.sliceBytes rope cursor-byte byte-index)
                                                   (.sliceBytes rope byte-index cursor-byte))
