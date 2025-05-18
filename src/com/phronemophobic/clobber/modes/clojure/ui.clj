@@ -838,6 +838,7 @@
 
 (defui clojure-keymap [{:keys [bindings body editor]}]
   (let [next-bindings (get extra ::next-bindings)
+        modifiers (get extra ::modifiers)
         find-match
         (fn [key-press]
           (if-let [match (get (or next-bindings bindings) key-press)]
@@ -863,6 +864,7 @@
            intents
            (when (and (not next-bindings)
                       (string? s)
+                      (empty? modifiers)
                       (-> (.getBytes ^String s)
                           first
                           pos?))
@@ -870,23 +872,32 @@
                                 :$editor $editor}]]))))
      :key-event
      (fn [key scancode action mods]
-       (when (#{:press :repeat} action)
-         (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
-               super? (not (zero? (bit-and ui/SUPER-MASK mods)))
-               shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-               ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))
-
-               key-press (cond-> {:key (if shift?
-                                         (let [c (char key)]
-                                           (get uppercase c))
-                                         (Character/toLowerCase (char key)))}
-                           alt? (assoc :meta? true)
-                           super? (assoc :super? true)
-                           ctrl? (assoc :ctrl? true))]
-           (when (or alt?
-                     super?
-                     ctrl?)
-             (find-match key-press)))))
+       (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
+             super? (not (zero? (bit-and ui/SUPER-MASK mods)))
+             shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
+             ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
+         (if (#{:press :repeat} action)
+           (let [key-press (cond-> {:key (if shift?
+                                           (let [c (char key)]
+                                             (get uppercase c))
+                                           (Character/toLowerCase (char key)))}
+                             alt? (assoc :meta? true)
+                             super? (assoc :super? true)
+                             ctrl? (assoc :ctrl? true))]
+             (when (or alt?
+                       super?
+                       ctrl?)
+               (cons
+                [:update $modifiers (fn [xs] (cond-> (or xs #{})
+                                               alt? (conj :alt)
+                                               super? (conj :super)
+                                               ctrl? (conj :ctrl?)))]
+                (find-match key-press))))
+           ;; release action
+           [[:update $modifiers (fn [xs] (cond-> (or xs #{})
+                                           (not alt?) (disj :alt)
+                                           (not super?) (disj :super)
+                                           (not ctrl?) (disj :ctrl?)))]])))
      body)))
 
 (defui code-editor [{:keys [editor
