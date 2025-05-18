@@ -40,8 +40,33 @@
 #_(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 (import 'io.lacuna.bifurcan.Rope)
 
+(defn editor-upkeep [editor op]
+  ;; if cursor or rope changed, editor-update-viewport
+  ;; potentially update undo history
+  ;; if rope changed, unset selection cursor
+  (let [new-editor (op editor)
+
+        rope-changed? (not (identical? (:rope editor)
+                                       (:rope new-editor)))
+        cursor-changed? (not (identical? (:cursor editor)
+                                         (:cursor new-editor)))
+
+        new-editor (if rope-changed?
+                     (-> new-editor
+                         (dissoc :select-cursor))
+                     new-editor)
+        new-editor (if (or rope-changed?
+                           cursor-changed?)
+                     (text-mode/editor-update-viewport new-editor)
+                     new-editor)]
+    new-editor))
+
+(defn editor-cancel [editor]
+  (dissoc editor :select-cursor))
+
+
 (defeffect ::update-editor [{:keys [$editor op]}]
-  (dispatch! :update $editor op))
+  (dispatch! :update $editor editor-upkeep op))
 
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
@@ -579,6 +604,7 @@
   (key-bindings->keytree
    (assoc clojure-mode/key-bindings
           "C-x C-s" #'my-save
+          "C-g" #'editor-cancel
           "C-M-x" ::editor-eval-top-form
           "C-s" #'init-search-forward)))
 
