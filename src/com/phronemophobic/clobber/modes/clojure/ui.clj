@@ -181,34 +181,6 @@
 (def base-style #:text-style {:font-families ["Menlo"]
                               :font-size 12})
 
-
-(defn ^:private add-node-to-paragraph [rope p offset end-byte-offset ^TSNode node base-style style]
-  (let [;; add any unmatched text as unadorned
-        start-byte (min end-byte-offset (.getStartByte node))
-        end-byte (min end-byte-offset (.getEndByte node))
-
-        p (if (> start-byte offset)
-            (conj p
-                  (util/rope->str rope offset start-byte))
-            p)
-
-        ;; add matched text
-        ;; ; matches can overlap
-        p (if (and (> end-byte offset)
-                   (> end-byte start-byte))
-            (let [color (get clojure-mode/text-colors style)
-                  chunk-text (util/rope->str rope (max start-byte offset) end-byte)
-                  chunk (if color
-                          {:text chunk-text
-                           :style (assoc base-style
-                                         :text-style/color color)}
-                          chunk-text)
-                  p (conj p chunk)]
-              p)
-            ;; else already covered by previous overlapping match
-            p)]
-    [p (max offset end-byte)]))
-
 (defn paren-highlight [editor para]
   (let [cursor-byte (-> editor :cursor :byte)
 
