@@ -13,3 +13,6 @@
 /.socket-repl-port
 .hgignore
 .hg/
+*.mp4
+*.mov
+*.org
