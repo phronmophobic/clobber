@@ -648,7 +648,7 @@
                             [])
                   clips (conj (or clips) rope)
                   clips (if (> (count clips) 5)
-                          (into [] (take 5) clips)
+                          (subvec clips (- (count clips) 5) (count clips))
                           clips)]
               {:clips clips}))))
 
