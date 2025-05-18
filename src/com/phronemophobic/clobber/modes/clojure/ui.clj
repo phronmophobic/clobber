@@ -392,7 +392,7 @@
 
           start-byte (min cursor-byte select-cursor-byte)
           end-byte (max cursor-byte select-cursor-byte)]
-      {[start-byte end-byte] {:text-style/background-color {:color [1 0 0 0.2]}}})))
+      {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
 
 (defn syntax-style [editor
                     ;; ;;lang highlight-queries
