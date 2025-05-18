@@ -1318,17 +1318,22 @@
 
 
 (defn dev []
-  (dev/add-component-as-applet #'debug
-                               {:editor (-> (make-editor)
-                                            (text-mode/editor-self-insert-command
-                                             (slurp (io/resource "com/phronemophobic/easel.clj")))
-                                            (assoc :eval-ns (the-ns 'com.phronemophobic.easel))
-                                            (assoc :cursor {:byte 0
-                                                            :char 0
-                                                            :point 0
-                                                            :row 0
-                                                            :column 0})
-                                            (text-mode/editor-update-viewport))})
+  (let [ns-sym 'com.phronemophobic.clobber.modes.clojure.ui
+        resource-path (let [parts (-> ns-sym
+                                      name
+                                      (str/split #"\."))]
+                        (str (str/join "/" parts) ".clj"))
+        source (slurp (io/resource resource-path))]
+    (dev/add-component-as-applet #'debug
+                                 {:editor (-> (make-editor)
+                                              (text-mode/editor-self-insert-command source)
+                                              (assoc :eval-ns (the-ns ns-sym))
+                                              (assoc :cursor {:byte 0
+                                                              :char 0
+                                                              :point 0
+                                                              :row 0
+                                                              :column 0})
+                                              (text-mode/editor-update-viewport))}))
   ,)
 
 (defeffect ::tap [& args]
