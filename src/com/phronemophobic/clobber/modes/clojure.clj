@@ -505,7 +505,9 @@
       ;; check if we're at the end of line
       (= \newline
          (-> rope (.charAt cursor-char)))
-      (editor-paredit-forward-delete editor)
+      (-> editor
+          (text-mode/editor-append-clipboard (Rope/from "\n"))
+          (editor-paredit-forward-delete))
 
       :else
       (let [root-node (.getRootNode tree)
@@ -607,14 +609,15 @@
 
                 new-rope (.concat (.sliceBytes rope 0 cursor-byte)
                                   (.sliceBytes rope end-byte-offset (.numBytes rope)))
+                clipboard-rope (.sliceBytes rope cursor-byte end-byte-offset)
 
                 reader (util/->RopeReader new-rope)
                 new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-
-            (assoc editor
-                   :tree new-tree
-                   :paragraph nil
-                   :rope new-rope)))))))
+            (-> editor
+                (text-mode/editor-append-clipboard clipboard-rope)
+                (assoc :tree new-tree
+                       :paragraph nil
+                       :rope new-rope))))))))
 
 
 
@@ -859,6 +862,8 @@
 
    "C-c a" identity
    "C-c b" identity
+
+   "C-y" #'text-mode/editor-yank
 
    ;; "C-x C-s" editor-save-buffer
 

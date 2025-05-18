@@ -582,6 +582,26 @@
                          :column new-cursor-column})
          (editor-insert s cursor-byte cursor-row cursor-column)))))
 
+(defn editor-append-clipboard [editor rope]
+  (update editor :clipboard
+          (fn [clipboard]
+            ;; todo: be smarter about this
+            (let [clips (or (:clips clipboard)
+                            [])
+                  clips (conj (or clips) rope)
+                  clips (if (> (count clips) 5)
+                          (into [] (take 5) clips)
+                          clips)]
+              {:clips clips}))))
+
+(defn editor-yank [editor]
+  (let [rope (-> editor :clipboard :clips peek)]
+    (if rope
+      ;; todo: be smarter about this
+      ;; converting from rope to string is unnecessary
+      (editor-self-insert-command editor (.toString rope))
+      editor)))
+
 (defn editor-open-line [editor]
   (-> editor
       (editor-self-insert-command "\n")
