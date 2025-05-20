@@ -188,6 +188,17 @@
             :tree new-tree)))
 )
 
+(defn editor-set-string [editor s]
+  (let [rope (Rope/from s)
+        ^TSParser
+         parser (:parser editor)
+         tree (when parser
+                    (let [reader (util/->RopeReader rope)]
+                      (.parse parser (:buf editor) nil reader TSInputEncoding/TSInputEncodingUTF8)))]
+    (assoc editor
+      :rope rope
+      :tree tree)))
+
 ;; (defn editor-snip [editor])
 ;; (defn editor-slice [editor])
 ;; (defn editor-concat [editor])

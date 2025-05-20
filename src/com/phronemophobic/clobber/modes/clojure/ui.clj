@@ -170,6 +170,16 @@
         (println "saved!"))))
   nil)
 
+(defeffect ::reload-editor [{:keys [editor $editor]}]
+  (future
+    (when-let [file (:file editor)]
+      (let [source (slurp file)
+            previous-source (.toString (:rope editor))]
+        (dispatch! :set $editor
+          (editor-upkeep editor
+          #(text-mode/editor-set-string % source))))))
+  nil)
+
 
 
 (defn make-editor
@@ -1253,6 +1263,10 @@
                                                        :column 0})
                                        (text-mode/editor-update-viewport))
                                    ]])})
+        (ant/button {:text  "reload"
+                     :on-click (fn []
+                                 [[::reload-editor {:editor editor
+                                                    :$editor $editor}]])})
         (ant/button {:text  "load-json"
                      :on-click (fn []
                                  [[:set $editor
