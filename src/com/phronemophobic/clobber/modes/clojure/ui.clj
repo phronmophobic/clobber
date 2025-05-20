@@ -59,6 +59,17 @@
         new-editor (if (or rope-changed?
                            cursor-changed?)
                      (text-mode/editor-update-viewport new-editor)
+                     new-editor)
+        new-editor (if rope-changed?
+                     (text-mode/editor-append-history new-editor editor)
+                     new-editor)
+
+        ;; support consecutive undos
+        new-history-index (-> new-editor :history :index)
+        new-editor (if (and new-history-index
+                            (= new-history-index
+                               (-> editor :history :index)))
+                     (update new-editor :history dissoc :index)
                      new-editor)]
     new-editor))
 
@@ -620,6 +631,7 @@
   (key-bindings->keytree
    (assoc clojure-mode/key-bindings
           "C-x C-s" ::save-editor
+          "C-_" #'text-mode/editor-undo
           "C-g" #'editor-cancel
           "C-M-x" ::editor-eval-top-form
           "C-s" #'init-search-forward)))

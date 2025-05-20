@@ -642,6 +642,37 @@
                         :column new-cursor-column})
         (editor-insert s cursor-byte cursor-row cursor-column))))
 
+(defn editor-append-history [editor past]
+  (update editor :history
+    (fn [history]
+      (let [log (or (:log history)
+                    [])
+            log (conj log past)]
+        (assoc history :log log)))))
+
+(defn editor-undo [editor]
+  ;; not sure if history should
+  ;; jump back to old editor with new history
+  ;; or update current editor with a subselect
+  ;; of keys from the old editor like
+  ;; :tree, :rope, :viewport, :cursor, etc.
+  (if (seq (-> editor :history :log))
+    (let [history (:history editor)
+          log (:log history)
+          index (max
+                 0
+                 (dec
+                  (or (:index history)
+                      (count log))))
+
+          old-editor (nth log index)
+          new-history (assoc history
+                             :index index)]
+      (assoc old-editor
+             :history new-history))
+    ;; else
+    editor))
+
 (defn editor-append-clipboard [editor rope]
   (update editor :clipboard
           (fn [clipboard]
