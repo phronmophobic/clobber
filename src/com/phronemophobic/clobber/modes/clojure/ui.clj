@@ -160,9 +160,14 @@
    {}
    key-bindings))
 
-(defn my-save [editor]
-  (-> editor
-      (text-mode/editor-self-insert-command "save!")))
+(defeffect ::save-editor [{:keys [editor $editor]}]
+  (future
+    (when-let [file (:file editor)]
+      (let [^Rope rope (:rope editor)
+            source (.toString rope)]
+        (spit file source)
+        (println "saved!"))))
+  nil)
 
 
 
@@ -603,7 +608,7 @@
 (def clojure-keytree
   (key-bindings->keytree
    (assoc clojure-mode/key-bindings
-          "C-x C-s" #'my-save
+          "C-x C-s" ::save-editor
           "C-g" #'editor-cancel
           "C-M-x" ::editor-eval-top-form
           "C-s" #'init-search-forward)))
@@ -1323,17 +1328,25 @@
                                       name
                                       (str/split #"\."))]
                         (str (str/join "/" parts) ".clj"))
-        source (slurp (io/resource resource-path))]
+        resource (io/resource resource-path)
+        source (slurp resource)
+        file (when (= "file" (.getProtocol resource))
+               (io/as-file resource))
+
+        editor (-> (make-editor)
+                   (text-mode/editor-self-insert-command source)
+                   (assoc :eval-ns (the-ns ns-sym))
+                   (assoc :cursor {:byte 0
+                                   :char 0
+                                   :point 0
+                                   :row 0
+                                   :column 0})
+                   (text-mode/editor-update-viewport))
+        editor (if file
+                 (assoc editor :file file)
+                 editor)]
     (dev/add-component-as-applet #'debug
-                                 {:editor (-> (make-editor)
-                                              (text-mode/editor-self-insert-command source)
-                                              (assoc :eval-ns (the-ns ns-sym))
-                                              (assoc :cursor {:byte 0
-                                                              :char 0
-                                                              :point 0
-                                                              :row 0
-                                                              :column 0})
-                                              (text-mode/editor-update-viewport))}))
+                                 {:editor editor}))
   ,)
 
 (defeffect ::tap [& args]
