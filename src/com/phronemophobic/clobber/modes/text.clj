@@ -648,7 +648,7 @@
             ;; todo: be smarter about this
             (let [clips (or (:clips clipboard)
                             [])
-                  clips (conj (or clips) rope)
+                  clips (conj clips rope)
                   clips (if (> (count clips) 5)
                           (subvec clips (- (count clips) 5) (count clips))
                           clips)]
