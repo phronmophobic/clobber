@@ -1337,32 +1337,33 @@
 
 
 
-(defn dev []
-  (let [ns-sym 'com.phronemophobic.clobber.modes.clojure.ui
-        resource-path (let [parts (-> ns-sym
-                                      name
-                                      (str/split #"\."))]
-                        (str (str/join "/" parts) ".clj"))
-        resource (io/resource resource-path)
-        source (slurp resource)
-        file (when (= "file" (.getProtocol resource))
-               (io/as-file resource))
+(defn dev
+  ([]
+   (dev 'com.phronemophobic.clobber.modes.clojure.ui))
+  ([ns-sym]
+   (let [resource-path (let [parts (-> ns-sym
+                                       name
+                                       (str/split #"\."))]
+                         (str (str/join "/" parts) ".clj"))
+         resource (io/resource resource-path)
+         source (slurp resource)
+         file (when (= "file" (.getProtocol resource))
+                (io/as-file resource))
 
-        editor (-> (make-editor)
-                   (text-mode/editor-self-insert-command source)
-                   (assoc :eval-ns (the-ns ns-sym))
-                   (assoc :cursor {:byte 0
-                                   :char 0
-                                   :point 0
-                                   :row 0
-                                   :column 0})
-                   (text-mode/editor-update-viewport))
-        editor (if file
-                 (assoc editor :file file)
-                 editor)]
-    (dev/add-component-as-applet #'debug
-                                 {:editor editor}))
-  ,)
+         editor (-> (make-editor)
+                    (text-mode/editor-self-insert-command source)
+                    (assoc :eval-ns (the-ns ns-sym))
+                    (assoc :cursor {:byte 0
+                                    :char 0
+                                    :point 0
+                                    :row 0
+                                    :column 0})
+                    (text-mode/editor-update-viewport))
+         editor (if file
+                  (assoc editor :file file)
+                  editor)]
+     (dev/add-component-as-applet #'debug
+                                  {:editor editor}))))
 
 (defeffect ::tap [& args]
   (case (count args)
