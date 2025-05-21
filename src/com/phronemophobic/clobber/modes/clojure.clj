@@ -1,6 +1,8 @@
 (ns com.phronemophobic.clobber.modes.clojure
   (:require [com.phronemophobic.clobber.modes.text :as text-mode]
+            [clojure.edn :as edn]
             [com.phronemophobic.clobber.util :as util]
+            [clojure.java.io :as io]
             [clojure.string :as str])
   (:import (org.treesitter TSTree
                            TSInputEdit
@@ -197,148 +199,6 @@
       
       editor)))
 
-
-(defn editor-indent [editor]
-  ;; Find enclosing coll literal
-  ;; if enclosing coll is on the same line, keep climbing
-  ;; 
-  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-        
-        {cursor-byte :byte
-         cursor-char :char
-         cursor-point :point
-         cursor-row :row
-         cursor-column :column} cursor]
-    (let [root-node (.getRootNode tree)
-          node (.getDescendantForByteRange root-node cursor-byte cursor-byte)
-          ^TSNode
-          parent-coll-node
-          (loop [node node]
-            (if (.isNull node)
-              nil
-              (if (contains? coll-node-types (.getType node))
-                (let [node-row (-> node
-                                   .getStartPoint
-                                   .getRow)]
-                  
-                  (if (not= node-row cursor-row)
-                    (do
-                      node)
-                    (recur (.getParent node))))
-                (recur (.getParent node)))))]
-      
-      (if (not parent-coll-node)
-        editor
-        ;; do indent
-        (let [relative-indent (if (= "list_lit"
-                                     (.getType parent-coll-node))
-                                2
-                                1)
-              indent (+ relative-indent
-                        (-> parent-coll-node
-                            .getStartPoint
-                            .getColumn))
-
-              ;; This can be optimized
-              ;; do the straightforward, naive thing for now
-
-              ;; 1. find start of line
-              ;; 2. move forward to indent
-              ;; 3. add or remove spaces until
-              ;;    first non-whitespace
-
-              bi (doto (BreakIterator/getCharacterInstance)
-                   (.setText rope))
-
-              ;; 1. find start of line
-              char-index
-              (loop [idx cursor-char]
-                (let [prev-idx (.preceding bi idx)]
-                  (if (or (= -1 prev-idx)
-                          (= \newline (.charAt rope prev-idx)))
-                    idx
-                    (recur prev-idx))))
-
-              
-              diff-string (.toString (.subSequence rope char-index cursor-char))
-              
-              byte-index (- cursor-byte (alength (.getBytes diff-string "utf-8")))
-              point-index (- cursor-point (util/num-points diff-string))
-
-              ;; move forward until newline or non whitespace
-              num-spaces (loop [idx char-index]
-                           (let [c (.charAt rope idx)]
-                             (if (= \space c)
-                               (recur (inc idx))
-                               (- idx char-index))))
-
-              
-              
-
-              ;; measure indent in bytes for now
-              indent-diff (- indent num-spaces)
-              ]
-          (if (zero? indent-diff)
-            ;; need to also move cursor, even if
-            ;; spaces aren't added or removed
-            (let [new-cursor (if (<= cursor-column num-spaces) 
-                               {:byte (+ byte-index indent)
-                                :char (+ char-index indent)
-                                :point (+ point-index indent)
-                                :row cursor-row
-                                :column indent}
-                               cursor)]
-              (assoc editor
-                     :cursor new-cursor))
-            (let [new-rope (if (pos? indent-diff)
-                             ;; this should be .insert?
-                             (.concat (.sliceBytes rope 0 byte-index)
-                                      (.concat (Rope/from (str/join (repeat indent-diff " ")))
-                                               (.sliceBytes rope byte-index (.numBytes rope))))
-
-                             ;; else 
-                             (.concat (.sliceBytes rope 0 byte-index)
-                                      (.sliceBytes rope
-                                                   (- byte-index indent-diff)
-                                                   (.numBytes rope))))
-
-                  
-                  
-                  
-                  new-tree (when-let [^TSTree tree tree]
-                             (let [tree (.copy tree)
-                                   input-edit (if (pos? indent-diff)
-                                                (TSInputEdit. byte-index byte-index (+ byte-index indent-diff)
-                                                              (TSPoint. cursor-row 0)
-                                                              (TSPoint. cursor-row 0)
-                                                              (TSPoint. cursor-row indent-diff))
-                                                (TSInputEdit. byte-index (- byte-index indent-diff) byte-index
-                                                              (TSPoint. cursor-row 0)
-                                                              (TSPoint. cursor-row (- indent-diff))
-                                                              (TSPoint. cursor-row 0)))]
-                               (.edit tree input-edit)
-                               tree))
-                  reader (util/->RopeReader new-rope)
-                  new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )
-
-                  new-cursor (if (<= cursor-column num-spaces) 
-                               {:byte (+ byte-index indent)
-                                :char (+ char-index indent)
-                                :point (+ point-index indent)
-                                :row cursor-row
-                                :column indent}
-                               {:byte (+ cursor-byte indent-diff)
-                                :char (+ cursor-char indent-diff)
-                                :point (+ cursor-point indent-diff)
-                                :row cursor-row
-                                :column (+ cursor-column indent-diff)})]
-              (assoc editor
-                     :tree new-tree
-                     :paragraph nil
-                     :rope new-rope
-                     :cursor new-cursor)))
-          )
-        ))))
 
 (defn editor-paredit-close-coll [editor close-char]
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -807,6 +667,289 @@
                     :paragraph nil
                     :rope new-rope))))))))
 
+;; indentation
+;; modeled after https://github.com/weavejester/cljfmt/blob/master/docs/INDENTS.md
+(def ^:private indent-config
+  (let [indents (with-open [reader (io/reader (io/resource "cljfmt/indents/clojure.clj"))
+                            reader (java.io.PushbackReader. reader)]
+                  (edn/read reader))
+        inner-rules (into []
+                          (mapcat
+                           (fn [[sym rules]]
+                             (eduction
+                              (filter #(= :inner (first %)))
+                              (map (fn [[_inner depth index]]
+                                     [depth (cond-> {:sym sym}
+                                              index (assoc :index index))]))
+                              rules)))
+                          indents)
+        max-depth (transduce (map first) max 0 inner-rules)
+
+        
+        inner-rules-index (into []
+                                (map (fn [n]
+                                       (into {}
+                                             (keep (fn [[depth rule]]
+                                                     (when (= depth n)
+                                                       [(name (:sym rule)) (:index rule)])))
+                                             inner-rules)))
+                                (range (inc max-depth)))
+
+        block-index
+        (into {}
+              (keep (fn [[sym rules]]
+                      (when-let [[_block index :as block-rule] (util/first-by
+                                                                (filter #(= :block (first %)))
+                                                                rules)]
+                        [(name sym) index])))
+              indents)]
+    {;; vector of [ {sym -> index} for depth 0, {sym -> index} for depth 1, ...] 
+     :inner-rules-index inner-rules-index
+     ;; map of {sym -> index}
+     :block-index block-index}) )
+
+
+(defn ^:private matches-inner? [parent rope]
+  (loop [node parent
+         child nil
+         inner-rules-index (seq (:inner-rules-index indent-config))]
+    (when (and inner-rules-index
+               (not (.isNull node)))
+      (let [m (first inner-rules-index)
+            first-child (.getNamedChild node 0)
+            sym-name (when (and (not (.isNull first-child))
+                                (= "sym_lit" (.getType first-child)))
+                       (util/rope->str rope
+                                       (.getStartByte first-child)
+                                       (.getEndByte first-child)))]
+        (if-let [[_ index] (and sym-name
+                                (find m sym-name))]
+          (if index 
+              (and child
+                   (TSNode/eq child (.getNamedChild node (inc index))))
+              true)
+          ;; else
+          (recur (.getParent node)
+                 node
+                 (next inner-rules-index)))))))
+
+(defn ^:private matches-block? [parent rope]
+  (when (= "list_lit" (.getType parent))
+    (let [first-child (.getNamedChild parent 0)
+          sym-name (when (and (not (.isNull first-child))
+                              (= "sym_lit" (.getType first-child)))
+                     (util/rope->str rope
+                                     (.getStartByte first-child)
+                                     (.getEndByte first-child)))]
+      (when-let [block-index (get (:block-index indent-config) sym-name)]
+        (let [parent-row (-> parent .getStartPoint .getRow)
+              child-count (dec (.getNamedChildCount parent))]
+          (cond
+            (< child-count block-index) 4
+            (= child-count block-index) 2
+            :else
+            (let [child (.getNamedChild parent (inc block-index))
+                  child-row (-> child .getStartPoint .getRow)]
+              (when (not= parent-row
+                          child-row)
+                ;; make sure child is first on its line
+                (loop [index block-index]
+                  (if (neg? index)
+                    2
+                    (let [node (.getNamedChild parent index)]
+                      (if (= child-row
+                             (-> node .getStartPoint .getRow))
+                        false
+                        (recur (dec index))))))))))))))
+
+
+(defn ^:private editor-indent* [editor parent indent]
+  (let [;; calculate parent offset in grapheme clusters
+        rope (:rope editor)
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+        parent-offset (loop [offset 0
+                             char-index (.length (.sliceBytes rope 0 (-> parent .getStartByte)))]
+                        (let [prev-char (.preceding bi char-index)]
+                          (cond
+                            (= -1 prev-char) offset
+                            (= \newline (.charAt rope prev-char)) offset
+                            :else (recur (inc offset)
+                                         prev-char))))
+
+        bol-editor (text-mode/editor-move-beginning-of-line editor)
+        rope-length (.length rope)
+        current-offset
+        (loop [offset 0
+               char-index (-> bol-editor :cursor :char)]
+          (if (>= char-index rope-length)
+            offset
+            (let [char (.charAt rope char-index)]
+              (if (= \space char)
+                (recur (inc offset)
+                       (.following bi char-index))
+                offset))))
+
+
+        indent-diff (- (+ parent-offset indent)
+                       current-offset)
+
+        cursor-column (-> editor :cursor :column)
+        next-cursor-offset (if (> cursor-column current-offset)
+                             (+ cursor-column indent-diff)
+                             (+ current-offset indent-diff))
+        
+        ;; fix the number of spaces
+        next-editor 
+        (cond
+          (pos? indent-diff) (text-mode/editor-insert bol-editor (str/join (repeat indent-diff " ")))
+
+          (neg? indent-diff) (let [cursor-byte (-> bol-editor :cursor :byte)]
+                               (text-mode/editor-snip bol-editor cursor-byte (+ cursor-byte (- indent-diff))))
+          :else bol-editor)
+
+        next-editor (loop [n next-cursor-offset
+                           e next-editor]
+                      (if (pos? n)
+                        (recur (dec n)
+                               (text-mode/editor-forward-char e))
+                        e))]
+    next-editor))
+
+
+(defn ^:private editor-indent-coll* [editor parent-coll-node]
+  (let [indent (if (= "set_lit" (.getType parent-coll-node))
+                 2
+                 1)]
+    (editor-indent* editor parent-coll-node indent)))
+
+
+(defn ^:private editor-indent-default*
+  "Indents the current line using the default style from cljfmt."
+  [editor parent-coll-node]
+  ;; indent matches first arg if on the same line as parent
+  ;; otherwise 1 space
+  (let [arg-node (.getNamedChild parent-coll-node 1)]
+    (if (and (not (.isNull arg-node))
+             (= (-> parent-coll-node .getStartPoint .getRow)
+                (-> arg-node .getStartPoint .getRow)))
+      ;; indent to arg node
+      (let [rope (:rope editor)
+            bi (doto (BreakIterator/getCharacterInstance)
+                 (.setText rope))
+            arg-offset (loop [offset 0
+                              char-index (.length (.sliceBytes rope 0 (-> arg-node .getStartByte)))]
+                         (let [prev-char (.preceding bi char-index)]
+                           (cond
+                             (= -1 prev-char) offset
+                             (= \newline (.charAt rope prev-char)) offset
+                             :else (recur (inc offset)
+                                          prev-char))))
+
+            bol-editor (text-mode/editor-move-beginning-of-line editor)
+            rope-length (.length rope)
+            ;; find number of spaces to first element on line
+            current-offset
+            (loop [offset 0
+                   char-index (-> bol-editor :cursor :char)]
+              (if (>= char-index rope-length)
+                offset
+                (let [char (.charAt rope char-index)]
+                  (if (= \space char)
+                    (recur (inc offset)
+                           (.following bi char-index))
+                    offset))))
+
+
+            indent-diff (- arg-offset
+                           current-offset)
+
+            cursor-column (-> editor :cursor :column)
+            next-cursor-offset (if (> cursor-column current-offset)
+                                 (+ cursor-column indent-diff)
+                                 (+ current-offset indent-diff))
+            
+
+            ;; fix the number of spaces
+            next-editor 
+            (cond
+              (pos? indent-diff) (text-mode/editor-insert bol-editor (str/join (repeat indent-diff " ")))
+
+              (neg? indent-diff) (let [cursor-byte (-> bol-editor :cursor :byte)]
+                                   (text-mode/editor-snip bol-editor cursor-byte (+ cursor-byte (- indent-diff))))
+              :else bol-editor)
+
+            ;; move forward
+            next-editor (loop [n next-cursor-offset
+                               e next-editor]
+                          (if (pos? n)
+                            (recur (dec n)
+                                   (text-mode/editor-forward-char e))
+                            e))]
+        next-editor)
+
+      ;; else indent normally
+      (editor-indent-coll* editor parent-coll-node))))
+
+
+(defn editor-indent
+  "Indents the current line.
+
+  If the cursor is before the first element on the line,
+  move the cursor to the indentation. Otherwise,
+  fix the indentation of the current line and keep the
+  same relative cursor position."
+  [editor]
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor]
+    (let [root-node (.getRootNode tree)
+          cursor (TSTreeCursor. root-node)
+          ;; find a collection node that starts before the current line
+          ;; and ends on or after the current line
+          ^TSNode
+          parent-coll-node
+          (when (.gotoFirstChild cursor)
+            ;; skip all top level nodes that end
+            ;; before current line
+            (when (loop []
+                    (if (< (-> (.currentNode cursor)
+                               .getEndPoint
+                               .getRow)
+                           cursor-row)
+                      (when (.gotoNextSibling cursor)
+                        (recur))
+                      true))
+              (loop [match nil]
+                (let [node (.currentNode cursor)]
+                  (if (>= (-> node .getStartPoint .getRow)
+                          cursor-row)
+                    match
+                    ;; else, started before this line
+                    (let [match (if (and (contains? coll-node-types (.getType node))
+                                         (>= (-> node .getEndPoint .getRow)
+                                             cursor-row))
+                                  node
+                                  match)]
+                      (when (util/goto-next-dfs-node cursor)
+                        (recur match))))))))]
+      (if (not parent-coll-node)
+                 (editor-indent* editor root-node 0)
+                 ;; do indent
+                 (if (= "list_lit" (.getType parent-coll-node))
+                   (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
+                     (editor-indent* editor parent-coll-node block-indent)
+                     (if (matches-inner? parent-coll-node (:rope editor))
+                       (editor-indent* editor parent-coll-node 2)
+                       ;; else
+                       (editor-indent-default* editor parent-coll-node)))
+                   ;; use normal coll indent
+                   (editor-indent-coll* editor parent-coll-node))))))
+
 (defn paredit-newline [editor]
   (-> editor
       (text-mode/editor-self-insert-command "\n")
@@ -869,4 +1012,3 @@
    ;; "C-x C-s" editor-save-buffer
 
    })
-

@@ -114,6 +114,7 @@
 (def special-keys {"DEL" :backspace
                    "RET" :enter
                    "SPC" \space
+                   "TAB" :tab
                    "<right>" :right
                    "<left>" :left
                    "<up>" :up
