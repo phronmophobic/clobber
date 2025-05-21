@@ -1254,6 +1254,7 @@
                      :on-click (fn []
                                  [[:set $editor
                                    (-> (make-editor)
+                                     (assoc :eval-ns (:eval-ns editor))
                                        (text-mode/editor-self-insert-command "\n\n\n\n\n\n")
                                        (assoc :cursor {:byte 0
                                                        :char 0
