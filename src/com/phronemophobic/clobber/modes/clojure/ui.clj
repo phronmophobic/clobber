@@ -422,6 +422,13 @@
           end-byte (max cursor-byte select-cursor-byte)]
       {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
 
+(defn debug-selection-style [editor viewport]
+  (when-let [^TSNode debug-node (get (:debug-node editor)
+                                     (:rope editor))]
+    (let [start-byte (.getStartByte debug-node )
+          end-byte (.getEndByte debug-node)]
+      {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
+
 (defn syntax-style [editor
                     ;; ;;lang highlight-queries
                     ;; ^TSQueryCursor qc
@@ -519,6 +526,7 @@
 
         p (styled-text rope [(syntax-style editor viewport)
                              (selection-style editor viewport)
+                             (debug-selection-style editor viewport)
                              (highlight-search editor viewport)
                              ]
                        start-byte-offset
