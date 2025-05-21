@@ -72,9 +72,17 @@
            :cursor cursor)))
 
 (defn editor-insert
-  "Inserts `s` at `byte-index`.
+  "Inserts `s`.
+
+  Inserts at current cursor if `byte-index` is not provided.
 
   If `row` and `column` are not provided. Calculate the row and column automatically"
+  ([editor s]
+   (let [cursor (:cursor editor)]
+     (editor-insert editor s
+                    (:byte cursor)
+                    (:row cursor)
+                    (:column cursor))))
   ([editor ^String s byte-index]
    (let [cursor (:cursor editor)
          ^Rope

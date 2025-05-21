@@ -176,14 +176,16 @@
 
 (defn parse
   "Debug function. don't use."
-  [lang s]
-  (let [parser (doto (TSParser.)
-                 (.setLanguage lang))
+  ([s]
+   (parse (TreeSitterClojure.) s))
+  ([lang s]
+   (let [parser (doto (TSParser.)
+                  (.setLanguage lang))
 
-        reader (->RopeReader (Rope/from s))
-        buf (byte-array 256)
-        tree (.parse parser buf nil reader TSInputEncoding/TSInputEncodingUTF8)]
-    tree))
+         reader (->RopeReader (Rope/from s))
+         buf (byte-array 256)
+         tree (.parse parser buf nil reader TSInputEncoding/TSInputEncodingUTF8)]
+     tree)))
 
 (defn rope->str
   "Converts `r` to string from bytes offsets.
