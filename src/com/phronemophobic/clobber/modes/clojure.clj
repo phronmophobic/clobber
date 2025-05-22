@@ -1011,7 +1011,6 @@
                                   editor-indent))
                        editor))
             editor (assoc editor :cursor cursor)]
-        (util/dtap :yo start-row end-row)
         editor))))
 
 (def key-bindings
