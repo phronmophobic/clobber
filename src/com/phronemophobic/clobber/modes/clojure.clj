@@ -733,6 +733,15 @@
                  node
                  (next inner-rules-index)))))))
 
+(defn ^:private matches-def? [parent rope]
+  (let [first-child (.getNamedChild parent 0)
+        sym-name (when (and (not (.isNull first-child))
+                            (= "sym_lit" (.getType first-child)))
+                   (util/rope->str rope
+                                   (.getStartByte first-child)
+                                   (.getEndByte first-child)))]
+    (str/starts-with? sym-name "def")))
+
 (defn ^:private matches-block? [parent rope]
   (when (= "list_lit" (.getType parent))
     (let [first-child (.getNamedChild parent 0)
@@ -943,7 +952,8 @@
         (if (= "list_lit" (.getType parent-coll-node))
           (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
             (editor-indent* editor parent-coll-node block-indent)
-            (if (matches-inner? parent-coll-node (:rope editor))
+            (if (or (matches-inner? parent-coll-node (:rope editor))
+                    (matches-def? parent-coll-node (:rope editor)))
               (editor-indent* editor parent-coll-node 2)
               ;; else
               (editor-indent-default* editor parent-coll-node)))
