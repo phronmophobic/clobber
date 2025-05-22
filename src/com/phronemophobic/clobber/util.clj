@@ -283,35 +283,36 @@
   ^TSNode
   [^TSTree tree byte-offset]
   (let [cursor (TSTreeCursor. (.getRootNode tree))]
-    (.gotoFirstChild cursor)
-    (loop []
-      (when (< (.getEndByte (.currentNode cursor))
-               byte-offset)
-        (.gotoNextSibling cursor)
-        (recur)))
+    (when (and (.gotoFirstChild cursor)
+               (loop []
+                 (if (< (.getEndByte (.currentNode cursor))
+                        byte-offset)
+                   (when (.gotoNextSibling cursor)
+                     (recur))
+                   true)))
 
-    (transduce
-     (comp
-      (filter (fn [^TSNode node]
-                (.isNamed node)))
-      (filter (fn [^TSNode node]
-                (> (.getEndByte node)
-                   byte-offset))))
-     (completing
-      (fn [^TSNode result ^TSNode node]
-        (if (> (.getStartByte node)
-               byte-offset)
-          (reduced
-           (if (and result
-                    (or (< (.getEndByte result)
-                           (.getEndByte node))
-                        (= (.getStartByte result)
-                           byte-offset)))
-             result
-             node))
-          node)))
-     nil
-     (tree-cursor-reducible cursor))))
+      (transduce
+       (comp
+        (filter (fn [^TSNode node]
+                  (.isNamed node)))
+        (filter (fn [^TSNode node]
+                  (> (.getEndByte node)
+                     byte-offset))))
+       (completing
+        (fn [^TSNode result ^TSNode node]
+          (if (> (.getStartByte node)
+                 byte-offset)
+            (reduced
+             (if (and result
+                      (or (< (.getEndByte result)
+                             (.getEndByte node))
+                          (= (.getStartByte result)
+                             byte-offset)))
+               result
+               node))
+            node)))
+       nil
+       (tree-cursor-reducible cursor)))))
 
 (defn previous-named-child-for-byte
   ^TSNode
