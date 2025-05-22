@@ -965,7 +965,54 @@
       (text-mode/editor-self-insert-command "\n")
       (editor-indent)))
 
+(defn editor-indent-region [editor]
+  (let [
+        cursor (:cursor editor)
+        {:keys [start-row end-row]}
+        (if-let [select-cursor (:select-cursor editor)]
+          {:start-row (min (:row select-cursor)
+                           (:row cursor))
+           :end-row (max (:row select-cursor)
+                         (:row cursor))}
+          ;; indent next form
+          (if-let [node (util/next-named-child-for-byte (:tree editor) (-> editor :cursor :byte))]
+            {:start-row (:row cursor)
+             :end-row (-> node .getEndPoint .getRow)}
+            {:start-row (:row cursor)
+             :end-row (:row cursor)}))]
+    (if (< start-row (:row cursor))
+      (let [;; backup to start row
+            ;; and then indent going forward
+            editor (text-mode/editor-previous-line
+                    editor (- (:row cursor)
+                              start-row))
+            editor (loop [n (- end-row start-row)
+                          editor editor]
+                     (if (pos? n)
+                       (recur (dec n)
+                              (-> editor
+                                  text-mode/editor-next-line
+                                  editor-indent))
+                       editor))]
+        editor)
+      ;; else
+      (let [;; indent current line and save cursor
+            ;; indent subsequent lines,
+            ;; reset cursor
+            editor (editor-indent editor)
+            cursor (:cursor editor)
 
+            editor (loop [n (- end-row start-row)
+                          editor editor]
+                     (if (pos? n)
+                       (recur (dec n)
+                              (-> editor
+                                  text-mode/editor-next-line
+                                  editor-indent))
+                       editor))
+            editor (assoc editor :cursor cursor)]
+        (util/dtap :yo start-row end-row)
+        editor))))
 
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
@@ -1012,6 +1059,7 @@
    "<down>" #'text-mode/editor-next-line
    "<left>" #'text-mode/editor-backward-char
    "TAB" #'editor-indent
+   "C-M-q" #'editor-indent-region
 
    "C-c a" identity
    "C-c b" identity
