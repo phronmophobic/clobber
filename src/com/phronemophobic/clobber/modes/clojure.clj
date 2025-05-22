@@ -938,17 +938,17 @@
                       (when (util/goto-next-dfs-node cursor)
                         (recur match))))))))]
       (if (not parent-coll-node)
-                 (editor-indent* editor root-node 0)
-                 ;; do indent
-                 (if (= "list_lit" (.getType parent-coll-node))
-                   (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
-                     (editor-indent* editor parent-coll-node block-indent)
-                     (if (matches-inner? parent-coll-node (:rope editor))
-                       (editor-indent* editor parent-coll-node 2)
-                       ;; else
-                       (editor-indent-default* editor parent-coll-node)))
-                   ;; use normal coll indent
-                   (editor-indent-coll* editor parent-coll-node))))))
+        (editor-indent* editor root-node 0)
+        ;; do indent
+        (if (= "list_lit" (.getType parent-coll-node))
+          (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
+            (editor-indent* editor parent-coll-node block-indent)
+            (if (matches-inner? parent-coll-node (:rope editor))
+              (editor-indent* editor parent-coll-node 2)
+              ;; else
+              (editor-indent-default* editor parent-coll-node)))
+          ;; use normal coll indent
+          (editor-indent-coll* editor parent-coll-node))))))
 
 (defn paredit-newline [editor]
   (-> editor
