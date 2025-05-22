@@ -811,12 +811,6 @@
     (editor-previous-line editor to-scroll)))
 
 
-
-(defn editor-set-mark-command [editor]
-  editor)
-(defn editor-kill-region [editor]
-  editor)
-
 (defn editor-goto-line [editor n]
   editor)
 
