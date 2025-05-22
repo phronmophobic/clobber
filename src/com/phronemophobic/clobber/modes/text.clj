@@ -727,6 +727,23 @@
     ;; else
     editor))
 
+(defn editor-save-region [editor]
+  (if-let [select-cursor (:select-cursor editor)]
+    (let [cursor (:cursor editor)
+          cursor-byte (:byte cursor)
+          select-cursor-byte (:byte select-cursor)
+          start-byte (min cursor-byte select-cursor-byte)
+          end-byte (max cursor-byte select-cursor-byte)
+          ^Rope
+          rope (:rope editor)
+          clip (.sliceBytes rope start-byte end-byte)
+          editor (-> editor
+                     (editor-append-clipboard clip)
+                     (dissoc :select-cursor))]
+      editor)
+    ;; else
+    editor))
+
 (defn editor-exchange-point-and-mark [editor]
   editor)
 
