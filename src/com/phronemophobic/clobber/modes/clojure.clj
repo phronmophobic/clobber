@@ -740,7 +740,8 @@
                    (util/rope->str rope
                                    (.getStartByte first-child)
                                    (.getEndByte first-child)))]
-    (str/starts-with? sym-name "def")))
+    (when sym-name
+      (str/starts-with? sym-name "def"))))
 
 (defn ^:private matches-block? [parent rope]
   (when (= "list_lit" (.getType parent))
