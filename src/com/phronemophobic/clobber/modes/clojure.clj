@@ -226,25 +226,22 @@
                     (recur parent)))))]
         (if (not parent-coll-node)
           editor
-          (let [end-byte (.getEndByte parent-coll-node)
-                diff-rope (.sliceBytes rope cursor-byte end-byte)
-                diff-string (.toString diff-rope)
-                diff-bytes (- end-byte cursor-byte)
-                diff-char (.length diff-string)
-                diff-points (.size diff-rope)
-                point-offset (util/count-points diff-string)
-
-                new-cursor-row (+ cursor-row (:row point-offset))
-                new-cursor-column (if (pos? (:row point-offset))
-                                    (:column point-offset)
-                                    (+ (:column point-offset) cursor-column))]
-            (text-mode/editor-update-viewport
-             (assoc editor
-                    :cursor {:byte (+ cursor-byte diff-bytes)
-                             :char (+ cursor-char diff-char)
-                             :point (+ cursor-point diff-points)
-                             :row new-cursor-row
-                             :column new-cursor-column}))))))))
+          (let [;; find end of last named node
+                ;; snip from there to end of coll
+                num-children (.getNamedChildCount parent-coll-node)
+                editor (if (pos? num-children)
+                         (let [last-child (.getNamedChild parent-coll-node (dec num-children))
+                               last-child-byte (.getEndByte last-child)
+                               end-byte (.getEndByte parent-coll-node)
+                               editor (if (not= last-child-byte (dec end-byte) )
+                                        (-> editor
+                                            (text-mode/editor-goto-byte last-child-byte)
+                                            (text-mode/editor-snip last-child-byte (dec end-byte))
+                                            (text-mode/editor-forward-char))
+                                        (text-mode/editor-goto-byte editor end-byte))]
+                           editor)
+                         (text-mode/editor-goto-byte editor (.getEndByte parent-coll-node)))]
+            editor))))))
 
 (defn editor-paredit-open-coll [editor open-char close-char]
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
