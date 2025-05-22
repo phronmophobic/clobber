@@ -1362,8 +1362,10 @@
 (defn dev
   ([]
    (dev 'com.phronemophobic.clobber.modes.clojure.ui))
-  ([ns-sym]
-   (let [resource-path (let [parts (-> ns-sym
+  ([ns]
+   (let [eval-ns (the-ns ns)
+         ns-sym (ns-name eval-ns)
+         resource-path (let [parts (-> ns-sym
                                        name
                                        (str/split #"\."))]
                          (str (str/join "/" parts) ".clj"))
@@ -1374,7 +1376,7 @@
 
          editor (-> (make-editor)
                     (text-mode/editor-self-insert-command source)
-                    (assoc :eval-ns (the-ns ns-sym))
+                    (assoc :eval-ns eval-ns)
                     (assoc :cursor {:byte 0
                                     :char 0
                                     :point 0
