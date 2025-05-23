@@ -208,7 +208,7 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor]
-    (if (= cursor-byte (.size rope))
+    (if (= cursor-byte (.numBytes rope))
       editor
       (let [root-node (.getRootNode tree)
             cursor (TSTreeCursor. root-node)
