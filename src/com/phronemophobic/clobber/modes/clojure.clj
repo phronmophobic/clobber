@@ -1034,7 +1034,7 @@
         editor))))
 
 (def word-whitespace
-  #{\space \newline \tab \. \- \_ \( \) \[ \] \{ \} \, \'  \` \# \"})
+  #{\space \newline \tab \. \- \_ \( \) \[ \] \{ \} \, \'  \` \# \" \/})
 
 (defn editor-backward-word [editor]
   (let [cursor (:cursor editor)
@@ -1120,8 +1120,7 @@
                       (alength (.getBytes diff-string "utf-8")))]
     (text-mode/editor-goto-byte editor byte-index)))
 
-
-(def kill-skip-whitespace #{\space \newline \tab \( \) \[ \] \{ \} \"})
+(def kill-skip-whitespace #{\space \newline \tab \( \) \[ \] \{ \} \" })
 
 (defn paredit-backward-kill-word [editor]
   (let [cursor (:cursor editor)
