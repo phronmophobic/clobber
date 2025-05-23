@@ -322,7 +322,34 @@
                 :cursor new-cursor))))))
 
 (defn editor-paredit-doublequote [editor]
-  (editor-paredit-open-coll editor \" \"))
+  (let [^Rope rope (:rope editor)
+
+        ;; check if we're trying to close a string 
+        closing-quote?
+        (when (= \" (.charAt rope (-> editor :cursor :char)))
+          (let [root-node (.getRootNode (:tree editor))
+                cursor (TSTreeCursor. root-node)
+                
+                cursor-byte (-> editor :cursor :byte)]
+            (when (util/skip-to-byte-offset cursor cursor-byte)
+              (loop []
+                (let [node (.currentNode cursor)]
+                  (cond 
+                    (> (.getStartByte node) cursor-byte)
+                    false
+                    
+                    (= cursor-byte (dec (.getEndByte node)))
+                    (= "str_lit" (.getType node))
+                    
+                    :else (when (util/goto-next-dfs-node cursor)
+                            (recur))))))))]
+    (if closing-quote?
+      (text-mode/editor-forward-char editor)
+      ;; else just insert string 
+      (-> editor
+          (text-mode/editor-self-insert-command "\"\"")
+          (text-mode/editor-backward-char)))))
+
 
 (defn editor-paredit-open-square [editor]
   (editor-paredit-open-coll editor \[ \]))
