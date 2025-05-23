@@ -853,3 +853,93 @@
   editor)
 (defn editor-kill-ring-save [editor]
   editor)
+
+(defn editor-single-space [editor]
+  (let [^Rope rope (:rope editor)
+        
+        cursor-char (-> editor :cursor :char)
+        cursor-byte  (-> editor :cursor :byte) 
+
+        bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText rope))
+
+        ;; counting spaces and spaces are single bytes
+        diff-bytes
+        (loop [n 0
+               char-index cursor-char]
+          (let [prev-char (.preceding bi char-index)]
+            (cond
+              (= -1 prev-char) n
+              (= \space (.charAt rope prev-char)) (recur (inc n) prev-char)
+              :else n)))
+
+        char-index (- cursor-char diff-bytes)
+        byte-index (- cursor-byte diff-bytes)
+        
+        editor (editor-goto-byte editor byte-index)
+        rope-length (.length rope)]
+    (if (or (>= char-index rope-length)
+            (not= \space (.charAt rope char-index)))
+      (editor-self-insert-command editor " ")
+      ;; else ensure exactly one space
+      (let [start-snip-byte (inc byte-index)
+            
+
+            ;; this works because spaces are one byte
+            diff-bytes 
+            (loop [n 0
+                   char-index (inc char-index)]
+              (if (>= char-index rope-length)
+                n
+                (if (= \space (.charAt rope char-index))
+                  (recur (inc n) (inc char-index))
+                  n)))]
+        (if (pos? diff-bytes)
+          (-> editor
+              (editor-snip start-snip-byte (+ start-snip-byte diff-bytes))
+              (editor-forward-char))
+          (editor-forward-char editor))))))
+
+
+
+(defn editor-delete-horizontal-space [editor]
+  (let [cursor-char (-> editor :cursor :char)
+        
+        ^Rope rope (:rope editor)
+        rope-length (.length rope)
+        ;; counting spaces forward, spaces are one byte each
+        forward-diff-bytes
+        (loop [n 0
+               char-index cursor-char]
+          (if (>= char-index rope-length)
+            n
+            (if (= \space (.charAt rope char-index))
+              (recur (inc n) (inc char-index))
+              n)))
+        
+        ;; count spaces backwards
+        bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText rope))
+        backward-diff-bytes
+        (loop [n 0
+               char-index cursor-char]
+          (let [prev-char (.preceding bi char-index)]
+            (cond
+              (= -1 prev-char) n
+              (= \space (.charAt rope prev-char)) (recur (inc n) prev-char)
+              :else n)))
+
+        new-cursor-byte (- (-> editor :cursor :byte)
+                           backward-diff-bytes)
+        editor (if (pos? backward-diff-bytes)
+                 (editor-goto-byte editor new-cursor-byte)
+                 editor)
+
+        editor (if (or (pos? backward-diff-bytes)
+                       (pos? forward-diff-bytes))
+                 (editor-snip editor
+                              new-cursor-byte
+                              (+ new-cursor-byte backward-diff-bytes forward-diff-bytes))
+                 editor)]
+    editor))
+

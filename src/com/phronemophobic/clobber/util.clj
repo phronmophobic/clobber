@@ -279,18 +279,25 @@
 (defn first-by [xf coll]
   (transduce xf (completing (fn [_ x] (reduced x))) nil coll))
 
+(defn skip-to-byte-offset
+  "Navigates `cursor` past all top level nodes
+  that end before `byte-offset`.
+
+  Returns `true` if navigation is successful, falsy otherwise."
+  [cursor byte-offset]
+  (and (.gotoFirstChild cursor)
+       (loop []
+         (if (< (.getEndByte (.currentNode cursor))
+                byte-offset)
+           (when (.gotoNextSibling cursor)
+             (recur))
+           true))))
+
 (defn next-named-child-for-byte
   ^TSNode
   [^TSTree tree byte-offset]
   (let [cursor (TSTreeCursor. (.getRootNode tree))]
-    (when (and (.gotoFirstChild cursor)
-               (loop []
-                 (if (< (.getEndByte (.currentNode cursor))
-                        byte-offset)
-                   (when (.gotoNextSibling cursor)
-                     (recur))
-                   true)))
-
+    (when (skip-to-byte-offset cursor byte-offset)
       (transduce
        (comp
         (filter (fn [^TSNode node]

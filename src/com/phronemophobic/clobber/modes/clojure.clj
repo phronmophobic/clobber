@@ -1226,6 +1226,121 @@
                                       (+ start-byte diff-bytes))]
     editor))
 
+(defn ^:private do-slurp* [editor coll-node slurp-node]
+  (let [coll-end-byte (.getEndByte coll-node)
+        slurp-end-byte (.getEndByte slurp-node)
+        end-coll-str (case (.getType coll-node)
+                       "str_lit" "\""
+                       "vec_lit" "]"
+                       "list_lit" ")"
+                       ("set_lit" "map_lit") "}")]
+    (-> editor
+        (text-mode/editor-insert end-coll-str slurp-end-byte)
+        (text-mode/editor-snip (dec coll-end-byte) coll-end-byte))))
+
+(defn paredit-forward-slurp-sexp [editor]
+  ;; if current parent-coll can't slurp
+  ;; then slurp the parent of that node.
+  (let [root-node (.getRootNode (:tree editor))
+        cursor (TSTreeCursor. root-node)
+        
+        cursor-byte (-> editor :cursor :byte)
+
+        ;; find enclosing node
+        cursor
+        (when (util/skip-to-byte-offset cursor cursor-byte)
+          (loop [match-cursor nil]
+            (let [node (.currentNode cursor)]
+              (if (>= (-> node .getStartByte)
+                      cursor-byte)
+                match-cursor
+                (if (and (< cursor-byte (.getEndByte node))
+                         (or (contains? coll-node-types (.getType node))
+                             (= "str_lit" (.getType node))))
+                  (let [match-cursor (.copy cursor)]
+                    (if (util/goto-next-dfs-node cursor)
+                      (recur match-cursor)
+                      match-cursor))
+                  ;; else
+                  (when (util/goto-next-dfs-node cursor)
+                    (recur match-cursor)))))))]
+    (if cursor
+      (let [;; find node to slurp
+            [coll-node slurp-node :as result]
+            (loop []
+              (let [coll-node (.currentNode cursor)
+                    slurp-node (loop []
+                                 (when (.gotoNextSibling cursor)
+                                   (let [node (.currentNode cursor)]
+                                     (if (.isNamed node)
+                                       node
+                                       (recur)))))]
+                (if slurp-node
+                  [coll-node slurp-node]
+                  (when (.gotoParent cursor)
+                    (recur)))))]
+        (if result
+          (do-slurp* editor coll-node slurp-node)
+          editor))
+
+      editor)))
+
+(defn paredit-forward-barf-sexp [editor]
+  (let [root-node (.getRootNode (:tree editor))
+        cursor (TSTreeCursor. root-node)
+        
+        cursor-byte (-> editor :cursor :byte)
+        
+        ;; find enclosing node
+        node
+        (when (util/skip-to-byte-offset cursor cursor-byte)
+          (loop [match nil]
+            (let [node (.currentNode cursor)]
+              (if (>= (-> node .getStartByte)
+                      cursor-byte)
+                match
+                (if (and (< cursor-byte (.getEndByte node))
+                         (contains? coll-node-types (.getType node)))
+                  (if (util/goto-next-dfs-node cursor)
+                    (recur node)
+                    node)
+                  ;; else
+                  (when (util/goto-next-dfs-node cursor)
+                    (recur match)))))))]
+    (or
+     (when node
+       (let [named-count (.getNamedChildCount node)]
+         (when (pos? named-count)
+           (let [barf-node (.getNamedChild node (dec named-count))
+                 coll-end-str (case (.getType node)
+                                "vec_lit" "]"
+                                "list_lit" ")"
+                                ("set_lit" "map_lit") "}")]
+             (if (= 1 named-count)
+               (let [coll-end-byte (.getEndByte node)
+                     coll-start-byte (+ (.getStartByte node)
+                                        (if (= "set_lit" (.getType node))
+                                          2
+                                          1))
+                     add-space? (= coll-start-byte (.getStartByte barf-node))
+                     
+                     insert-str (if add-space?
+                                  (str coll-end-str " ")
+                                  coll-end-str)]
+                 (-> editor
+                     (text-mode/editor-snip (dec coll-end-byte) coll-end-byte)
+                     (text-mode/editor-goto-byte coll-start-byte)
+                     (text-mode/editor-insert insert-str)))
+               ;; barf last elem
+               (let [coll-end-byte (.getEndByte node)
+                     new-last-node (.getNamedChild node (- named-count 2))
+                     new-last-node-end-byte (.getEndByte new-last-node)]
+                 (-> editor
+                     (text-mode/editor-snip (dec coll-end-byte) coll-end-byte)
+                     (text-mode/editor-goto-byte new-last-node-end-byte)
+                     (text-mode/editor-insert coll-end-str))))))))
+     editor)))
+
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
    "C-M-f" #'editor-paredit-forward
@@ -1283,4 +1398,10 @@
    "M-w" #'text-mode/editor-save-region
    ;; "C-x C-s" editor-save-buffer
 
-   })
+   "M-SPC" #'text-mode/editor-single-space
+   "M-\\" #'text-mode/editor-delete-horizontal-space
+
+   "C-c )" #'paredit-forward-slurp-sexp
+   "C-c C-)" #'paredit-forward-slurp-sexp
+   "C-c }" #'paredit-forward-barf-sexp})
+
