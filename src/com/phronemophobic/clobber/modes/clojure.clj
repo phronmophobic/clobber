@@ -707,7 +707,7 @@
 
 
 (defn ^:private matches-inner? [parent rope]
-  (loop [node parent
+  (loop [^TSNode node parent
          child nil
          inner-rules-index (seq (:inner-rules-index indent-config))]
     (when (and inner-rules-index
@@ -730,7 +730,7 @@
                  node
                  (next inner-rules-index)))))))
 
-(defn ^:private matches-def? [parent rope]
+(defn ^:private matches-def? [^TSNode parent rope]
   (let [first-child (.getNamedChild parent 0)
         sym-name (when (and (not (.isNull first-child))
                             (= "sym_lit" (.getType first-child)))
@@ -740,7 +740,7 @@
     (when sym-name
       (str/starts-with? sym-name "def"))))
 
-(defn ^:private matches-block? [parent rope]
+(defn ^:private matches-block? [^TSNode parent rope]
   (when (= "list_lit" (.getType parent))
     (let [first-child (.getNamedChild parent 0)
           sym-name (when (and (not (.isNull first-child))
@@ -770,9 +770,9 @@
                         (recur (dec index))))))))))))))
 
 
-(defn ^:private editor-indent* [editor parent indent]
+(defn ^:private editor-indent* [editor ^TSNode parent indent]
   (let [;; calculate parent offset in grapheme clusters
-        rope (:rope editor)
+        ^Rope rope (:rope editor)
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
         parent-offset (loop [offset 0
@@ -824,7 +824,7 @@
     next-editor))
 
 
-(defn ^:private editor-indent-coll* [editor parent-coll-node]
+(defn ^:private editor-indent-coll* [editor ^TSNode parent-coll-node]
   (let [indent (if (= "set_lit" (.getType parent-coll-node))
                  2
                  1)]
@@ -833,7 +833,7 @@
 
 (defn ^:private editor-indent-default*
   "Indents the current line using the default style from cljfmt."
-  [editor parent-coll-node]
+  [editor ^TSNode parent-coll-node]
   ;; indent matches first arg if on the same line as parent
   ;; otherwise 1 space
   (let [arg-node (.getNamedChild parent-coll-node 1)]
@@ -841,7 +841,7 @@
              (= (-> parent-coll-node .getStartPoint .getRow)
                 (-> arg-node .getStartPoint .getRow)))
       ;; indent to arg node
-      (let [rope (:rope editor)
+      (let [^Rope rope (:rope editor)
             bi (doto (BreakIterator/getCharacterInstance)
                  (.setText rope))
             arg-offset (loop [offset 0
@@ -1016,7 +1016,7 @@
 
 (defn editor-backward-word [editor]
   (let [cursor (:cursor editor)
-        rope (:rope editor)
+        ^Rope rope (:rope editor)
         
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
@@ -1059,7 +1059,7 @@
 
 (defn editor-forward-word [editor]
   (let [cursor (:cursor editor)
-        rope (:rope editor)
+        ^Rope rope (:rope editor)
         
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
@@ -1103,7 +1103,7 @@
 
 (defn paredit-backward-kill-word [editor]
   (let [cursor (:cursor editor)
-        rope (:rope editor)
+        ^Rope rope (:rope editor)
         
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
@@ -1156,7 +1156,7 @@
 
 (defn paredit-forward-kill-word [editor]
   (let [cursor (:cursor editor)
-        rope (:rope editor)
+        ^Rope rope (:rope editor)
         
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
