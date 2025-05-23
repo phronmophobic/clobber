@@ -250,14 +250,9 @@
          cursor-point :point
          cursor-row :row
          cursor-column :column} cursor]
-    (if (or (= (.numBytes rope)
-               cursor-byte)
-            (not= (.charAt rope cursor-char)
-                  open-char))
-      (-> editor
-          (text-mode/editor-self-insert-command (str open-char close-char))
-          (text-mode/editor-backward-char))
-      (text-mode/editor-forward-char editor))))
+    (-> editor
+        (text-mode/editor-self-insert-command (str open-char close-char))
+        (text-mode/editor-backward-char))))
 
 (defn editor-cider-eval-defun-at-point [editor]
   editor)
