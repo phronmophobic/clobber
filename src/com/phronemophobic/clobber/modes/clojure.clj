@@ -1125,7 +1125,7 @@
         snip-char char-index
 
         char-index
-        (loop [char-index (:char cursor)]
+        (loop [char-index char-index]
           (let [prev-char (.preceding bi char-index)]
             (cond
               (= -1 prev-char) char-index
