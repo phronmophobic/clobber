@@ -178,8 +178,7 @@
     (when-let [file (:file editor)]
       (let [^Rope rope (:rope editor)
             source (.toString rope)]
-        (spit file source)
-        (println "saved!"))))
+        (spit file source))))
   nil)
 
 (defeffect ::reload-editor [{:keys [editor $editor]}]
