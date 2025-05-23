@@ -920,9 +920,11 @@
      :key-press
      (fn [s]
        (let [intents (if (empty? modifiers)
-                       (find-match {:key (if (string? s)
-                                           (first s)
-                                           s)})
+                       (when (not (#{:left_shift :right_shift}
+                                   s))
+                         (find-match {:key (if (string? s)
+                                             (first s)
+                                             s)}))
                        (if (keyword? s)
                          (find-match
                           (cond-> {:key s}
@@ -946,16 +948,18 @@
              shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
              ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
          (if (#{:press :repeat} action)
-           (let [key-press (cond-> {:key (if shift?
-                                           (let [c (char key)]
-                                             (get uppercase c))
-                                           (Character/toLowerCase (char key)))}
+           (let [key (if shift?
+                       (let [c (char key)]
+                         (get uppercase c))
+                       (Character/toLowerCase (char key)))
+                 key-press (cond-> {:key key}
                              alt? (assoc :meta? true)
                              super? (assoc :super? true)
                              ctrl? (assoc :ctrl? true))]
-             (when (or alt?
-                       super?
-                       ctrl?)
+             (when (and key
+                        (or alt?
+                            super?
+                            ctrl?))
                (cons
                 [:update $modifiers (fn [xs] (cond-> (or xs #{})
                                                alt? (conj :alt)
