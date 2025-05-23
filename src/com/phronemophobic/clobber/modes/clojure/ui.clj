@@ -919,9 +919,16 @@
     (ui/on
      :key-press
      (fn [s]
-       (let [intents (find-match {:key (if (string? s)
-                                         (first s)
-                                         s)})]
+       (let [intents (if (empty? modifiers)
+                       (find-match {:key (if (string? s)
+                                           (first s)
+                                           s)})
+                       (if (keyword? s)
+                         (find-match
+                          (cond-> {:key s}
+                            (:alt modifiers) (assoc :meta? true)
+                            (:super modifiers) (assoc :super? true)
+                            (:ctrl? modifiers) (assoc :ctrl? true)))))]
          (if (seq intents)
            intents
            (when (and (not next-bindings)
