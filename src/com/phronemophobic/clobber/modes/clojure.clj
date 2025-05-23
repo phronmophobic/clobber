@@ -1011,6 +1011,200 @@
             editor (assoc editor :cursor cursor)]
         editor))))
 
+(def word-whitespace
+  #{\space \newline \tab \. \- \_ \( \) \[ \] \{ \} \, \'  \` \# \"})
+
+(defn editor-backward-word [editor]
+  (let [cursor (:cursor editor)
+        rope (:rope editor)
+        
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+        
+        
+
+        ;; go backwards past whitespace
+        char-index
+        (loop [char-index (:char cursor)]
+          (let [prev-char (.preceding bi char-index)]
+            (cond
+              (= -1 prev-char) char-index
+
+              (contains? word-whitespace
+                         (.charAt rope prev-char))
+              (recur prev-char)
+
+              :else char-index)))
+        
+        ;; go back until you reach whitespace again
+        char-index
+        (loop [char-index char-index]
+          (let [prev-char (.preceding bi char-index)]
+            (cond
+              (= -1 prev-char) char-index
+
+              (contains? word-whitespace
+                         (.charAt rope prev-char))
+              char-index
+
+              :else (recur prev-char))))
+        
+        diff-string (-> (.subSequence rope char-index (:char cursor))
+                        .toString)
+        
+        byte-index (- (:byte cursor)
+                      (alength (.getBytes diff-string "utf-8")))]
+    (text-mode/editor-goto-byte editor byte-index)))
+
+
+(defn editor-forward-word [editor]
+  (let [cursor (:cursor editor)
+        rope (:rope editor)
+        
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+        
+        ;; go past whitespace
+        rope-length (.length rope)
+        char-index
+        (loop [char-index (:char cursor)]
+          (cond
+            (= rope-length char-index) char-index
+            
+            (contains? word-whitespace
+                       (.charAt rope char-index))
+            (recur (.following bi char-index))
+            
+            :else char-index))
+        
+        
+        ;; go until you reach whitespace again
+        char-index
+        (loop [char-index char-index]
+          (cond
+            (= rope-length char-index) char-index
+            
+            (contains? word-whitespace
+                       (.charAt rope char-index))
+            char-index
+            
+            :else (recur (.following bi char-index))))
+        
+
+        diff-string (-> (.subSequence rope (:char cursor) char-index)
+                        .toString)
+        
+        byte-index (+ (:byte cursor)
+                      (alength (.getBytes diff-string "utf-8")))]
+    (text-mode/editor-goto-byte editor byte-index)))
+
+
+(def kill-skip-whitespace #{\space \newline \tab \( \) \[ \] \{ \} \"})
+
+(defn paredit-backward-kill-word [editor]
+  (let [cursor (:cursor editor)
+        rope (:rope editor)
+        
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+        
+        rope-length (.length rope)
+        char-index
+        (loop [char-index (:char cursor)]
+          (let [prev-char (.preceding bi char-index)]
+            (cond
+              (= -1 prev-char) char-index
+
+              (contains? kill-skip-whitespace
+                         (.charAt rope prev-char))
+              (recur prev-char)
+
+              :else char-index)))
+
+        
+        snip-char char-index
+
+        char-index
+        (loop [char-index (:char cursor)]
+          (let [prev-char (.preceding bi char-index)]
+            (cond
+              (= -1 prev-char) char-index
+
+              (contains? kill-skip-whitespace
+                         (.charAt rope prev-char))
+              char-index
+
+              :else (recur prev-char))))
+
+        diff-bytes (-> (.subSequence rope char-index (:char cursor))
+                       .toString
+                       (.getBytes "utf-8")
+                       alength)
+        
+        editor (text-mode/editor-goto-byte editor (- (:byte cursor) diff-bytes))
+        
+        diff-bytes (-> (.subSequence rope char-index snip-char)
+                       .toString
+                       (.getBytes "utf-8")
+                       alength)
+        
+        start-byte (-> editor :cursor :byte)
+        editor (text-mode/editor-snip editor 
+                                      start-byte
+                                      (+ start-byte diff-bytes))]
+    editor))
+
+(defn paredit-forward-kill-word [editor]
+  (let [cursor (:cursor editor)
+        rope (:rope editor)
+        
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+        
+        ;; go past whitespace
+        rope-length (.length rope)
+        char-index
+        (loop [char-index (:char cursor)]
+          (cond
+            (= rope-length char-index) char-index
+            
+            (contains? kill-skip-whitespace
+                       (.charAt rope char-index))
+            (recur (.following bi char-index))
+            
+            :else char-index))
+        
+        new-cursor-char char-index
+
+        ;; go until you reach whitespace again
+        char-index
+        (loop [char-index char-index]
+          (cond
+            (= rope-length char-index) char-index
+            
+            (contains? kill-skip-whitespace
+                       (.charAt rope char-index))
+            char-index
+            
+            :else (recur (.following bi char-index))))
+        
+        diff-bytes (-> (.subSequence rope (:char cursor) new-cursor-char)
+                       .toString
+                       (.getBytes "utf-8")
+                       alength)
+        editor (text-mode/editor-goto-byte editor (+ (:byte cursor) diff-bytes))
+        
+        diff-bytes (-> (.subSequence rope new-cursor-char char-index)
+                       .toString
+                       (.getBytes "utf-8")
+                       alength)
+        
+        start-byte (-> editor :cursor :byte)
+        editor (text-mode/editor-snip editor
+                                      start-byte
+                                      (+ start-byte diff-bytes))]
+    editor))
+
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
    "C-M-f" #'editor-paredit-forward
@@ -1030,9 +1224,9 @@
    "C-p" #'text-mode/editor-previous-line
    "C-v" #'text-mode/editor-scroll-down
 
-
-   "M-b" #'text-mode/editor-backward-word
-   "M-f" #'text-mode/editor-forward-word
+   "M-d" #'paredit-forward-kill-word
+   "M-b" #'editor-backward-word
+   "M-f" #'editor-forward-word
    "M-v" #'text-mode/editor-scroll-up
    
    "M-<" #'text-mode/editor-beginning-of-buffer
@@ -1050,6 +1244,7 @@
 
    "C-u DEL" #'text-mode/editor-delete-backward-char
    "DEL" #'editor-paredit-backward-delete
+   "M-DEL" #'paredit-backward-kill-word
    "RET" #'paredit-newline
    "<right>" #'text-mode/editor-forward-char
    "<up>" #'text-mode/editor-previous-line
