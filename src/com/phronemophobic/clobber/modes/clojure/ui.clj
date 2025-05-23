@@ -282,7 +282,7 @@
                          width height)))))))
 
 (def builtin?
-  #{"def" "defn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
+  #{"def" "defn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "reify" "if-let" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
 
 (defn cursor-view [^Rope rope para cursor]
   (let [cursor-char (- (:char cursor)
