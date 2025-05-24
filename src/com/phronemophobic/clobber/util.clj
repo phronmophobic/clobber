@@ -191,7 +191,7 @@
   "Converts `r` to string from bytes offsets.
 
   Assumes `r` contains `byte-start` and `byte-end`."
-  [^Rope r byte-start byte-end]
+  [^Rope r ^long byte-start ^long byte-end]
   (let [to-read (- byte-end byte-start)
         dest (ByteBuffer/allocate to-read)]
     (loop [iter (.bytes r)
@@ -202,7 +202,7 @@
               src-remaining (.remaining src)]
           (if (< offset src-remaining)
             (let [copy-size (min to-read (- src-remaining offset))
-                  copy-bb  (.slice src ^int offset ^int copy-size)]
+                  copy-bb  (.slice src  offset copy-size)]
               (.put dest copy-bb)
               (recur iter 0 (- to-read copy-size)))
             ;; else
