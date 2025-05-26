@@ -1316,7 +1316,7 @@
        {:direction :row
         :gap 4
         :align :center})
-      (ant/radio-bar
+      #_(ant/radio-bar
        {:options (into []
                        (map (fn [s]
                               {:text s
@@ -1327,7 +1327,7 @@
                         "Fira Code"
                         "Comic Sans MS"])
         :selection font-family})
-      (ui/flex-layout
+      #_(ui/flex-layout
        [(ui/label "font-size")
         (ant/number-slider
          {:integer? true
@@ -1339,21 +1339,21 @@
        {:direction :row
         :gap 4
         :align :center})
-      (ui/flex-layout
+      #_(ui/flex-layout
        [(basic/checkbox
          {:checked? viscous?})
         (ui/label "viscous?")]
        {:direction :row
         :gap 4
         :align :center})
-      (ui/flex-layout
+      #_(ui/flex-layout
        [(basic/checkbox
          {:checked? instarepl?})
         (ui/label "instarepl?")]
        {:direction :row
         :gap 4
         :align :center})
-      (ui/flex-layout
+      #_(ui/flex-layout
        [(basic/checkbox
          {:checked? structure?})
         (ui/label "structure?")]
