@@ -19,7 +19,10 @@
 (def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit"})
 
 
-
+(defn ^:private debug-node [editor node]
+  (if node
+    (assoc editor :debug-node {(:rope editor) node})
+    (dissoc editor :debug-node)))
 
 (def highlight-queries
   ;; tree-sitter-clojure/queries/highlights.scm
