@@ -274,35 +274,51 @@
                 [:viewport :start-line]
                 middle))))
 
-(defn editor-forward-char [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-        
-        {cursor-byte :byte
-         cursor-char :char
-         cursor-point :point
-         cursor-row :row
-         cursor-column :column} cursor
-        bi (doto (BreakIterator/getCharacterInstance)
-             (.setText rope))
+(defn editor-forward-char
+  ([editor]
+   (editor-forward-char editor 1))
+  ([editor n]
+   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+         
+         {cursor-byte :byte
+          cursor-char :char
+          cursor-point :point
+          cursor-row :row
+          cursor-column :column} cursor
+         bi (doto (BreakIterator/getCharacterInstance)
+              (.setText rope))
 
-        next-char (.following bi cursor-char)]
-    (if (= -1 next-char)
-      editor
-      (let [diff-string (-> (.subSequence rope cursor-char next-char)
-                            .toString)
-            newline? (= "\n" diff-string)
-            new-cursor-row (if newline?
-                             (inc cursor-row)
-                             cursor-row)
-            new-cursor-column (if newline?
-                                0
-                                (inc cursor-column))]
-        (assoc editor
-               :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (+ cursor-char (.length diff-string))
-                        :point (+ cursor-point (util/num-points diff-string))
-                        :row new-cursor-row
-                        :column new-cursor-column})))))
+         rope-length (.length rope)
+         [end-char new-cursor-row new-cursor-column]
+         (loop [n n
+                char-index cursor-char
+                new-cursor-row cursor-row
+                new-cursor-column cursor-column]
+           (cond
+             (or (>= char-index rope-length)
+                 (<= n 0))
+             [char-index new-cursor-row new-cursor-column]
+
+             (= \newline (.charAt rope char-index))
+             (recur (inc n)
+                    (.following bi char-index)
+                    (inc new-cursor-row)
+                    0)
+
+             :else
+             (recur (dec n)
+                    (.following bi char-index)
+                    new-cursor-row
+                    (inc new-cursor-column))))
+
+         diff-string (-> (.subSequence rope cursor-char end-char)
+                         .toString)]
+     (assoc editor
+            :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
+                     :char (+ cursor-char (.length diff-string))
+                     :point (+ cursor-point (util/num-points diff-string))
+                     :row new-cursor-row
+                     :column new-cursor-column}))))
 
 (defn editor-delete-backward-char [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]

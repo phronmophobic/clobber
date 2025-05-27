@@ -1344,6 +1344,276 @@
                      (text-mode/editor-insert coll-end-str))))))))
      editor)))
 
+
+
+(defn paredit-semicolon
+  "Comments the next form.
+
+  Pushes collection end characters to next line. "
+  [editor]
+  (let [cursor-byte (-> editor :cursor :byte)
+        cursor-row (-> editor :cursor :row)
+        root-node (.getRootNode (:tree editor))
+        cursor (TSTreeCursor. root-node)
+
+        ;; find enclosing coll if it
+        ;; ends on the same line
+        parent-coll-node
+        (transduce
+         (comp (filter (fn [^TSNode node]
+                         (.isNamed node)))
+               (take-while (fn [^TSNode node]
+                             (<= (-> node .getStartPoint .getRow)
+                                 cursor-row))))
+         (completing
+          (fn [result ^TSNode node]
+            (if (and (contains? coll-node-types (.getType node))
+                     (< (.getStartByte node)
+                        cursor-byte)
+                     (= cursor-row (-> node .getEndPoint .getRow)))
+              node
+              result)))
+         nil
+         (when (util/skip-to-byte-offset cursor cursor-byte)
+           (util/tree-cursor-reducible cursor)))]
+    (if parent-coll-node
+      (let [end-byte (-> parent-coll-node
+                         .getEndByte
+                         dec)
+            cursor (:cursor editor)]
+        (-> editor
+            (text-mode/editor-self-insert-command ";")
+            (text-mode/editor-goto-byte (inc end-byte))
+            text-mode/editor-delete-horizontal-space
+            paredit-newline
+            (assoc :cursor cursor)
+            text-mode/editor-forward-char))
+      ;; else
+      (text-mode/editor-self-insert-command editor ";"))))
+
+
+(declare editor-toggle-comment-line)
+(defn editor-comment-region [editor]
+  (let [cursor (:cursor editor)
+        {:keys [start-row end-row start-byte]}
+        (if-let [select-cursor (:select-cursor editor)]
+          {:start-row (min (:row select-cursor)
+                           (:row cursor))
+           :start-byte (min (:byte select-cursor)
+                            (:byte cursor))
+           :end-row (max (:row select-cursor)
+                         (:row cursor))}
+          {:start-row (:row cursor)
+           :start-byte (:byte cursor)
+           :end-row (:row cursor)})
+        
+        ;; check if first row has a comment
+        comment-node
+        (util/first-by
+         (comp (filter (fn [^TSNode node]
+                         (.isNamed node)))
+               (filter (fn [^TSNode node]
+                         (= (-> node .getStartPoint .getRow)
+                            start-row)))
+               (filter (fn [^TSNode node]
+                         (= "comment" (.getType node))))
+               (take-while (fn [^TSNode node]
+                             (<= (-> node .getStartPoint .getRow)
+                                 start-row))))
+         
+         (let [^TSTree tree (:tree editor)
+               tree-cursor (-> tree
+                               .getRootNode
+                               (TSTreeCursor.))]
+           (when (util/skip-to-byte-offset tree-cursor start-byte)
+             (util/tree-cursor-reducible tree-cursor))))]
+    (if comment-node
+      ;; uncomment
+      (let [;; find the rows with comments
+            
+            comment-starts
+            (into
+             []
+             (comp (take-while (fn [^TSNode node]
+                                 (<= (-> node .getStartPoint .getRow)
+                                     end-row)))
+                   (filter (fn [^TSNode node]
+                             (= "comment" (.getType node))))
+                   (filter (fn [^TSNode node]
+                             (>= (-> node .getStartPoint .getRow)
+                                 start-row)))
+                   (map (fn [^TSNode node]
+                          (.getStartByte node))))
+             (let [^TSTree tree (:tree editor)
+                   tree-cursor (-> tree
+                                   .getRootNode
+                                   (TSTreeCursor.))]
+               (when (util/skip-to-byte-offset tree-cursor start-byte)
+                 (util/tree-cursor-reducible tree-cursor))))
+            
+            editor (if (not= start-row (:row cursor))
+                     (assoc editor :cursor (:select-cursor editor))
+                     editor)
+            
+            editor
+            (loop [editor editor
+                   offset 0
+                   comment-starts (seq comment-starts)]
+              (if comment-starts
+                (let [comment-start-byte (first comment-starts)
+                      
+                      next-editor (-> editor
+                                      (text-mode/editor-goto-byte 
+                                       (+ comment-start-byte
+                                          offset))
+                                      (editor-toggle-comment-line))
+                      offset (+ offset
+                                (- (.numBytes (:rope next-editor))
+                                   (.numBytes (:rope editor))))]
+                  (recur next-editor
+                         offset
+                         (next comment-starts)))
+                ;; else
+                editor))]
+        editor)
+      ;; comment
+      ;; insert comments at start cursor 
+      ;; insert comments for subsequent rows
+      ;; only only rows that start or end that row
+      ;; use min column of those rows
+      (let [
+            
+            merge-point (fn [min-cols [row col] ]
+                          (if-let [col' (get min-cols row)]
+                            (if (< col col')
+                              (assoc min-cols row col)
+                              min-cols)
+                            (assoc min-cols row col)))
+
+            min-cols
+            (transduce
+             (comp 
+              (take-while (fn [^TSNode node]
+                                 (<= (-> node .getStartPoint .getRow)
+                                     end-row)))
+              (mapcat (fn [^TSNode node]
+                        (let [start (.getStartPoint node)
+                              end (.getEndPoint node)
+                              end-col (.getColumn end)]
+                          (if (zero? end-col)
+                            [[(.getRow start) (.getColumn start)]]
+                            [[(.getRow start) (.getColumn start)]
+                             [(.getRow end) (dec end-col)]]))))
+              (filter (fn [[row col]]
+                        (and (>= row start-row)
+                             (<= row end-row)))))
+
+             (completing
+              (fn [min-cols pt]
+                (merge-point min-cols pt)))
+             nil
+             
+             (let [^TSTree tree (:tree editor)
+                   tree-cursor (-> tree
+                                   .getRootNode
+                                   (TSTreeCursor.))]
+               (when (util/skip-to-byte-offset tree-cursor start-byte)
+                 (util/tree-cursor-reducible tree-cursor))))
+            
+            minnest-col (apply min (vals min-cols))
+            
+            editor (if (not= start-row (:row cursor))
+                     (assoc editor :cursor (:select-cursor editor))
+                     editor)
+            
+            editor
+            (loop [editor editor
+                   n (inc (- end-row start-row))]
+              (if (pos? n)
+                (let [current-row (-> editor :cursor :row)]
+                  (recur (if (get min-cols current-row)
+                           (-> editor
+                               text-mode/editor-move-beginning-of-line
+                               (text-mode/editor-forward-char minnest-col)
+                               (text-mode/editor-self-insert-command ";; ")
+                               text-mode/editor-next-line)
+                           (text-mode/editor-next-line editor))
+                         (dec n)))
+                ;; else
+                editor))
+            
+            editor (assoc editor :cursor cursor)]
+        editor))))
+
+(defn editor-toggle-comment-line [editor]
+  (let [
+        cursor-byte (-> editor :cursor :byte)
+        cursor-row (-> editor :cursor :row)
+        root-node (.getRootNode (:tree editor))
+        cursor (TSTreeCursor. root-node)
+        
+        ;; need to find first node on the line
+l        ;; also need to find enclosing coll
+        ;;      that end on the same line
+        {:keys [enclosing-comment-node
+                line-node]}
+        (transduce
+         (comp (filter (fn [^TSNode node]
+                         (.isNamed node)))
+               (filter (fn [^TSNode node]
+                         (= (-> node .getStartPoint .getRow)
+                            cursor-row)))
+               (take-while (fn [^TSNode node]
+                             (<= (-> node .getStartPoint .getRow)
+                                 cursor-row))))
+         (completing
+          (fn [result ^TSNode node]
+            (if (= "comment" (.getType node))
+              (reduced {:enclosing-comment-node node})
+              (if (:line-node result)
+                result
+                {:line-node node}))))
+         nil
+         (when (util/skip-to-byte-offset cursor cursor-byte)
+           (util/tree-cursor-reducible cursor)))
+]
+    (if enclosing-comment-node
+      (let [start-byte (.getStartByte enclosing-comment-node)
+            
+            editor (text-mode/editor-goto-byte editor start-byte)
+            ^Rope rope (:rope editor)
+            rope-length (.length rope)
+            ;; semicolons are single bytes
+            diff-bytes
+            (loop [n 0
+                   char-index (-> editor :cursor :char)]
+              (if (and (< char-index rope-length)
+                       (= \; (.charAt rope char-index)))
+                (recur (inc n)
+                       (inc char-index))
+                n))
+            
+            cursor-byte (-> editor :cursor :byte)]
+        (-> editor
+            (text-mode/editor-snip cursor-byte
+                                          (+ cursor-byte diff-bytes))
+            editor-indent))
+      ;; else
+      (-> editor
+          text-mode/editor-move-beginning-of-line
+          editor-indent
+          paredit-semicolon
+          (text-mode/editor-self-insert-command "; ")))))
+
+(defn editor-toggle-comment
+  "Comments the line if not commented. Otherwise, uncomment.
+  
+  Also applies indentation"
+  [editor]
+  (if (:select-cursor editor)
+    (editor-comment-region editor)
+    (editor-toggle-comment-line editor)))
+
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
    "C-M-f" #'editor-paredit-forward
@@ -1400,9 +1670,12 @@
    "C-w" #'text-mode/editor-kill-region
    "M-w" #'text-mode/editor-save-region
    ;; "C-x C-s" editor-save-buffer
+   "M-;" #'editor-toggle-comment
 
    "M-SPC" #'text-mode/editor-single-space
    "M-\\" #'text-mode/editor-delete-horizontal-space
+
+   ";" #'paredit-semicolon
 
    "C-c )" #'paredit-forward-slurp-sexp
    "C-c C-)" #'paredit-forward-slurp-sexp
