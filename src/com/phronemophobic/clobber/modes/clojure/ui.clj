@@ -253,9 +253,6 @@
     {clojure-lang highlight-queries
      json-lang json-highlight-queries})
 
-(def base-style #:text-style {:font-families ["Menlo"]
-                              :font-size 12})
-
 (defn paren-highlight [editor para]
   (let [cursor-byte (-> editor :cursor :byte)
 
@@ -394,7 +391,7 @@
         by-index (sort-by :index all-styles)]
     by-index))
 
-(defn styled-text [rope styles start-byte-offset end-byte-offset]
+(defn styled-text [rope base-style styles start-byte-offset end-byte-offset]
   (let [by-index (styles-by-index styles)]
     (loop [offset start-byte-offset
            by-index (seq by-index)
@@ -546,11 +543,12 @@
                   :char-offset char-offset
                   :end-byte-offset end-byte-offset}
 
-        p (styled-text rope [(syntax-style editor viewport)
-                             (selection-style editor viewport)
-                             (debug-selection-style editor viewport)
-                             (highlight-search editor viewport)
-                             ]
+        p (styled-text rope
+                       (:base-style editor)
+                       [(syntax-style editor viewport)
+                        (selection-style editor viewport)
+                        (debug-selection-style editor viewport)
+                        (highlight-search editor viewport)]
                        start-byte-offset
                        end-byte-offset)
         para (para/paragraph p nil {:paragraph-style/text-style (:base-style editor)})
