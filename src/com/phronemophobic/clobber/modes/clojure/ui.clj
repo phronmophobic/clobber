@@ -76,6 +76,14 @@
 (defn editor-cancel [editor]
   (dissoc editor :select-cursor))
 
+(defn editor-set-height [editor height]
+  (let [base-style (:base-style editor)
+        row-height (* (:text-style/height base-style)
+                      (:text-style/font-size base-style))
+        num-lines (quot height row-height)]
+    (assoc-in editor
+              [:viewport :num-lines] (long num-lines))))
+
 
 (defeffect ::update-editor [{:keys [$editor op]}]
   (dispatch! :update $editor editor-upkeep op))
