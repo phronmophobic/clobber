@@ -240,10 +240,10 @@
                                :height-override true}
      :eval-ns *ns*
      :rope Rope/EMPTY
-     :language lang
+     :language (TreeSitterClojure.)
      :viscous? true
      :parser (doto (TSParser.)
-               (.setLanguage lang))
+               (.setLanguage (TreeSitterClojure.)))
      :buf (byte-array 4096)})))
 
 ;; Tree sitter uses these strings
