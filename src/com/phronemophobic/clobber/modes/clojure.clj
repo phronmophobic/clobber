@@ -327,9 +327,12 @@
 (defn editor-paredit-doublequote [editor]
   (let [^Rope rope (:rope editor)
 
+        cursor-char (-> editor :cursor :char)
+
         ;; check if we're trying to close a string 
         closing-quote?
-        (when (= \" (.charAt rope (-> editor :cursor :char)))
+        (when (and (< (.length rope) cursor-char)
+                   (= \" (.charAt rope cursor-char)))
           (let [root-node (.getRootNode (:tree editor))
                 cursor (TSTreeCursor. root-node)
                 
