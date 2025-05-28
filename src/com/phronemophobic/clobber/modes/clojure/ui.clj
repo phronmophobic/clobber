@@ -194,9 +194,32 @@
 
 
 (defn make-editor
+  ([ns]
+   (let [eval-ns (the-ns ns)
+         ns-sym (ns-name eval-ns)
+         resource-path (let [parts (-> ns-sym
+                                       name
+                                       (str/split #"\."))]
+                         (str (str/join "/" parts) ".clj"))
+         resource (io/resource resource-path)
+         source (slurp resource)
+         file (when (= "file" (.getProtocol resource))
+                (io/as-file resource))
+
+         editor (-> (make-editor)
+                    (text-mode/editor-self-insert-command source)
+                    (assoc :eval-ns eval-ns)
+                    (assoc :cursor {:byte 0
+                                    :char 0
+                                    :point 0
+                                    :row 0
+                                    :column 0})
+                    (text-mode/editor-update-viewport))
+         editor (if file
+                  (assoc editor :file file)
+                  editor)]
+     editor))
   ([]
-   (make-editor (TreeSitterClojure.)))
-  ([lang]
    (#_map->Editor
     identity
     {:tree nil
