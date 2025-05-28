@@ -1556,7 +1556,7 @@
         cursor (TSTreeCursor. root-node)
         
         ;; need to find first node on the line
-l        ;; also need to find enclosing coll
+        ;; also need to find enclosing coll
         ;;      that end on the same line
         {:keys [enclosing-comment-node
                 line-node]}
