@@ -235,7 +235,9 @@
                 :num-lines 40}
      :paragraph nil
      :base-style #:text-style {:font-families ["Menlo"]
-                               :font-size 12}
+                               :font-size 12
+                               :height 1.2
+                               :height-override true}
      :eval-ns *ns*
      :rope Rope/EMPTY
      :language lang
