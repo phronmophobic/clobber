@@ -80,13 +80,30 @@
   (let [base-style (:base-style editor)
         row-height (* (:text-style/height base-style)
                       (:text-style/font-size base-style))
-        num-lines (quot height row-height)]
+        num-lines (max 0
+                       (- (quot height row-height)
+                          ;; reserve two lines for status bar
+                          ;; and one line for cursor info
+                          3))]
     (assoc-in editor
-              [:viewport :num-lines] (long num-lines))))
+              [:viewport :num-lines] (long num-lines)
+              [:viewport :height] height)))
 
 
 (defeffect ::update-editor [{:keys [$editor op]}]
   (dispatch! :update $editor editor-upkeep op))
+
+(defeffect ::temp-status [{:keys [$editor msg]}]
+  (future
+    (dispatch! :update $editor
+               (fn [editor]
+                 (assoc-in editor [:status :temp] msg)))
+    (Thread/sleep 6000)
+    (dispatch! :update $editor
+               (fn [editor]
+                 (if (= msg (-> editor :status :temp))
+                   (update editor :status dissoc :temp)
+                   editor)))))
 
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
@@ -114,8 +131,18 @@
                              update :line-val
                              (fn [m]
                                (let [line-val (get m rope)]
-                                 {rope (assoc line-val line-number (viscous/wrap val))}))))))
+                                 {rope (assoc line-val line-number (viscous/wrap val))})))
+                  (let [temp-view (ui/translate 0 -4
+                                                (viscous/inspector
+                                   {:obj (viscous/wrap val)
+                                    :width 40
+                                    :height 1
+                                    :show-context? false}))]
+                    (dispatch! ::temp-status {:$editor $editor
+                                              :msg temp-view})))))
             (catch Exception e
+              (dispatch! ::temp-status {:$editor $editor
+                                        :msg "Exception!"})
               (prn e))))))))
 
 
@@ -186,7 +213,9 @@
     (when-let [file (:file editor)]
       (let [^Rope rope (:rope editor)
             source (.toString rope)]
-        (spit file source))))
+        (spit file source)
+        (dispatch! ::temp-status {:$editor $editor
+                                  :msg "saved."}))))
   nil)
 
 (defeffect ::reload-editor [{:keys [editor $editor]}]
@@ -625,11 +654,22 @@
                       (line-val-view
                        {:editor editor
                         :para para
-                        :line-val line-val}))]
+                        :line-val line-val}))
+
+          status-bar (when-let [status (:status editor)]
+                       (when-let [height (-> editor :viewport :height)]
+                         (let [view (or (:temp status)
+                                        (:status status))
+                               status-bar (if (string? view)
+                                            (para/paragraph view nil {:paragraph-style/text-style (:base-style editor)})
+                                            view)]
+                           (ui/translate 0 (- height 4 (* 1 (ui/height status-bar)))
+                                         status-bar))))]
       [(cursor-view rope para (:cursor editor))
        paren-highlight-view
        para
-       line-vals])))
+       line-vals
+       status-bar])))
 
 
 (defn init-search-forward [editor]
