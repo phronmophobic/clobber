@@ -45,7 +45,6 @@
   ;; if cursor or rope changed, editor-update-viewport
   ;; potentially update undo history
   ;; if rope changed, unset selection cursor
-  ;; todo: move tree updates here?
   (let [new-editor (op editor)
 
         rope-changed? (not (identical? (:rope editor)
