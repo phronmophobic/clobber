@@ -355,13 +355,6 @@
   ^TSNode
   [^TSTree tree byte-offset]
   (let [cursor (TSTreeCursor. (.getRootNode tree))]
-    (.gotoFirstChild cursor)
-    (loop []
-      (when (< (.getEndByte (.currentNode cursor))
-               byte-offset)
-        (.gotoNextSibling cursor)
-        (recur)))
-
     (transduce
      (filter (fn [^TSNode node]
                (> (-> node .getEndByte)
@@ -380,7 +373,8 @@
             node
             best-match))))
      nil
-     (tree-cursor-reducible cursor))))
+     (when (skip-to-byte-offset cursor byte-offset)
+       (tree-cursor-reducible cursor)))))
 
 (defn find-byte-offset-for-line [^TSTree tree ^Rope rope target-line]
   (if (zero? target-line)
