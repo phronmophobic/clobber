@@ -85,10 +85,10 @@
                        (- (quot height row-height)
                           ;; reserve two lines for status bar
                           ;; and one line for cursor info
-                          3))]
-    (assoc-in editor
-              [:viewport :num-lines] (long num-lines)
-              [:viewport :height] height)))
+                          4))]
+    (-> editor
+        (assoc-in [:viewport :num-lines] (long num-lines))
+        (assoc-in [:viewport :height] height))))
 
 
 (defeffect ::update-editor [{:keys [$editor op] :as m}]
@@ -105,7 +105,7 @@
     (dispatch! :update $editor
                (fn [editor]
                  (assoc-in editor [:status :temp] msg)))
-    (Thread/sleep 6000)
+    (Thread/sleep 4000)
     (dispatch! :update $editor
                (fn [editor]
                  (if (= msg (-> editor :status :temp))
@@ -780,7 +780,8 @@
                                status-bar (if (string? view)
                                             (para/paragraph view nil {:paragraph-style/text-style (:base-style editor)})
                                             view)]
-                           (ui/translate 0 (- height 4 (* 1 (ui/height status-bar)))
+                           (ui/translate 0
+                                         (- height 8 (ui/height status-bar))
                                          status-bar))))]
       [(cursor-view rope para (:cursor editor))
        paren-highlight-view
@@ -1223,7 +1224,14 @@
 
         ]
     (ui/vertical-layout
-     (ui/label (pr-str (:cursor editor)))
+     ;;(ui/label (pr-str (:cursor editor)))
+     #_(ui/flex-layout
+       [(basic/checkbox
+         {:checked? (:structure? editor)})
+        (ui/label "structure?")]
+      {:direction :row
+       :gap 4
+       :align :center})
      (when (:structure? editor)
        [(ui/spacer 100 200)
         (ui/vertical-layout
