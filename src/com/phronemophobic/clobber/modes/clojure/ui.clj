@@ -3,6 +3,7 @@
             [clojure.datafy :as d]
             [clojure.core.protocols :as p]
             [clojure.string :as str]
+            [clojure.core.async :as async]
             [membrane.basic-components :as basic]
             [membrane.ui :as ui]
             [membrane.skia :as skia]
@@ -90,8 +91,14 @@
               [:viewport :height] height)))
 
 
-(defeffect ::update-editor [{:keys [$editor op]}]
-  (dispatch! :update $editor editor-upkeep op))
+(defeffect ::update-editor [{:keys [$editor op] :as m}]
+  (dispatch! :update $editor editor-upkeep op)
+  ;; check and do arglist-update
+  (let [editor (dispatch! :get $editor)]
+    (when-let [ch (:arglist-chan editor)]
+      (async/put! ch {:editor editor
+                      :$editor $editor
+                      :dispatch! dispatch!}))))
 
 (defeffect ::temp-status [{:keys [$editor msg]}]
   (future
@@ -228,6 +235,115 @@
           #(text-mode/editor-set-string % source))))))
   nil)
 
+(defn update-arglist [{:keys [$editor editor dispatch!] :as m}]
+  (try
+    (when-let [^TSTree tree (:tree editor)]
+      (let [rope (:rope editor)
+            tc (TSTreeCursor. (.getRootNode tree))
+            cursor (:cursor editor)
+            cursor-byte (:byte cursor)
+            
+            ;; find parent coll
+            parent-coll
+            (transduce
+             (comp (take-while (fn [^TSNode node]
+                                 (< (-> node .getStartByte)
+                                    cursor-byte)))
+                   (filter (fn [^TSNode node]
+                             (contains? clojure-mode/coll-node-types (.getType node))
+                             ))
+                   (filter (fn [^TSNode node]
+                             (> (-> node .getEndByte)
+                                cursor-byte))))
+             (completing
+              (fn [result node]
+                node))
+             nil
+             (when (util/skip-to-byte-offset tc cursor-byte)
+               (util/tree-cursor-reducible tc)))]
+        (if (and parent-coll (= "list_lit" (.getType parent-coll)))
+          ;; try to find arglist
+          (let [named-child-count (.getNamedChildCount parent-coll)]
+            (when (pos? named-child-count)
+              (let [first-child (.getNamedChild parent-coll 0)]
+                (when (and (= "sym_lit" (.getType first-child))
+                           ;; not sure if we should show
+                           ;; arglists when cursor is
+                           ;; not in arg position
+                           #_(>= cursor-byte 
+                               (.getEndByte first-child)))
+                  (let [sym (read-string 
+                             (util/node->str rope first-child))
+                        v (ns-resolve (:eval-ns editor) sym)
+                        
+                        arglists (-> v meta :arglists)]
+                    (when arglists
+                      (let [cursor-index
+                            (loop [index 1]
+                              (if (>= index named-child-count)
+                                (dec index)
+                                (let [argnode (.getNamedChild parent-coll index)]
+                                  (if (<= cursor-byte (.getEndByte argnode))
+                                    (dec index)
+                                    (recur (inc index))))))
+                            
+                            base-style (:base-style editor)
+                            ps (into [(str 
+                                       (pr-str v)
+                                       " ")]
+                                     (comp
+                                      (map (fn [arglist]
+                                             ["["
+                                              (into []
+                                                    (comp
+                                                     (map-indexed (fn [i node]
+                                                                    (let [s (pr-str node)]
+                                                                      (if (= i cursor-index)
+                                                                        {:text s
+                                                                         :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
+                                                                        s))))
+                                                     (interpose " "))
+                                                    arglist)
+                                              "]"]))
+                                      (interpose " "))
+                                     arglists)
+                            p (para/paragraph
+                               ps
+                               nil
+                               {:paragraph-style/text-style (:base-style editor)}
+                               
+                               )]
+                        (dispatch! :update $editor
+                                   (fn [editor]
+                                     (assoc-in editor [:status :status] p)))))
+                    
+                    
+                    
+                    )))
+              ))
+          ;; else, remove arglist
+          (when (-> editor :status :status)
+            (dispatch! :update $editor
+                       (fn [editor]
+                         (assoc-in editor [:status :status] nil)))
+            ))))
+    (catch Exception e
+      (tap> e))))
+
+(defn arglist-watcher []
+  (let [ch (async/chan (async/sliding-buffer 1))]
+    (async/thread
+     (try
+       (loop [last-editor nil]
+         (let [msg (async/<!! ch)
+               editor (:editor msg)
+               editor (select-keys editor [:rope :cursor])]
+           (when (not= editor last-editor)
+             (update-arglist msg))
+           (recur editor)))
+       (catch Exception e
+         (prn e))))
+    ch))
 
 
 (defn make-editor
@@ -246,6 +362,7 @@
          editor (-> (make-editor)
                     (text-mode/editor-self-insert-command source)
                     (assoc :eval-ns eval-ns)
+                    (assoc :arglist-chan (arglist-watcher))
                     (assoc :cursor {:byte 0
                                     :char 0
                                     :point 0

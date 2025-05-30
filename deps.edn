@@ -6,6 +6,7 @@
         io.github.IGJoshua/ropes {;;:git/sha "85ebbfced8c9e1fcd6e09c152dcc2bd4b9a72a86"
                                   :local/root "../ropes"
                                   }
+        org.clojure/core.async {:mvn/version "1.8.741"}
         org.clojars.quoll/tiara {:mvn/version "0.3.7"}
         clope/clope {:mvn/version "1"}
         io.lacuna/bifurcan {:mvn/version "0.2.0-rc1"}
