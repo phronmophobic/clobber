@@ -224,6 +224,90 @@
                                   :msg "saved."}))))
   nil)
 
+(defui file-picker [{:keys [base-style folder
+                            focused?
+                            width]
+                     :as this}]
+  (let [base-style (or base-style 
+                       #:text-style
+                       {:font-families ["Menlo"]
+                        :font-size 12
+                        :height 1.2
+                        :height-override true})
+
+        current-folder (get extra :current-folder folder)
+        
+        search-str (get extra :search-str "")
+        fs (into 
+            []
+            (comp (filter (fn [f]
+                            (str/includes? (.getName f)
+                                           search-str))))
+            (.listFiles current-folder))
+        ps (into 
+            [{:text (str (.getCanonicalPath current-folder) "/")
+              :style (assoc base-style :text-style/color [0 0 0.843])}
+             search-str
+             " | "]
+            (comp (map (fn [f]
+                         
+                         (if (.isFile f)
+                           (.getName f)
+                           {:text (str (.getName f) "/")
+                            :style (assoc base-style :text-style/color [0.909 0.2784 0.3411  ])}
+                           )))
+                  (interpose " | "))
+            fs)
+
+        p (para/paragraph
+           ps
+           width
+           {:paragraph-style/text-style base-style})
+        
+        p (if focused?
+            (ui/on
+
+             :key-press
+             (fn [s]
+               (cond
+                 
+                 (= s :enter)
+                 
+                 (when-let [f (first fs)]
+                   (if (.isFile f)
+                     [[::select-file {:file f}]]
+                     [[:set $current-folder f]
+                      [:set $search-str ""]]))
+                 
+                 (= s :backspace)
+                 (if (= search-str "")
+                   (when-let [parent (-> current-folder
+                                         .getCanonicalFile
+                                         .getParentFile)]
+                     [[:set $current-folder parent]])
+                   [[:update $search-str
+                     (fn [s]
+                       (subs s 0 (max 0 (- (count s) 2))))]])
+                 
+                 (string? s)
+                 [[:update $search-str str s]]))
+             p)
+            ;; else
+            p)]
+    p))
+
+(defeffect ::file-picker [{:keys [editor $editor]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (-> editor
+                   (assoc-in [:status :file-picker] true))))
+  ;; ugly
+  (dispatch! :set 
+             ['(keypath :membrane.component/context)
+              '(keypath :focus)]
+             [$editor :file-picker])
+  nil)
+
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
     (when-let [file (:file editor)]
@@ -758,7 +842,22 @@
           line-val)))
 
 
-(defui editor-view [{:keys [editor]}]
+(defn guess-ns [file]
+  (let [source (slurp file)
+        [_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" (slurp file))]
+    (when ns-str
+      (symbol ns-str))))
+
+(defeffect ::select-file [{:keys [file]}]
+  (when-let [ns-sym (guess-ns file)]
+    (dispatch! :com.phronemophobic.easel/add-applet
+               {:make-applet
+                (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                  #(f % ns-sym))})))
+
+(defui editor-view [{:keys [editor
+                            ^:membrane.component/contextual
+                            focus]}]
   (when-let [tree (:tree editor)]
     (let [lang (:language editor)
           rope (:rope editor)
@@ -774,8 +873,31 @@
 
           status-bar (when-let [status (:status editor)]
                        (when-let [height (-> editor :viewport :height)]
-                         (let [view (or (:temp status)
-                                        (:status status))
+                         (let [view (or 
+                                     (when (and (:file-picker status)
+                                                (:file editor))
+                                       (ui/on
+                                        ::select-file
+                                        (fn [m]
+                                          [[::select-file m]
+                                           [:update $editor update :status dissoc :file-picker]])
+                                        
+                                        (ui/on
+                                         :key-event
+                                         (fn [key scancode action mods]
+                                           (when (#{:press :repeat} action)
+                                             (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
+                                               (cond 
+                                                 
+                                                 (and ctrl?
+                                                      (= (char key) \G))
+                                                 [[:update $editor update :status dissoc :file-picker]]))))
+                                         
+                                         (file-picker {:folder (.getParentFile (:file editor))
+                                                       :base-style (:base-style editor)
+                                                       :focused? (= [$editor :file-picker] focus)}))))
+                                     (:temp status)
+                                     (:status status))
                                status-bar (if (string? view)
                                             (para/paragraph view nil {:paragraph-style/text-style (:base-style editor)})
                                             view)]
@@ -827,6 +949,7 @@
   (key-bindings->keytree
    (assoc clojure-mode/key-bindings
           "C-x C-s" ::save-editor
+          "C-x C-f" ::file-picker
           "C-_" #'text-mode/editor-undo
           "C-g" #'editor-cancel
           "C-M-x" ::editor-eval-top-form
