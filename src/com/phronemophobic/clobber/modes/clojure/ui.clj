@@ -318,7 +318,7 @@
   (dispatch! :update $editor
              (fn [editor]
                (-> editor
-                   (assoc-in [:status :file-picker] true))))
+                   (assoc-in [:status :file-picker] {}))))
   ;; ugly
   (dispatch! :set 
              ['(keypath :membrane.component/context)
@@ -900,18 +900,22 @@
                                           [[::select-file m]
                                            [:update $editor update :status dissoc :file-picker]])
                                         
-                                        (ui/on
+                                        (ui/wrap-on
                                          :key-event
-                                         (fn [key scancode action mods]
+                                         (fn [handler key scancode action mods]
                                            (when (#{:press :repeat} action)
                                              (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
                                                (cond 
                                                  
                                                  (and ctrl?
                                                       (= (char key) \G))
-                                                 [[:update $editor update :status dissoc :file-picker]]))))
+                                                 [[:update $editor update :status dissoc :file-picker]
+                                                  [:set $focus $editor]]
+                                                 
+                                                 :else (handler key scancode action mods)))))
                                          
                                          (file-picker {:folder (.getParentFile (:file editor))
+                                                       :extra (:file-picker status)
                                                        :base-style (:base-style editor)
                                                        :focused? (= [$editor :file-picker] focus)}))))
                                      (:temp status)
@@ -1306,7 +1310,9 @@
                             ^:membrane.component/contextual
                             focus]
                      :as this}]
-  (let [body (editor-view {:editor editor})
+  (let [body (editor-view {:editor editor
+                           ;; hack, otherwise, $editor is slightly different
+                           :$editor $editor})
 
         structure-state (get editor ::structure-state)
         body (ui/wrap-on
@@ -1333,11 +1339,14 @@
         body (if focused?
                (clojure-keymap {:bindings clojure-keytree
                                 :editor editor
+                                :$editor $editor
                                 :body body})
                (let [[w h] (ui/bounds body)
                      gray 0.98]
-                 [(ui/filled-rectangle [gray gray gray]
-                                       (max 800 w) (max 100 h))
+                 [(when (not= [$editor :file-picker]
+                              focus)
+                    (ui/filled-rectangle [gray gray gray]
+                                         (max 800 w) (max 100 h)))
                   body]))
 
         body (if focused?
