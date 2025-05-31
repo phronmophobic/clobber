@@ -237,12 +237,14 @@
 
         current-folder (get extra :current-folder folder)
         
+        offset (get extra :offset 0)
         search-str (get extra :search-str "")
         fs (into 
             []
             (comp (filter (fn [f]
                             (str/includes? (.getName f)
-                                           search-str))))
+                                           search-str)))
+                  (drop offset))
             (.listFiles current-folder))
         ps (into 
             [{:text (str (.getCanonicalPath current-folder) "/")
@@ -266,31 +268,47 @@
         
         p (if focused?
             (ui/on
-
+             :key-event
+             (fn [key scancode action mods]
+               (when (#{:press :repeat} action)
+                 (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
+                   (cond 
+                     
+                     (and ctrl?
+                          (= (char key) \S))
+                     [[:update $offset 
+                       (fn [offset]
+                         (if (>= offset (count fs))
+                           0
+                           (inc offset)))]]))))
+             
              :key-press
              (fn [s]
                (cond
                  
                  (= s :enter)
-                 
                  (when-let [f (first fs)]
                    (if (.isFile f)
                      [[::select-file {:file f}]]
                      [[:set $current-folder f]
-                      [:set $search-str ""]]))
+                      [:set $search-str ""]
+                      [:set $offset 0]]))
                  
                  (= s :backspace)
                  (if (= search-str "")
                    (when-let [parent (-> current-folder
                                          .getCanonicalFile
                                          .getParentFile)]
-                     [[:set $current-folder parent]])
+                     [[:set $current-folder parent]
+                      [:set $offset 0]])
                    [[:update $search-str
                      (fn [s]
-                       (subs s 0 (max 0 (- (count s) 2))))]])
+                       (subs s 0 (max 0 (- (count s) 1))))]
+                    [:set $offset 0]])
                  
                  (string? s)
-                 [[:update $search-str str s]]))
+                 [[:update $search-str str s]
+                  [:set $offset 0]]))
              p)
             ;; else
             p)]
