@@ -36,10 +36,26 @@
            java.nio.ByteBuffer
            java.util.regex.Pattern
            com.ibm.icu.text.BreakIterator
-           ))
+           clojure.lang.LineNumberingPushbackReader
+           java.io.File
+           java.io.StringReader))
 
 #_(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 (import 'io.lacuna.bifurcan.Rope)
+
+(defn ^:private ns-sym->resource-path
+  ([ns-sym]
+   (ns-sym->resource-path ns-sym ".clj"))
+  ([ns-sym ext]
+   (let [resource-path (let [parts (-> ns-sym
+                                       name
+                                       (str/split #"\."))]
+                         (str (str/join "/"
+                                        (eduction
+                                         (map #(str/replace % "-" "_"))
+                                         parts))
+                              ext))]
+     resource-path)))
 
 (defn editor-upkeep [editor op]
   ;; if cursor or rope changed, editor-update-viewport
@@ -111,6 +127,12 @@
                    (update editor :status dissoc :temp)
                    editor)))))
 
+(defn ^:private file-ext [^File f]
+  (let [fname (.getName f)
+        idx (.lastIndexOf fname ".")]
+    (when (not= -1 idx)
+      (subs fname idx))))
+
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -126,26 +148,51 @@
         (if (= -1 idx)
           editor
           (try
-            (let [node (.currentNode cursor)
+            (let [eval-ns (:eval-ns editor)
+                  eval-ns-name (ns-name eval-ns)
+                  node (.currentNode cursor)
                   line-number (-> node
                                   .getEndPoint
-                                  .getRow)]
-              (binding [*ns* (:eval-ns editor)]
-                (let [form (read-string (util/node->str rope node))
-                      val (eval form)]
-                  (dispatch! :update $editor
-                             update :line-val
-                             (fn [m]
-                               (let [line-val (get m rope)]
-                                 {rope (assoc line-val line-number (viscous/wrap val))})))
-                  (let [temp-view (ui/translate 0 -4
-                                                (viscous/inspector
-                                   {:obj (viscous/wrap val)
-                                    :width 40
-                                    :height 1
-                                    :show-context? false}))]
-                    (dispatch! ::temp-status {:$editor $editor
-                                              :msg temp-view})))))
+                                  .getRow)
+                  
+                  [;; path relative to class-path  
+                   source-path
+                   ;; filename
+                   source-name]
+                  (when-let [f (:file editor)]
+                    [(ns-sym->resource-path eval-ns-name (file-ext f))
+                     (.getName f)])
+                  
+                  rdr (doto (LineNumberingPushbackReader.
+                             (StringReader. 
+                              (if (pos? line-number)
+                                (str (pr-str
+                                      `(ns ~eval-ns-name))
+                                     "\n"
+                                     (util/node->str rope node))
+                                ;; else
+                                (util/node->str rope node))))
+                        (.setLineNumber 
+                         (if (pos? line-number)
+                           (dec line-number)
+                           line-number)))
+
+                  val (clojure.lang.Compiler/load rdr source-path source-name)
+                  
+                  temp-view (ui/translate 0 -4
+                                          (viscous/inspector
+                                           {:obj (viscous/wrap val)
+                                            :width 40
+                                            :height 1
+                                            :show-context? false}))]
+              (dispatch! :update $editor
+                         update :line-val
+                         (fn [m]
+                           (let [line-val (get m rope)]
+                             {rope (assoc line-val line-number (viscous/wrap val))})))
+              (dispatch! ::temp-status {:$editor $editor
+                                        :msg temp-view})
+              )
             (catch Exception e
               (dispatch! ::temp-status {:$editor $editor
                                         :msg "Exception!"})
