@@ -337,6 +337,7 @@
   nil)
 
 (defn update-arglist [{:keys [$editor editor dispatch!] :as m}]
+  ;; TODO: should try to cache results
   (try
     (when-let [^TSTree tree (:tree editor)]
       (let [rope (:rope editor)
@@ -448,31 +449,22 @@
 
 
 (defn make-editor
-  ([ns]
-   (let [eval-ns (the-ns ns)
-         ns-sym (ns-name eval-ns)
-         resource-path (let [parts (-> ns-sym
-                                       name
-                                       (str/split #"\."))]
-                         (str (str/join "/" parts) ".clj"))
-         resource (io/resource resource-path)
-         source (slurp resource)
-         file (when (= "file" (.getProtocol resource))
-                (io/as-file resource))
+  ([{:keys [file eval-ns source] :as m}]
+   (let [editor (-> (make-editor)
+                    (assoc :arglist-chan (arglist-watcher)))
+         
+         editor (cond-> editor
+                  file (assoc :file file)
+                  eval-ns (assoc :eval-ns eval-ns )
+                  source (text-mode/editor-self-insert-command source))
 
-         editor (-> (make-editor)
-                    (text-mode/editor-self-insert-command source)
-                    (assoc :eval-ns eval-ns)
-                    (assoc :arglist-chan (arglist-watcher))
+         editor (-> editor
                     (assoc :cursor {:byte 0
                                     :char 0
                                     :point 0
                                     :row 0
                                     :column 0})
-                    (text-mode/editor-update-viewport))
-         editor (if file
-                  (assoc editor :file file)
-                  editor)]
+                    (text-mode/editor-update-viewport))]
      editor))
   ([]
    (#_map->Editor
@@ -500,6 +492,35 @@
      :parser (doto (TSParser.)
                (.setLanguage (TreeSitterClojure.)))
      :buf (byte-array 4096)})))
+
+(defn make-editor-from-file [f]
+  (let [source (slurp f)
+        eval-ns (when-let [ns-sym (guess-ns source)]
+                  (the-ns ns-sym))]
+    (make-editor 
+     (cond-> {:file f
+              :source source}
+       eval-ns (assoc :eval-ns eval-ns)))))
+
+(defn make-editor-from-ns [ns]
+  (let [eval-ns (the-ns ns)
+        ns-sym (ns-name eval-ns)
+        resource-path (let [parts (-> ns-sym
+                                      name
+                                      (str/split #"\."))]
+                        (str (str/join "/" parts) ".clj"))
+        resource (io/resource resource-path)
+        source (slurp resource)
+        file (when (= "file" (.getProtocol resource))
+               (io/as-file resource))
+        source (when resource
+                 (slurp resource))]
+    (make-editor 
+     (cond-> {:eval-ns eval-ns}
+       file (assoc :file file)
+       source (assoc :source source)))))
+
+
 
 ;; Tree sitter uses these strings
 ;; and requires they not be garbage collected
@@ -860,18 +881,16 @@
           line-val)))
 
 
-(defn guess-ns [file]
-  (let [source (slurp file)
-        [_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" (slurp file))]
+(defn ^:private guess-ns [source]
+  (let [[_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" source)]
     (when ns-str
       (symbol ns-str))))
 
 (defeffect ::select-file [{:keys [file]}]
-  (when-let [ns-sym (guess-ns file)]
-    (dispatch! :com.phronemophobic.easel/add-applet
-               {:make-applet
-                (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
-                  #(f % ns-sym))})))
+  (dispatch! :com.phronemophobic.easel/add-applet
+             {:make-applet
+              (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                #(f % {:file file}))}))
 
 (defui editor-view [{:keys [editor
                             ^:membrane.component/contextual
