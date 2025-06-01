@@ -292,7 +292,7 @@
                             (str/includes? (.getName f)
                                            search-str)))
                   (drop offset))
-            (.listFiles current-folder))
+            (sort (.listFiles current-folder)))
         ps (into 
             [{:text (str (.getCanonicalPath current-folder) "/")
               :style (assoc base-style :text-style/color [0 0 0.843])}
