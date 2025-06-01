@@ -558,10 +558,7 @@
 (defn make-editor-from-ns [ns]
   (let [eval-ns (the-ns ns)
         ns-sym (ns-name eval-ns)
-        resource-path (let [parts (-> ns-sym
-                                      name
-                                      (str/split #"\."))]
-                        (str (str/join "/" parts) ".clj"))
+        resource-path (ns-sym->resource-path ns-sym)
         resource (io/resource resource-path)
         source (slurp resource)
         file (when (= "file" (.getProtocol resource))
