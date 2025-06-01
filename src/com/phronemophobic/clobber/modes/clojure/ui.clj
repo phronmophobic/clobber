@@ -493,6 +493,12 @@
                (.setLanguage (TreeSitterClojure.)))
      :buf (byte-array 4096)})))
 
+
+(defn ^:private guess-ns [source]
+  (let [[_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" source)]
+    (when ns-str
+      (symbol ns-str))))
+
 (defn make-editor-from-file [f]
   (let [source (slurp f)
         eval-ns (when-let [ns-sym (guess-ns source)]
@@ -881,10 +887,7 @@
           line-val)))
 
 
-(defn ^:private guess-ns [source]
-  (let [[_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" source)]
-    (when ns-str
-      (symbol ns-str))))
+
 
 (defeffect ::select-file [{:keys [file]}]
   (dispatch! :com.phronemophobic.easel/add-applet
