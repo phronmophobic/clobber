@@ -331,7 +331,7 @@
 
         ;; check if we're trying to close a string 
         closing-quote?
-        (when (and (< (.length rope) cursor-char)
+        (when (and (< cursor-char (.length rope))
                    (= \" (.charAt rope cursor-char)))
           (let [root-node (.getRootNode (:tree editor))
                 cursor (TSTreeCursor. root-node)
