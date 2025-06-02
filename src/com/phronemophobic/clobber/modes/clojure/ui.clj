@@ -1143,12 +1143,17 @@
                                     ::search
                                     :query)
                                 s)]
-                 (editor-search-forward editor query)))))
+                 (-> editor
+                     (editor-search-forward query)
+                     (assoc :search/last-search query))))))
 
 (defeffect ::repeat-search-forward [{:keys [$editor s]}]
   (dispatch! :update $editor
              (fn [editor]
-               (editor-repeat-search-forward editor))))
+               (if (-> editor ::search :query)
+                 (editor-repeat-search-forward editor)
+                 (when-let [query (:search/last-search editor)]
+                   (editor-search-forward editor query))))))
 
 (defui wrap-search [{:keys [editor body]
                      :as this}]
