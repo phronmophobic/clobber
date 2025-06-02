@@ -80,6 +80,17 @@
                      (text-mode/editor-append-history new-editor editor)
                      new-editor)
 
+        ;; this could be improved
+        ;; probably want some specific
+        ;; support for keeping and clearing state
+        ;; for repeated commands.
+        popmode? (-> new-editor :mark :popmode?)
+        new-editor (if (and popmode?
+                            (= popmode?
+                               (-> editor :mark :popmode?)))
+                     (update new-editor :mark dissoc :popmode?)
+                     new-editor)
+
         ;; support consecutive undos
         new-history-index (-> new-editor :history :index)
         new-editor (if (and new-history-index
@@ -1031,7 +1042,9 @@
                )))
 
 (defn finish-search-forward [editor]
-  (dissoc editor ::search))
+  (-> editor
+      (text-mode/editor-push-mark (-> editor ::search :initial-cursor))
+      (dissoc ::search)))
 
 (def clojure-keytree
   (key-bindings->keytree
@@ -1045,8 +1058,7 @@
 
 (defeffect ::finish-search-forward [{:keys [$editor]}]
   (dispatch! :update $editor
-             (fn [editor]
-               (dissoc editor ::search))))
+             finish-search-forward))
 
 (defn editor-search-forward [editor query]
   (let [search-state (::search editor)

@@ -1670,6 +1670,7 @@
 
    "C-y" #'text-mode/editor-yank
    "C-SPC" #'text-mode/editor-set-mark
+   "C-u C-SPC" #'text-mode/editor-pop-mark
    "C-w" #'text-mode/editor-kill-region
    "M-w" #'text-mode/editor-save-region
    ;; "C-x C-s" editor-save-buffer

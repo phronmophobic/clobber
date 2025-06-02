@@ -717,10 +717,47 @@
       (editor-self-insert-command editor (.toString rope))
       editor)))
 
+
+
+(defn editor-push-mark 
+  ([editor]
+   (editor-push-mark editor (:cursor editor)))
+  ([editor cursor]
+   (update editor :mark
+           (fn [mark]
+             (let [history (conj (or (:history mark) [])
+                                 cursor)
+                   history-count (count history)
+                   
+                   history (if (> history-count 5)
+                             (subvec history
+                                     (- history 5)
+                                     (count history))
+                             history)]
+               (assoc mark :history history))))))
+
+(defn editor-pop-mark [editor]
+  (let [mark (:mark editor)
+        history (:history mark)]
+    (if (seq history)
+      (-> editor
+          (assoc :cursor (peek history))
+          (update-in [:mark :history] pop)
+          (update-in [:mark :popmode?] (fn [pm]
+                                         (if pm
+                                           (inc pm)
+                                           0))))
+      ;; else
+      editor)))
+
 (defn editor-set-mark [editor]
-  (if (:select-cursor editor)
-    (dissoc editor :select-cursor)
-    (assoc editor :select-cursor (:cursor editor))))
+  (if (-> editor :mark :popmode?)
+    (editor-pop-mark editor)
+    ;; else
+    (if (:select-cursor editor)
+      (dissoc editor :select-cursor)
+      (assoc editor :select-cursor (:cursor editor)))))
+
 
 (defn editor-kill-region [editor]
   (if-let [select-cursor (:select-cursor editor)]
@@ -851,20 +888,24 @@
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         ;; could probably be more efficient
         {:keys [row column]} (util/count-points (.toString rope))]
-    (assoc editor
-           :cursor {:byte (.numBytes rope)
-                    :char (-> rope .toCharSequence .length)
-                    :point (-> rope .size)
-                    :row row
-                    :column column})))
+    
+    (-> editor
+        (editor-push-mark)
+        (assoc :cursor {:byte (.numBytes rope)
+                        :char (-> rope .toCharSequence .length)
+                        :point (-> rope .size)
+                        :row row
+                        :column column}))))
 
 (defn editor-beginning-of-buffer [editor]
-  (assoc editor
-         :cursor {:byte 0
-                  :char 0
-                  :point 0
-                  :row 0
-                  :column 0}))
+  (-> editor
+      (editor-push-mark)
+      (assoc :cursor {:byte 0
+                      :char 0
+                      :point 0
+                      :row 0
+                      :column 0})))
+
 (defn editor-isearch-forward [editor]
   editor)
 (defn editor-kill-ring-save [editor]
