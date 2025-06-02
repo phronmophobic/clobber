@@ -1780,7 +1780,7 @@
 
 
 
-(defn dev
+#_(defn dev
   ([]
    (dev 'com.phronemophobic.clobber.modes.clojure.ui))
   ([ns]
