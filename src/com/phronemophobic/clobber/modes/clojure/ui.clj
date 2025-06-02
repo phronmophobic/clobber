@@ -163,6 +163,9 @@
                     [(ns-sym->resource-path eval-ns-name (file-ext f))
                      (.getName f)])
                   
+                  ;; tree-sitter line numbers are 0 indexed
+                  ;; these source line numbers are 1 indexed
+                  ;; we are adding a line for the ns form
                   rdr (doto (LineNumberingPushbackReader.
                              (StringReader. 
                               (if (pos? line-number)
@@ -172,10 +175,7 @@
                                      (util/node->str rope node))
                                 ;; else
                                 (util/node->str rope node))))
-                        (.setLineNumber 
-                         (if (pos? line-number)
-                           (dec line-number)
-                           line-number)))
+                        (.setLineNumber line-number))
 
                   val (clojure.lang.Compiler/load rdr source-path source-name)
                   
