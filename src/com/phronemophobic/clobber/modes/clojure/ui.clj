@@ -1152,8 +1152,9 @@
              (fn [editor]
                (if (-> editor ::search :query)
                  (editor-repeat-search-forward editor)
-                 (when-let [query (:search/last-search editor)]
-                   (editor-search-forward editor query))))))
+                 (if-let [query (:search/last-search editor)]
+                   (editor-search-forward editor query)
+                   editor)))))
 
 (defui wrap-search [{:keys [editor body]
                      :as this}]
