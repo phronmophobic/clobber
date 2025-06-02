@@ -549,7 +549,7 @@
 (defn make-editor-from-file [f]
   (let [source (slurp f)
         eval-ns (when-let [ns-sym (guess-ns source)]
-                  (the-ns ns-sym))]
+                  (create-ns ns-sym))]
     (make-editor 
      (cond-> {:file f
               :source source}
