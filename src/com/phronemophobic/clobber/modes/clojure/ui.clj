@@ -144,6 +144,14 @@
     (when (not= -1 idx)
       (subs fname idx))))
 
+(defeffect ::editor-paste [{:keys [$editor s]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (editor-upkeep editor
+                              #(text-mode/editor-self-insert-command % s )))))
+
+
+
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -1053,6 +1061,7 @@
           "C-x C-f" ::file-picker
           "C-_" #'text-mode/editor-undo
           "C-g" #'editor-cancel
+          ;; "C-c C-v" ::editor-paste
           "C-M-x" ::editor-eval-top-form
           "C-s" #'init-search-forward)))
 
@@ -1455,7 +1464,12 @@
                         intents)))
               body)
 
-        ]
+        body (ui/on-clipboard-paste
+              (fn [s]
+                [[::editor-paste {:editor editor
+                                  :$editor $editor
+                                  :s s}]])
+              body)]
     (ui/vertical-layout
      ;;(ui/label (pr-str (:cursor editor)))
      #_(ui/flex-layout
