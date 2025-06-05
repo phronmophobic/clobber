@@ -290,6 +290,10 @@
                                   :msg "saved."}))))
   nil)
 
+(defeffect ::tap-editor [{:keys [editor $editor]}]
+  (tap> editor)
+  nil)
+
 (defui file-picker [{:keys [base-style folder
                             focused?
                             width]
@@ -1061,6 +1065,7 @@
           "C-x C-f" ::file-picker
           "C-_" #'text-mode/editor-undo
           "C-g" #'editor-cancel
+          "C-c t" ::tap-editor
           ;; "C-c C-v" ::editor-paste
           "C-M-x" ::editor-eval-top-form
           "C-s" #'init-search-forward)))
