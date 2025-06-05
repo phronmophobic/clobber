@@ -91,6 +91,12 @@
         (assoc-in [:viewport :height] height))))
 
 
+(defeffect ::editor-paste [{:keys [$editor s]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (editor-upkeep editor
+                              #(text-mode/editor-self-insert-command % s )))))
+
 (defeffect ::update-editor [{:keys [$editor op] :as m}]
   (dispatch! :update $editor editor-upkeep op))
 
@@ -512,66 +518,117 @@
                  (.getNamedChild parent i)))
           (range c))))
 
-(defmulti node->styled-text* (fn [^TSNode node rope style start-byte end-byte]
+
+
+(defmulti node->styled-text* (fn [ctx ^TSNode node]
                                (.getType node)))
 
-(defmethod node->styled-text* "paragraph" [^TSNode node rope  style  start-byte end-byte]
+(defn ^:private style-children [ctx ^TSNode parent]
+  (into []
+        (map #(node->styled-text* ctx %))
+        (named-node-children parent)))
+
+(defmethod node->styled-text* "paragraph" [ctx ^TSNode node]
   (conj
-   (into []
-         (map #(node->styled-text* % rope style start-byte end-byte))
-         (named-node-children node))
+   (style-children ctx node)
    "\n"))
 
-(defmethod node->styled-text* "tight_list" [^TSNode node rope  style  start-byte end-byte]
+(defmethod node->styled-text* "line_break" [ctx ^TSNode node]
+  {:style (:style ctx)
+   :text "\n"})
+
+(defmethod node->styled-text* "code_span" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
+                             #:text-style
+                             {:color [0.7137254901960784 0.23529411764705882 0.32941176470588235]
+                              :background-color {:color [0.9647058823529412
+                                                         0.9647058823529412
+                                                         0.9647058823529412]}
+                              :font-families ["Menlo"]}])
+        ctx (assoc ctx :style style)]
+    (into []
+          (map #(node->styled-text* ctx %))
+          (named-node-children node)))
+  )
+
+(defmethod node->styled-text* "fenced_code_block" [ctx ^TSNode node]
   (conj
-   (into []
-         (map #(node->styled-text* % rope style start-byte end-byte))
-         (named-node-children node))
+   (style-children ctx node)
    "\n"))
 
-(defmethod node->styled-text* "list_item" [^TSNode node rope  style  start-byte end-byte]
-  (conj
-   (into []
-         (map #(node->styled-text* % rope style start-byte end-byte))
-         (named-node-children node))
-   ""))
+(defmethod node->styled-text* "code_fence_content" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
+                             #:text-style
+                             {:font-families ["Menlo"]}])
+        ctx (assoc ctx :style style)]
+    (into []
+          (map #(node->styled-text* ctx %))
+          (named-node-children node)))
+  )
 
-(defmethod node->styled-text* "list_marker" [^TSNode node rope  style  start-byte end-byte]
+(defmethod node->styled-text* "tight_list" [ctx ^TSNode node]
+  (conj
+   (style-children ctx node)
+   "\n"))
+
+(defmethod node->styled-text* "loose_list" [ctx ^TSNode node]
+  (conj
+   (style-children node)
+   "\n"))
+
+(defmethod node->styled-text* "list_item" [ctx ^TSNode node]
+  (style-children ctx node))
+
+(defmethod node->styled-text* "list_marker" [ctx ^TSNode node]
   {:text " • "
-   :style style
+   :style (:style ctx)
    :node {:type (.getType node)}})
 
-(defmethod node->styled-text* "document" [^TSNode node rope style start-byte end-byte]
-  (into []
-         (map #(node->styled-text* % rope style start-byte end-byte))
-         (named-node-children node))
-   )
+(defmethod node->styled-text* "document" [ctx ^TSNode node]
+  (style-children ctx node))
 
-(defmethod node->styled-text* "text" [^TSNode node rope style start-byte end-byte]
+(defmethod node->styled-text* "text" [ctx ^TSNode node]
   {:text 
-   ;; not that sure about this trimming here.
-   (str/triml
-          (util/rope->str rope
-                          (max start-byte (.getStartByte node))
-                          (min end-byte (.getEndByte node))))
-   :style style})
+   (util/rope->str (:rope ctx)
+                   (max (:start-byte ctx) (.getStartByte node))
+                   (min (:end-byte ctx) (.getEndByte node)))
+   :style (:style ctx)})
 
 
-(defmethod node->styled-text* "soft_line_break" [^TSNode node rope style start-byte end-byte]
+(defmethod node->styled-text* "soft_line_break" [ctx ^TSNode node]
   (with-meta
    {:text "\n"
-    :style style}
+    :style (:style ctx)}
    {:node {:type (.getType node)}}))
 
-(defmethod node->styled-text* "link" [^TSNode node rope style start-byte end-byte]
-  (let [style (merge-styles [style
+(defmethod node->styled-text* "link" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
                              #:text-style
-                             {:color [0.0 0.36470588235294116 0.8156862745098039]}])]
+                             {:color [0.0 0.36470588235294116 0.8156862745098039]}])
+        ctx (assoc ctx :style style)
+        rope (:rope ctx)]
     
     (with-meta
-     (into []
-           (map #(node->styled-text* % rope style start-byte end-byte))
-           (named-node-children node))
+      (style-children ctx node)
+      {:node
+       (into {:type (.getType node)}
+             (keep (fn [i]
+                     (let [child (.getNamedChild node i)]
+                       (case (.getType child)
+                         "link_text" [:text (util/node->str rope child)]
+                         "link_destination" [:destination (util/node->str rope child)]
+                         nil))))
+             (range (.getNamedChildCount node)))})))
+
+(defmethod node->styled-text* "uri_autolink" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
+                             #:text-style
+                             {:color [0.0 0.36470588235294116 0.8156862745098039]}])
+        ctx (assoc ctx :style style)
+        rope (:rope ctx)]
+    
+    (with-meta
+      (style-children ctx node)
      {:node
       (into {:type (.getType node)}
             (keep (fn [i]
@@ -582,19 +639,17 @@
                        nil))))
             (range (.getNamedChildCount node)))})))
 
-(defmethod node->styled-text* "link_text" [^TSNode node rope style start-byte end-byte]
-  (with-meta (into []
-                   (map #(node->styled-text* % rope style start-byte end-byte))
-                   (named-node-children node))
-             {:node {:type (.getType node)}})
-    
-    )
+(defmethod node->styled-text* "link_text" [ctx ^TSNode node]
+  (with-meta (style-children ctx node)
+    {:node {:type (.getType node)}}))
 
 
 
-(defmethod node->styled-text* "link_destination" [^TSNode node rope style start-byte end-byte])
+(defmethod node->styled-text* "link_destination" [ctx ^TSNode node]
+  ;; this space has been intentionally left blank.
+  )
 
-(defmethod node->styled-text* "atx_heading" [^TSNode node rope style start-byte end-byte]
+(defmethod node->styled-text* "atx_heading" [ctx ^TSNode node]
   
   (let [htype (.getNamedChild node 0)
         hnum (case (.getType htype)
@@ -604,42 +659,46 @@
                "atx_h4_marker" 4
                "atx_h5_marker" 5
                "atx_h6_marker" 6)
-        style (merge-styles [style
+        base-style (:style ctx)
+        style (merge-styles [base-style
                              #:text-style
                              {
-                             :font-size 32
-                             :font-style #:font-style{:weight :bold}
-                             }
-                             ])]
-    
-    [(node->styled-text* (.getNamedChild node 1) rope style start-byte end-byte)
-     {:text "\n"
-      :style style}]))
+                              :font-size 32
+                              :font-style #:font-style{:weight :bold}
+                              }
+                             ])
+        ctx (assoc ctx
+                   :style style
+                   :start-byte (+ 2 (.getStartByte node)))
+        child (.getNamedChild node 1)]
+    (when (not (.isNull child))
+      [(node->styled-text* ctx child)
+       {:text "\n\n"
+        :style base-style}])))
+
+
+
+(defmethod node->styled-text* "strong_emphasis" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
+                             #:text-style
+                             {:font-style #:font-style{:weight :bold}}])
+        ctx (assoc ctx :style style)]
+    (style-children ctx node)))
 
 (def my-base-style #:text-style
-     {:font-families ["Menlo"]
-     :font-size 12
-     :height 1.2
-     :height-override true})
+  {:font-families ["Menlo"]
+   :font-size 12
+   :height 1.2
+   :height-override true})
 
-(defmethod node->styled-text* "atx_h1_marker" [^TSNode node rope style start-byte end-byte]
-  
-  nil
-  #_(let [style (merge-styles [style
-                             #:text-style
-                             {:font-size 32}])]
-    (into []
-          (map #(node->styled-text* % rope style start-byte end-byte))
-          (named-node-children node))))
+(defmethod node->styled-text* "atx_h1_marker" [ctx ^TSNode node]
+  nil)
 
-(defmethod node->styled-text* "heading_content" [^TSNode node rope style start-byte end-byte]
+(defmethod node->styled-text* "heading_content" [ctx ^TSNode node]
+  (style-children ctx node))
 
-  (into []
-        (map #(node->styled-text* % rope style start-byte end-byte))
-        (named-node-children node)))
-
-(defn node->styled-text [^TSNode node rope style start-byte end-byte]
-  (node->styled-text* node rope style start-byte end-byte))
+(defn node->styled-text [ctx ^TSNode node]
+  (node->styled-text* ctx node))
 
 #_(do
   (ns-unmap *ns* 'node->styled-text)
@@ -684,8 +743,8 @@
 
         base-style (:base-style editor)
         
-
-        para (para/paragraph p nil {:paragraph-style/text-style (:base-style editor)})
+        ;; p (node->styled-text (.getRootNode tree) rope base-style start-byte-offset end-byte-offset)
+        para (para/paragraph (.toString rope) nil {:paragraph-style/text-style (:base-style editor)})
         para (assoc para
                     :char-offset char-offset
                     :start-byte-offset start-byte-offset
@@ -1072,6 +1131,13 @@
                  :body body})
                body)
 
+        body (ui/on-clipboard-paste
+              (fn [s]
+                [[::editor-paste {:editor editor
+                                  :$editor $editor
+                                  :s s}]])
+              body)
+
         body (ui/wrap-on
               :mouse-down
               (fn [handler mpos]
@@ -1083,26 +1149,26 @@
         ]
     (ui/vertical-layout
      ;;(ui/label (pr-str (:cursor editor)))
-     body
-     (when-let [tree (:tree editor)]
+     [body
+      (ui/spacer 0 50)]
+
+     #_(when-let [tree (:tree editor)]
        (para/paragraph
         (-> tree (.getRootNode) str)
 
-       400))
+        400))
      
      (when-let [tree (:tree editor)]
        (try
-         
-         (para/paragraph
-          (node->styled-text (-> tree .getRootNode)
-                             (:rope editor)
-                             (:base-style editor)
-                             0 (.numBytes (:rope editor)))
-          nil
-          (:base-style editor)
-          )
+         (para/paragraph (node->styled-text
+                          {:rope (:rope editor)
+                           :style (:base-style editor)
+                           :start-byte 0
+                           :end-byte (.numBytes (:rope editor))}
+                          (-> tree .getRootNode)))
          (catch Exception e
-;;           (tap> e)
+           (prn e)
+           ;;           (tap> e)
            nil))))))
 
 
