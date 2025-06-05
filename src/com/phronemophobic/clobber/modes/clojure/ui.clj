@@ -1485,7 +1485,7 @@
        :gap 4
        :align :center})
      (when (:structure? editor)
-       [(ui/spacer 100 200)
+       [(ui/spacer 100 150)
         (ui/vertical-layout
          (ant/button {:text "make-fn"
                       :on-click (fn []
