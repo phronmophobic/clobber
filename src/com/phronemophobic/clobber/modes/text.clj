@@ -731,7 +731,7 @@
                    
                    history (if (> history-count 5)
                              (subvec history
-                                     (- history 5)
+                                     (- history-count 5)
                                      (count history))
                              history)]
                (assoc mark :history history))))))
