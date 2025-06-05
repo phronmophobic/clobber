@@ -127,6 +127,18 @@
           {:row row
            :column column})))))
 
+(defn count-grapheme-clusters
+  "Counts the number of grapheme clusters in s."
+  [^CharSequence s]
+  (let [bi (doto (BreakIterator/getCharacterInstance)
+             (.setText s)
+             (.first))]
+    (loop [cnt 0]
+      (let [end (.next bi)]
+        (if (not= end BreakIterator/DONE)
+          (recur (inc cnt) )
+          cnt)))))
+
 
 
 (defrecord StringReader [^String s]
