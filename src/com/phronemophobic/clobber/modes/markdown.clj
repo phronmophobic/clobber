@@ -32,7 +32,7 @@
    "C-j" #'editor-newline
    "RET" #'editor-newline
    
-   ;; "C-k" #'editor-paredit-kill
+   "C-k" #'text-mode/editor-kill-line
    "C-l" #'text-mode/editor-recenter-top-bottom
    "C-n" #'text-mode/editor-next-line
    "C-o" #'text-mode/editor-open-line

@@ -758,6 +758,40 @@
       (dissoc editor :select-cursor)
       (assoc editor :select-cursor (:cursor editor)))))
 
+(defn editor-kill-line [editor]
+  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+
+        char-index (loop [char-index cursor-char
+                          all-whitespace? true]
+                     (let [next-char (.following bi char-index)]
+                       (if (= -1 next-char)
+                         char-index
+                         (let [c (.charAt rope char-index)]
+                           (case c
+                             \newline (if all-whitespace?
+                                        next-char
+                                        char-index)
+                             \space (recur next-char
+                                           all-whitespace?)
+                             ;; else
+                             (recur next-char false))))))]
+    (if (= char-index cursor-char)
+      editor
+      (let [diff-string (-> (.subSequence rope cursor-char char-index )
+                            .toString)
+            num-bytes (alength (.getBytes diff-string "utf-8"))]
+        
+        (-> editor
+            (editor-append-clipboard (Rope/from diff-string))
+            (editor-snip cursor-byte (+ cursor-byte num-bytes)))))))
 
 (defn editor-kill-region [editor]
   (if-let [select-cursor (:select-cursor editor)]
