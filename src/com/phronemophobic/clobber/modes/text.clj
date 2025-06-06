@@ -300,7 +300,7 @@
              [char-index new-cursor-row new-cursor-column]
 
              (= \newline (.charAt rope char-index))
-             (recur (inc n)
+             (recur (dec n)
                     (.following bi char-index)
                     (inc new-cursor-row)
                     0)
@@ -417,7 +417,7 @@
                       tree))
 
          new-rope (.concat (.sliceBytes rope 0 cursor-byte)
-                           (.slice rope end-byte (.size rope)))
+                           (.sliceBytes rope end-byte (.numBytes rope)))
          
          reader (util/->RopeReader new-rope)
          new-tree (when parser
