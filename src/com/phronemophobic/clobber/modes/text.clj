@@ -1034,3 +1034,11 @@
                  editor)]
     editor))
 
+(defn make-editor
+  ([]
+   {:cursor {:byte 0
+             :char 0
+             :point 0
+             :row 0
+             :column 0}
+    :rope Rope/EMPTY}))

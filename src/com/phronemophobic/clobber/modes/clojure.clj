@@ -8,6 +8,7 @@
                            TSInputEdit
                            TSInputEncoding
                            TSTreeCursor
+                           TreeSitterClojure
                            TSParser
                            TSPoint
                            TSNode)
@@ -1685,3 +1686,15 @@
    "C-c C-)" #'paredit-forward-slurp-sexp
    "C-c }" #'paredit-forward-barf-sexp})
 
+(defn make-editor []
+  {:tree nil
+   :cursor {:byte 0
+            :char 0
+            :point 0
+            :row 0
+            :column 0}
+   :rope Rope/EMPTY
+   :language (TreeSitterClojure.)
+   :parser (doto (TSParser.)
+             (.setLanguage (TreeSitterClojure.)))
+   :buf (byte-array 4096)})
