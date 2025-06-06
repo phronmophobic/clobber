@@ -61,8 +61,8 @@
        :error? (.hasError node)
        :start-byte (.getStartByte node)
        :end-byte (.getEndByte node)
-       :start-point (.getStartPoint node)
-       :end-point (.getEndPoint node)
+       :start-point (d/datafy (.getStartPoint node))
+       :end-point (d/datafy (.getEndPoint node))
        :parent (.getParent node)}))
   TSPoint
   (datafy [^TSPoint point]
