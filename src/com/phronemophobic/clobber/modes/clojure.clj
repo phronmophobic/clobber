@@ -102,7 +102,7 @@
             target-byte (.getStartByte wrap-node)
             editor (text-mode/editor-goto-byte editor target-byte)
             editor (text-mode/editor-self-insert-command editor "(")]
-        (text-mode/editor-update-viewport editor))
+        editor)
       
       (text-mode/editor-self-insert-command editor "()"))))
 
@@ -195,11 +195,10 @@
                         :column (if (pos? (:row point-offset))
                                   cursor-column
                                   (dec cursor-column))}]
-        (text-mode/editor-update-viewport
-         (assoc editor
-                :tree new-tree
-                :rope new-rope
-                :cursor new-cursor)))
+        (assoc editor
+               :tree new-tree
+               :rope new-rope
+               :cursor new-cursor))
       
       editor)))
 
@@ -290,9 +289,8 @@
                         :point (+ cursor-point diff-points)
                         :row new-cursor-row
                         :column new-cursor-column}]
-        (text-mode/editor-update-viewport
-         (assoc editor
-                :cursor new-cursor))))))
+        (assoc editor
+               :cursor new-cursor)))))
 
 (defn editor-paredit-backward [editor]
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -321,9 +319,8 @@
                         :point (- cursor-point diff-points)
                         :row new-cursor-row
                         :column new-cursor-column}]
-        (text-mode/editor-update-viewport
-         (assoc editor
-                :cursor new-cursor))))))
+        (assoc editor
+               :cursor new-cursor)))))
 
 (defn editor-paredit-doublequote [editor]
   (let [^Rope rope (:rope editor)
@@ -682,16 +679,15 @@
 
                 reader (util/->RopeReader new-rope)
                 new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )]
-            (text-mode/editor-update-viewport
-             (assoc editor
-                    :tree new-tree
-                    :cursor {:byte prev-byte
-                             :char prev
-                             :point prev-point
-                             :row new-cursor-row
-                             :column new-cursor-column}
-                    :paragraph nil
-                    :rope new-rope))))))))
+            (assoc editor
+                   :tree new-tree
+                   :cursor {:byte prev-byte
+                            :char prev
+                            :point prev-point
+                            :row new-cursor-row
+                            :column new-cursor-column}
+                   :paragraph nil
+                   :rope new-rope)))))))
 
 ;; indentation
 ;; modeled after https://github.com/weavejester/cljfmt/blob/master/docs/INDENTS.md
