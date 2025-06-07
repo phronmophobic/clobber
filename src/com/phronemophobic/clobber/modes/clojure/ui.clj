@@ -1063,7 +1063,6 @@
    (assoc clojure-mode/key-bindings
           "C-x C-s" ::save-editor
           "C-x C-f" ::file-picker
-          "C-_" #'text-mode/editor-undo
           "C-g" #'editor-cancel
           "C-c t" ::tap-editor
           ;; "C-c C-v" ::editor-paste

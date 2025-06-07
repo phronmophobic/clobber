@@ -1675,7 +1675,10 @@
 
    "C-c )" #'paredit-forward-slurp-sexp
    "C-c C-)" #'paredit-forward-slurp-sexp
-   "C-c }" #'paredit-forward-barf-sexp})
+   "C-c }" #'paredit-forward-barf-sexp
+   "C-_" #'text-mode/editor-undo
+
+   ,})
 
 (defn make-editor []
   {:tree nil
