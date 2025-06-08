@@ -1100,7 +1100,8 @@
 
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
-                            focus]
+                            focus
+                            edit?]
                      :as this}]
   (let [body (editor-view {:editor editor
                            ;; hack, otherwise, $editor is slightly different
@@ -1147,8 +1148,6 @@
         ]
     (ui/vertical-layout
      ;;(ui/label (pr-str (:cursor editor)))
-     [body
-      (ui/spacer 0 50)]
 
      #_(when-let [tree (:tree editor)]
        (para/paragraph
@@ -1163,11 +1162,15 @@
                            :style (:base-style editor)
                            :start-byte 0
                            :end-byte (.numBytes (:rope editor))}
-                          (-> tree .getRootNode)))
+                          (-> tree .getRootNode))
+                         1000)
          (catch Exception e
            (prn e)
            ;;           (tap> e)
-           nil))))))
+           nil)))
+     (when edit?
+       [body
+        (ui/spacer 0 50)]))))
 
 
 
