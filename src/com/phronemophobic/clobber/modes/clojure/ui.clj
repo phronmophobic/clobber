@@ -930,24 +930,27 @@
                            y (transduce (map :y) max (-> rects first :y) (rest rects))
 
                            offset 4]
-                       (if viscous?
-                         (ui/translate (- (+ x 10) offset) (- y offset)
-                                       (let [inspector-extra (get extra [::inspector [line val]])]
-                                         (ui/vertical-layout
-                                          (viscous/inspector
-                                           {:obj val
-                                            :width (get inspector-extra :width 40)
-                                            :height (get inspector-extra :height 1)
-                                            :show-context? (get inspector-extra :show-context?)
-                                            :extra inspector-extra}))))
-                         (ui/translate (+ x 10) y 
-                                       (-> (make-editor)
-                                           (assoc :base-style base-style)
-                                           (text-mode/editor-self-insert-command
-                                            "=> ")
-                                           (text-mode/editor-self-insert-command
-                                            (pr-str @val))
-                                           (editor->paragraph)))))))))
+                       (if (-> val viscous/-unwrap meta :view)
+                         (ui/translate (+ x 10) y
+                                       (viscous/-unwrap val))
+                         (if viscous?
+                           (ui/translate (- (+ x 10) offset) (- y offset)
+                                         (let [inspector-extra (get extra [::inspector [line val]])]
+                                           (ui/vertical-layout
+                                            (viscous/inspector
+                                             {:obj val
+                                              :width (get inspector-extra :width 40)
+                                              :height (get inspector-extra :height 1)
+                                              :show-context? (get inspector-extra :show-context?)
+                                              :extra inspector-extra}))))
+                           (ui/translate (+ x 10) y 
+                                         (-> (make-editor)
+                                             (assoc :base-style base-style)
+                                             (text-mode/editor-self-insert-command
+                                              "=> ")
+                                             (text-mode/editor-self-insert-command
+                                              (pr-str @val))
+                                             (editor->paragraph))))))))))
           line-val)))
 
 
