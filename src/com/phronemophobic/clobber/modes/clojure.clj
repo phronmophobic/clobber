@@ -12,9 +12,10 @@
                            TSParser
                            TSPoint
                            TSNode)
-           com.ibm.icu.text.BreakIterator))
+           com.ibm.icu.text.BreakIterator
+           io.lacuna.bifurcan.Rope))
 
-(import 'io.lacuna.bifurcan.Rope)
+
 
 (def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit"})
 

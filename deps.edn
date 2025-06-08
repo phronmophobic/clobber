@@ -3,13 +3,14 @@
         io.github.bonede/tree-sitter {:mvn/version "0.24.5"}
         io.github.bonede/tree-sitter-clojure {:mvn/version "0.0.12a"}
         io.github.bonede/tree-sitter-json {:mvn/version "0.23.0"}
-        io.github.IGJoshua/ropes {;;:git/sha "85ebbfced8c9e1fcd6e09c152dcc2bd4b9a72a86"
-                                  :local/root "../ropes"
-                                  }
+        io.github.bonede/tree-sitter-markdown {:mvn/version "0.7.1a"}
+        io.github.IGJoshua/ropes {:git/sha "de6efb90dbabb290878ca498919ce40646f6811b"}
         org.clojure/core.async {:mvn/version "1.8.741"}
         org.clojars.quoll/tiara {:mvn/version "0.3.7"}
         clope/clope {:mvn/version "1"}
-        io.lacuna/bifurcan {:mvn/version "0.2.0-rc1"}
+        io.lacuna/bifurcan {:git/url "https://github.com/phronmophobic/bifurcan"
+                            :git/sha "c389a712269d9f89af66dc1f759559744f58ff6a"}
+
         dev.weavejester/cljfmt {:mvn/version "0.13.1"}
 
         com.ibm.icu/icu4j {:mvn/version "68.1"}

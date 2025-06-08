@@ -10,7 +10,6 @@
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
-            [ropes.core :as ropes]
             [com.phronemophobic.viscous :as viscous]
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
@@ -38,9 +37,8 @@
            com.ibm.icu.text.BreakIterator
            clojure.lang.LineNumberingPushbackReader
            java.io.File
-           java.io.StringReader))
-
-(import 'io.lacuna.bifurcan.Rope)
+           java.io.StringReader
+           io.lacuna.bifurcan.Rope))
 
 (defn ^:private ns-sym->resource-path
   ([ns-sym]

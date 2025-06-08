@@ -9,7 +9,6 @@
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
-            [ropes.core :as ropes]
             [com.phronemophobic.viscous :as viscous]
             [clojure.tools.analyzer.jvm :as ana.jvm])
   (:import (org.treesitter TSLanguage
@@ -33,11 +32,13 @@
            ;; java.text.BreakIterator
            java.nio.ByteBuffer
            java.util.regex.Pattern
+           io.lacuna.bifurcan.Rope
            ))
 
-(require 'virgil)
-(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
-(import 'io.lacuna.bifurcan.Rope)
+(comment
+  (require 'virgil)
+  (defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
+  ,)
 
 (extend-protocol p/Datafiable
   TSTree

@@ -5,9 +5,8 @@
                            TSInputEdit
                            TSInputEncoding
                            TSParser
-                           TSPoint)))
-
-(import 'io.lacuna.bifurcan.Rope)
+                           TSPoint)
+           io.lacuna.bifurcan.Rope))
 
 (defn editor-goto-byte
   "Moves the :cursor of editor to `byte-index`. Does not change anything else."

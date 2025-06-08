@@ -12,9 +12,8 @@
                            TSParser
                            TSPoint
                            TSNode)
-           com.ibm.icu.text.BreakIterator))
-
-(import 'io.lacuna.bifurcan.Rope)
+           com.ibm.icu.text.BreakIterator
+           io.lacuna.bifurcan.Rope))
 
 
 (defn editor-newline [editor]
