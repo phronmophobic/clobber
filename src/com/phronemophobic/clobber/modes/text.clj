@@ -7,7 +7,6 @@
                            TSParser
                            TSPoint)))
 
-#_(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 (import 'io.lacuna.bifurcan.Rope)
 
 (defn editor-goto-byte

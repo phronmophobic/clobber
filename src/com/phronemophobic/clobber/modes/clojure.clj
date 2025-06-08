@@ -14,7 +14,6 @@
                            TSNode)
            com.ibm.icu.text.BreakIterator))
 
-#_(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 (import 'io.lacuna.bifurcan.Rope)
 
 (def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit"})

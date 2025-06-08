@@ -40,7 +40,6 @@
            java.io.File
            java.io.StringReader))
 
-#_(defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
 (import 'io.lacuna.bifurcan.Rope)
 
 (defn ^:private ns-sym->resource-path
