@@ -24,6 +24,7 @@ The connection between a lisp developer's program and dev tools is critical. How
 - [-] markdown mode
 - [ ] org mode
 - [ ] Files with long lines
+- [ ] Add generative tests
 - [X] long files
 
 ## License
