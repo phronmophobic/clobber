@@ -1035,6 +1035,41 @@
 (defn editor-newline [editor]
   (editor-self-insert-command editor "\n"))
 
+
+
+(def key-bindings
+  {"C-a" editor-move-beginning-of-line
+   "C-d" editor-delete-char
+   "C-e" editor-move-end-of-line
+   "C-f" editor-forward-char
+   "C-b" editor-backward-char
+   "C-j" editor-newline
+   "RET" editor-newline
+   "C-k" editor-kill-line
+   "C-l" editor-recenter-top-bottom
+   "C-n" editor-next-line
+   "C-o" editor-open-line
+   "C-p" editor-previous-line
+   "C-v" editor-scroll-down
+   "M-v" editor-scroll-up
+   "M-<" editor-beginning-of-buffer
+   "M->" editor-end-of-buffer
+   "DEL" editor-delete-backward-char
+   "<right>" editor-forward-char
+   "<up>" editor-previous-line
+   "<down>" editor-next-line
+   "<left>" editor-backward-char
+   "C-y" editor-yank
+   "C-SPC" editor-set-mark
+   "C-w" editor-kill-region
+   "M-w" editor-save-region
+   "M-SPC" editor-single-space
+   "M-\\" editor-delete-horizontal-space
+   "C-_" editor-undo
+
+   ,})
+
+
 (defn make-editor
   ([]
    {:cursor {:byte 0
