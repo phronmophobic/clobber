@@ -661,7 +661,7 @@
         style (merge-styles [base-style
                              #:text-style
                              {
-                              :font-size 32
+                              :font-size 60
                               :font-style #:font-style{:weight :bold}
                               }
                              ])
