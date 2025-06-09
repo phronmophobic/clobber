@@ -16,9 +16,6 @@
            io.lacuna.bifurcan.Rope))
 
 
-(defn editor-newline [editor]
-  (text-mode/editor-self-insert-command editor "\n"))
-
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
 
@@ -28,8 +25,8 @@
    "C-f" #'text-mode/editor-forward-char
    "C-b" #'text-mode/editor-backward-char
 
-   "C-j" #'editor-newline
-   "RET" #'editor-newline
+   "C-j" #'text-mode/editor-newline
+   "RET" #'text-mode/editor-newline
    
    "C-k" #'text-mode/editor-kill-line
    "C-l" #'text-mode/editor-recenter-top-bottom

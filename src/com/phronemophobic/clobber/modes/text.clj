@@ -1032,6 +1032,9 @@
                  editor)]
     editor))
 
+(defn editor-newline [editor]
+  (editor-self-insert-command editor "\n"))
+
 (defn make-editor
   ([]
    {:cursor {:byte 0
