@@ -153,6 +153,23 @@
                (editor-upkeep editor
                               #(text-mode/editor-self-insert-command % s )))))
 
+(defeffect ::editor-copy [{:keys [$editor editor]}]
+  (when-let [select-cursor (:select-cursor editor)]
+    (let [cursor (:cursor editor)
+          start-byte (min (:byte select-cursor)
+                          (:byte cursor))
+          end-byte (max (:byte select-cursor)
+                        (:byte cursor))
+          
+          ^Rope rope (:rope editor) 
+          selected-text (-> (.sliceBytes rope start-byte end-byte)
+                            .toString)]
+      (dispatch! :clipboard-copy selected-text)
+      (dispatch! :update $editor
+                 (fn [editor]
+                   (editor-upkeep editor
+                                  #(dissoc % :select-cursor)))))))
+
 
 
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
@@ -1484,12 +1501,19 @@
                         intents)))
               body)
 
-        body (ui/on-clipboard-paste
-              (fn [s]
-                [[::editor-paste {:editor editor
-                                  :$editor $editor
-                                  :s s}]])
-              body)]
+        body (if focused?
+               (ui/on-clipboard-copy
+                (fn []
+                  [[::editor-copy {:editor editor
+                                   :$editor $editor}]])
+                (ui/on-clipboard-paste
+                 (fn [s]
+                   [[::editor-paste {:editor editor
+                                     :$editor $editor
+                                     :s s}]])
+                 body))
+               ;; else
+               body)]
     (ui/vertical-layout
      ;;(ui/label (pr-str (:cursor editor)))
      #_(ui/flex-layout
