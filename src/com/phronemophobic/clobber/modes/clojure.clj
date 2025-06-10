@@ -326,7 +326,7 @@
         closing-quote?
         (when (and (< cursor-char (.length rope))
                    (= \" (.charAt rope cursor-char)))
-          (let [root-node (.getRootNode (:tree editor))
+          (let [root-node (.getRootNode ^TSTree (:tree editor))
                 cursor (TSTreeCursor. root-node)
                 
                 cursor-byte (-> editor :cursor :byte)]
@@ -1224,7 +1224,7 @@
                                       (+ start-byte diff-bytes))]
     editor))
 
-(defn ^:private do-slurp* [editor coll-node slurp-node]
+(defn ^:private do-slurp* [editor ^TSNode coll-node ^TSNode slurp-node]
   (let [coll-end-byte (.getEndByte coll-node)
         slurp-end-byte (.getEndByte slurp-node)
         end-coll-str (case (.getType coll-node)
@@ -1239,12 +1239,13 @@
 (defn paredit-forward-slurp-sexp [editor]
   ;; if current parent-coll can't slurp
   ;; then slurp the parent of that node.
-  (let [root-node (.getRootNode (:tree editor))
+  (let [root-node (.getRootNode ^TSTree (:tree editor))
         cursor (TSTreeCursor. root-node)
         
         cursor-byte (-> editor :cursor :byte)
 
         ;; find enclosing node
+        ^TSTreeCursor
         cursor
         (when (util/skip-to-byte-offset cursor cursor-byte)
           (loop [match-cursor nil]
@@ -1284,12 +1285,13 @@
       editor)))
 
 (defn paredit-forward-barf-sexp [editor]
-  (let [root-node (.getRootNode (:tree editor))
+  (let [root-node (.getRootNode ^TSTree (:tree editor))
         cursor (TSTreeCursor. root-node)
         
         cursor-byte (-> editor :cursor :byte)
         
         ;; find enclosing node
+        ^TSNode
         node
         (when (util/skip-to-byte-offset cursor cursor-byte)
           (loop [match nil]
@@ -1348,11 +1350,12 @@
   [editor]
   (let [cursor-byte (-> editor :cursor :byte)
         cursor-row (-> editor :cursor :row)
-        root-node (.getRootNode (:tree editor))
+        root-node (.getRootNode ^TSTree (:tree editor))
         cursor (TSTreeCursor. root-node)
 
         ;; find enclosing coll if it
         ;; ends on the same line
+        ^TSNode
         parent-coll-node
         (transduce
          (comp (filter (fn [^TSNode node]
@@ -1463,8 +1466,8 @@
                                           offset))
                                       (editor-toggle-comment-line))
                       offset (+ offset
-                                (- (.numBytes (:rope next-editor))
-                                   (.numBytes (:rope editor))))]
+                                (- (.numBytes ^Rope (:rope next-editor))
+                                   (.numBytes ^Rope (:rope editor))))]
                   (recur next-editor
                          offset
                          (next comment-starts)))
@@ -1544,13 +1547,13 @@
   (let [
         cursor-byte (-> editor :cursor :byte)
         cursor-row (-> editor :cursor :row)
-        root-node (.getRootNode (:tree editor))
+        root-node (.getRootNode ^TSTree (:tree editor))
         cursor (TSTreeCursor. root-node)
         
         ;; need to find first node on the line
         ;; also need to find enclosing coll
         ;;      that end on the same line
-        {:keys [enclosing-comment-node
+        {:keys [^TSNode enclosing-comment-node
                 line-node]}
         (transduce
          (comp (filter (fn [^TSNode node]

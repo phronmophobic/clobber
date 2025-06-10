@@ -198,7 +198,7 @@
                    source-path
                    ;; filename
                    source-name]
-                  (when-let [f (:file editor)]
+                  (when-let [^File f (:file editor)]
                     [(ns-sym->resource-path eval-ns-name (file-ext f))
                      (.getName f)])
                   
@@ -330,13 +330,13 @@
                         :height 1.2
                         :height-override true})
 
-        current-folder (get extra :current-folder folder)
+        ^File current-folder (get extra :current-folder folder)
         
         offset (get extra :offset 0)
         search-str (get extra :search-str "")
         fs (into 
             []
-            (comp (filter (fn [f]
+            (comp (filter (fn [^File f]
                             (str/includes? (.getName f)
                                            search-str)))
                   (drop offset))
@@ -347,7 +347,7 @@
              search-str
              " | "]
             (comp (map-indexed 
-                   (fn [i f]
+                   (fn [i ^File f]
                      (let [style (if (zero? i)
                                    (assoc base-style 
                                           :text-style/font-style
@@ -387,7 +387,7 @@
                (cond
                  
                  (= s :enter)
-                 (when-let [f (first fs)]
+                 (when-let [^File f (first fs)]
                    (if (.isFile f)
                      [[::select-file {:file f}]]
                      [[:set $current-folder f]
@@ -430,7 +430,7 @@
   (future
     (when-let [file (:file editor)]
       (let [source (slurp file)
-            previous-source (.toString (:rope editor))]
+            previous-source (.toString ^Rope (:rope editor))]
         (dispatch! :set $editor
           (editor-upkeep editor
           #(text-mode/editor-set-string % source))))))
@@ -446,6 +446,7 @@
             cursor-byte (:byte cursor)
             
             ;; find parent coll
+            ^TSNode
             parent-coll
             (transduce
              (comp (take-while (fn [^TSNode node]
@@ -1041,7 +1042,7 @@
                                                  
                                                  :else (handler key scancode action mods)))))
                                          
-                                         (file-picker {:folder (.getParentFile (:file editor))
+                                         (file-picker {:folder (.getParentFile ^File (:file editor))
                                                        :extra (:file-picker status)
                                                        :base-style (:base-style editor)
                                                        :focused? (= [$editor :file-picker] focus)}))))
@@ -1909,13 +1910,13 @@
   ;; last-change
   (let [editor (dispatch! :get $editor)
         last-change (:last-change editor)]
-    (when-let [file (:file editor)]
-      (when-let [last-file-load (:last-file-load editor)]
+    (when-let [^File file (:file editor)]
+      (when-let [^Instant last-file-load (:last-file-load editor)]
         (let [last-save (:last-save editor)
               we-just-saved? (and last-save
                                   (within-last-5-seconds? last-save)
                                   (= (.length file)
-                                     (.numBytes (:rope editor))))]
+                                     (.numBytes ^Rope (:rope editor))))]
           (when (and (not we-just-saved?)
                      (or (not last-change)
                          (= last-file-load last-change)
@@ -1955,7 +1956,7 @@
                              editor))))))))))
 
 (defeffect ::auto-reload-file [{:keys [editor $editor]}]
-  (when-let [file (:file editor)]
+  (when-let [^File file (:file editor)]
     (when-let [unwatch (::auto-reload-unwatch editor)]
       (unwatch))
     (let [;; keep this as an optional dependency

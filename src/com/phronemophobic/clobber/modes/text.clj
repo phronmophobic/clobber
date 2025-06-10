@@ -749,7 +749,7 @@
               {:clips clips}))))
 
 (defn editor-yank [editor]
-  (let [rope (-> editor :clipboard :clips peek)]
+  (let [^Rope rope (-> editor :clipboard :clips peek)]
     (if rope
       ;; todo: be smarter about this
       ;; converting from rope to string is unnecessary
