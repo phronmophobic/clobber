@@ -171,6 +171,58 @@
                                   #(dissoc % :select-cursor)))))))
 
 
+(defeffect ::editor-eval-last-sexp [{:keys [editor $editor]}]
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
+        node (util/previous-named-child-for-byte tree cursor-byte)]
+    (when node
+      (let [eval-ns (:eval-ns editor)
+            eval-ns-name (ns-name eval-ns)
+            line-number (-> node
+                            .getEndPoint
+                            .getRow)
+            
+            [;; path relative to class-path  
+             source-path
+             ;; filename
+             source-name]
+            (when-let [^File f (:file editor)]
+              [(ns-sym->resource-path eval-ns-name (file-ext f))
+               (.getName f)])
+            
+            ;; tree-sitter line numbers are 0 indexed
+            ;; these source line numbers are 1 indexed
+            ;; we are adding a line for the ns form
+            rdr (doto (LineNumberingPushbackReader.
+                       (StringReader. 
+                        (if (pos? line-number)
+                          (str (pr-str
+                                `(ns ~eval-ns-name))
+                               "\n"
+                               (util/node->str rope node))
+                          ;; else
+                          (util/node->str rope node))))
+                  (.setLineNumber line-number))
+            
+            val (clojure.lang.Compiler/load rdr source-path source-name)
+            
+            temp-view (ui/translate 0 -4
+                                    (viscous/inspector
+                                     {:obj (viscous/wrap val)
+                                      :width 40
+                                      :height 1
+                                      :show-context? false}))]
+        (dispatch! :update $editor
+                   update :line-val
+                   (fn [m]
+                     (let [line-val (get m rope)]
+                       {rope (assoc line-val line-number (viscous/wrap val))})))
+        (dispatch! ::temp-status {:$editor $editor
+                                  :msg temp-view})))))
 
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
@@ -237,6 +289,29 @@
                                         :msg "Exception!"})
               (prn e))))))))
 
+(defeffect ::load-buffer [{:keys [editor $editor]}]
+  (future
+    (let [eval-ns (:eval-ns editor)
+          eval-ns-name (ns-name eval-ns)
+          
+          [;; path relative to class-path  
+           source-path
+           ;; filename
+           source-name] (when-let [^File f (:file editor)]
+                          [(ns-sym->resource-path eval-ns-name (file-ext f))
+                           (.getName f)])
+          
+          
+          rdr (LineNumberingPushbackReader.
+               (StringReader. (-> editor :rope .toString)))]
+      (try
+        (clojure.lang.Compiler/load rdr source-path source-name)
+        (dispatch! ::temp-status {:$editor $editor
+                                  :msg "buffer loaded."})
+        (catch Exception e
+          (dispatch! ::temp-status {:$editor $editor
+                                    :msg "Exception!"})
+          (prn e))))))
 
 (def special-keys {"DEL" :backspace
                    "RET" :enter
@@ -1104,8 +1179,10 @@
           "C-x C-f" ::file-picker
           "C-g" #'editor-cancel
           "C-c t" ::tap-editor
+          "C-c C-k" ::load-buffer
           ;; "C-c C-v" ::editor-paste
           "C-M-x" ::editor-eval-top-form
+          "C-x C-e" ::editor-eval-last-sexp
           "C-s" #'init-search-forward)))
 
 (defeffect ::finish-search-forward [{:keys [$editor]}]
