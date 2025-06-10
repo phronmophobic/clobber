@@ -346,13 +346,18 @@
               :style (assoc base-style :text-style/color [0 0 0.843])}
              search-str
              " | "]
-            (comp (map (fn [f]
-                         
-                         (if (.isFile f)
-                           (.getName f)
-                           {:text (str (.getName f) "/")
-                            :style (assoc base-style :text-style/color [0.909 0.2784 0.3411  ])}
-                           )))
+            (comp (map-indexed 
+                   (fn [i f]
+                     (let [style (if (zero? i)
+                                   (assoc base-style 
+                                          :text-style/font-style
+                                          {:font-style/weight :bold})
+                                   base-style)]
+                       (if (.isFile f)
+                         {:style style
+                          :text (.getName f)}
+                         {:text (str (.getName f) "/")
+                          :style (assoc style :text-style/color [0.909 0.2784 0.3411  ])}))))
                   (interpose " | "))
             fs)
 
