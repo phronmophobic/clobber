@@ -194,6 +194,47 @@
             :tree new-tree)))
 )
 
+(defn editor-goto-row-col [editor target-row target-column]
+  (let [^Rope rope (:rope editor)
+        
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+        
+        ;; find newline
+        [row char-index]
+        (loop [char-index 0
+               lines 0]
+          (if (= lines target-row)
+            [lines char-index]
+            
+            (let [next-char (.following bi char-index)]
+              (cond
+                ;; last line. go to last line char
+                (= -1 next-char) [lines  char-index]
+                (= \newline (.charAt rope char-index)) (recur next-char (inc lines))
+                :else (recur next-char lines)))))
+        
+        ;; keep going until target column
+        [column char-index]
+        (loop [char-index char-index
+               column 0]
+          (let [next-char (.following bi char-index)]
+            (cond
+              
+              (= -1 next-char) [column char-index]
+              (= \newline (.charAt rope char-index)) [column char-index]
+              (= column target-column) [column char-index]
+              :else (recur next-char (inc column)))))]
+    (let [diff-string (-> (.subSequence rope 0 char-index)
+                          .toString)
+          num-bytes (alength (.getBytes diff-string "utf-8"))]
+      (assoc editor
+             :cursor {:byte num-bytes
+                      :char char-index
+                      :point (util/num-points diff-string)
+                      :row row
+                      :column column}))))
+
 (defn editor-set-string [editor s]
   (let [rope (Rope/from s)
         ^TSParser

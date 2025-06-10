@@ -36,6 +36,8 @@
            java.util.regex.Pattern
            com.ibm.icu.text.BreakIterator
            clojure.lang.LineNumberingPushbackReader
+           java.time.Duration
+           java.time.Instant
            java.io.File
            java.io.StringReader
            io.lacuna.bifurcan.Rope))
@@ -75,6 +77,10 @@
                      new-editor)
         new-editor (if rope-changed?
                      (text-mode/editor-append-history new-editor editor)
+                     new-editor)
+        new-editor (if rope-changed?
+                     (-> new-editor
+                         (assoc :last-change (java.time.Instant/now)))
                      new-editor)
 
         ;; this could be improved
@@ -281,10 +287,15 @@
   (future
     (when-let [file (:file editor)]
       (let [^Rope rope (:rope editor)
-            source (.toString rope)]
+            source (.toString rope)
+            now (java.time.Instant/now)]
         (spit file source)
-        (dispatch! ::temp-status {:$editor $editor
-                                  :msg "saved."}))))
+        (dispatch! :update $editor 
+                   assoc
+                   :last-file-load now
+                   :last-save now))
+      (dispatch! ::temp-status {:$editor $editor
+                                :msg "saved."})))
   nil)
 
 (defeffect ::tap-editor [{:keys [editor $editor]}]
@@ -567,13 +578,15 @@
       (symbol ns-str))))
 
 (defn make-editor-from-file [f]
-  (let [source (slurp f)
+  (let [last-file-load (java.time.Instant/now)
+        source (slurp f)
         eval-ns (when-let [ns-sym (guess-ns source)]
                   (create-ns ns-sym))]
-    (make-editor 
-     (cond-> {:file f
-              :source source}
-       eval-ns (assoc :eval-ns eval-ns)))))
+    (-> (make-editor 
+         (cond-> {:file f
+                  :source source}
+           eval-ns (assoc :eval-ns eval-ns)))
+        (assoc :last-file-load last-file-load))))
 
 (defn make-editor-from-ns [ns]
   (let [eval-ns (the-ns ns)
@@ -583,12 +596,15 @@
         source (slurp resource)
         file (when (= "file" (.getProtocol resource))
                (io/as-file resource))
+        last-file-load (when file
+                         (java.time.Instant/now))
         source (when resource
                  (slurp resource))]
-    (make-editor 
-     (cond-> {:eval-ns eval-ns}
-       file (assoc :file file)
-       source (assoc :source source)))))
+    (cond-> (make-editor 
+             (cond-> {:eval-ns eval-ns}
+               file (assoc :file file)
+               source (assoc :source source)))
+      last-file-load (assoc :last-file-load last-file-load))))
 
 
 
@@ -1851,3 +1867,86 @@
     0 nil
     1 (tap> (first args))
     2 (tap> (vec args))))
+
+(defn ^:private within-last-5-seconds? [instant]
+  (let [now (Instant/now)
+        duration (Duration/between instant now)]
+    (and (not (.isNegative duration))
+         (<= (.getSeconds duration) 5))))
+
+
+(defn ^:private file-changed [dispatch! $editor]
+  ;; only reload if last-file-load is after
+  ;; last-change
+  (let [editor (dispatch! :get $editor)
+        last-change (:last-change editor)]
+    (when-let [file (:file editor)]
+      (when-let [last-file-load (:last-file-load editor)]
+        (let [last-save (:last-save editor)
+              we-just-saved? (and last-save
+                                  (within-last-5-seconds? last-save)
+                                  (= (.length file)
+                                     (.numBytes (:rope editor))))]
+          (when (and (not we-just-saved?)
+                     (or (not last-change)
+                         (= last-file-load last-change)
+                         (.isAfter last-file-load last-change)))
+            (let [update-time (java.time.Instant/now)
+                  source (slurp file)]
+              (dispatch! ::temp-status {:$editor $editor
+                                        :msg "reverting..."})
+              (dispatch! :update
+                         $editor
+                         (fn [editor]
+                           (let [old-cursor (:cursor editor)
+                                 
+                                 editor (-> editor
+                                            (assoc :rope Rope/EMPTY)
+                                            (assoc :cursor {:byte 0
+                                                            :char 0
+                                                            :point 0
+                                                            :row 0
+                                                            :column 0})
+                                            (text-mode/editor-self-insert-command source)
+                                            (assoc :last-file-load update-time
+                                                   :last-change update-time))
+                                 
+                                 end-cursor (:cursor editor)
+                                 editor (if (or (< (:row old-cursor)
+                                                   (:row end-cursor))
+                                                (and (= (:row old-cursor)
+                                                        (:row end-cursor))
+                                                     (<= (:column old-cursor)
+                                                         (:column end-cursor))))
+                                          (text-mode/editor-goto-row-col editor
+                                                                         (:row old-cursor)
+                                                                         (:column old-cursor))
+                                          editor)
+                                 editor (text-mode/editor-update-viewport editor)]
+                             editor))))))))))
+
+(defeffect ::auto-reload-file [{:keys [editor $editor]}]
+  (when-let [file (:file editor)]
+    (when-let [unwatch (::auto-reload-unwatch editor)]
+      (unwatch))
+    (let [;; keep this as an optional dependency
+          watch @(requiring-resolve 'nextjournal.beholder/watch)
+          stop @(requiring-resolve 'nextjournal.beholder/stop)
+          
+          path (.getCanonicalPath file)
+          watch-fn (fn [{:keys [path type] :as m}]
+                     (when (= :modify type)
+                       (file-changed dispatch! $editor)))
+          watcher (watch watch-fn path)
+          unwatch (fn []
+                    (stop watcher))]
+      (dispatch! :update $editor assoc ::auto-reload-unwatch unwatch))))
+
+(defeffect ::auto-reload-file-unwatch [{:keys [$editor editor]}]
+  (when-let [unwatch (::auto-reload-unwatch editor)]
+    ;; there is a race condition here, but
+    ;; we're ignoring it for now.
+    (dispatch! :update $editor dissoc ::auto-reload-unwatch)
+    (unwatch)))
+
+
