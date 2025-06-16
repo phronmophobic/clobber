@@ -20,6 +20,7 @@
   { ;; "C-M-x" editor-eval-top-form
 
    "C-a" #'text-mode/editor-move-beginning-of-line
+   "M-m" #'text-mode/editor-back-to-indentation
    "C-d" #'text-mode/editor-delete-char
    "C-e" #'text-mode/editor-move-end-of-line
    "C-f" #'text-mode/editor-forward-char
