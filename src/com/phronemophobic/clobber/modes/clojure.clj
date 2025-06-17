@@ -1617,6 +1617,7 @@
    "C-M-f" #'editor-paredit-forward
    "C-M-b" #'editor-paredit-backward
    "C-a" #'text-mode/editor-move-beginning-of-line
+   "M-m" #'text-mode/editor-back-to-indentation
    "C-u C-d" #'text-mode/editor-delete-char
    "C-d" #'editor-paredit-forward-delete
    "C-e" #'text-mode/editor-move-end-of-line

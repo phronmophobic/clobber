@@ -629,6 +629,38 @@
                         :row cursor-row
                         :column new-cursor-column})))))
 
+(defn editor-back-to-indentation [editor]
+  (let [{:keys [cursor ^Rope rope] :as editor}
+        (editor-move-beginning-of-line editor)
+
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column :column} cursor
+
+        bi (doto (BreakIterator/getCharacterInstance)
+             (.setText rope))
+
+        char-index (loop [char-index cursor-char]
+                     (let [next-char (.following bi char-index)]
+                       (cond
+                         (= -1 next-char) char-index
+                         (#{\space \tab} (.charAt rope char-index)) (recur next-char)
+                         :else char-index)))]
+    (if (= char-index cursor-char)
+      editor
+      (let [diff-string (-> (.subSequence rope cursor-char char-index )
+                            .toString)
+            num-bytes (alength (.getBytes diff-string "utf-8"))
+            new-cursor-column (+ cursor-column num-bytes)]
+        (assoc editor
+               :cursor {:byte (+ cursor-byte num-bytes)
+                        :char (+ cursor-char (.length diff-string))
+                        :point (+ cursor-point (util/num-points diff-string))
+                        :row cursor-row
+                        :column new-cursor-column})))))
+
 (defn editor-previous-line
   ([editor]
    (editor-previous-line editor 1))
