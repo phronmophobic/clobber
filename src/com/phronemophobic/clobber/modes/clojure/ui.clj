@@ -1514,10 +1514,15 @@
                                                ctrl? (conj :ctrl?)))]
                 (find-match key-press))))
            ;; release action
-           [[:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                           (not alt?) (disj :alt)
-                                           (not super?) (disj :super)
-                                           (not ctrl?) (disj :ctrl?)))]])))
+           [[:update $modifiers
+             (fn [xs]
+               (cond-> (or xs #{})
+                 (#{:left_alt :right_alt} (skia/keymap key))
+                 (disj :alt)
+                 (#{:left_super :right_super} (skia/keymap key))
+                 (disj :super)
+                 (#{:left_control :right_control} (skia/keymap key))
+                 (disj :ctrl?)))]])))
      body)))
 
 (defui code-editor [{:keys [editor
