@@ -1608,9 +1608,12 @@
   
   Also applies indentation"
   [editor]
-  (if (:select-cursor editor)
-    (editor-comment-region editor)
-    (editor-toggle-comment-line editor)))
+  (let [select-cursor (:select-cursor editor)]
+    (if (and select-cursor
+             (not= (:row select-cursor)
+                   (-> editor :cursor :row)))
+      (editor-comment-region editor)
+      (editor-toggle-comment-line editor))))
 
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
