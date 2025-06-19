@@ -1482,7 +1482,7 @@
                       key
                       (let [c (first key)]
                         (if shift?
-                          (get uppercase c)
+                          (get uppercase c c)
                           (Character/toLowerCase c))))
                 key-press (cond-> {:key key}
                             alt?   (assoc :meta? true)
