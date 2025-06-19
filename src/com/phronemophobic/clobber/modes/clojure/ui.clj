@@ -1460,7 +1460,9 @@
                                    :editor editor
                                    :$editor $editor}])])
             (let [c (:key key-press)]
-              (when-not (#{:left_shift :right_shift} c)
+              (when-not (#{:left_shift :right_shift
+                           :left_control :right_control
+                           :left_alt :right_alt} c)
                 (cond-> [[:set $next-bindings nil]]
                   (and (not next-bindings)
                        (char? c)
