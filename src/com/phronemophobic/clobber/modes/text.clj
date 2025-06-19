@@ -437,10 +437,11 @@
                 n n]
            (if (zero? n)
              [char-index row column]
-             (cond
-               (= -1 next) char-index
-               (= \newline (.charAt rope char-index)) (recur (.following bi char-index) (inc row) 0 (dec n))
-               :else (recur (.following bi char-index) row (inc column) (dec n)))))
+             (let [next-char (.following bi char-index)]
+               (cond
+                 (= -1 next-char) [char-index row column]
+                 (= \newline (.charAt rope char-index)) (recur next-char (inc row) 0 (dec n))
+                 :else (recur next-char row (inc column) (dec n))))))
 
          diff-string (-> (.subSequence rope cursor-char char-index)
                          .toString)
