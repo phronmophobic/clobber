@@ -1447,7 +1447,6 @@
 
 (defui clojure-keymap [{:keys [bindings body editor]}]
   (let [next-bindings (get extra ::next-bindings)
-        modifiers (get extra ::modifiers)
         find-match
         (fn [key-press]
           (if-let [match (get (or next-bindings bindings) key-press)]
@@ -1460,70 +1459,37 @@
                  [::update-editor {:op match
                                    :editor editor
                                    :$editor $editor}])])
-            ;; no match
-            (when next-bindings
-              [[:set $next-bindings nil]])))]
+            (let [c (:key key-press)]
+              (when-not (#{:left_shift :right_shift} c)
+                (cond-> [[:set $next-bindings nil]]
+                  (and (not next-bindings)
+                       (char? c)
+                       (pos? (byte c)))
+                  (conj 
+                    [::update-editor {:op #(text-mode/editor-self-insert-command % (str c))
+                                      :$editor $editor}]))))))]
     (ui/on
-     :key-press
-     (fn [s]
-       (let [intents (if (empty? modifiers)
-                       (when (not (#{:left_shift :right_shift}
-                                   s))
-                         (find-match {:key (if (string? s)
-                                             (first s)
-                                             s)}))
-                       (if (keyword? s)
-                         (find-match
-                          (cond-> {:key s}
-                            (:alt modifiers) (assoc :meta? true)
-                            (:super modifiers) (assoc :super? true)
-                            (:ctrl? modifiers) (assoc :ctrl? true)))))]
-         (if (seq intents)
-           intents
-           (when (and (not next-bindings)
-                      (string? s)
-                      (empty? modifiers)
-                      (-> (.getBytes ^String s)
-                          first
-                          pos?))
-             [[::update-editor {:op #(text-mode/editor-self-insert-command % s)
-                                :$editor $editor}]]))))
-     :key-event
-     (fn [key scancode action mods]
-       (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
-             super? (not (zero? (bit-and ui/SUPER-MASK mods)))
-             shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-             ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-         (if (#{:press :repeat} action)
-           (let [key (if shift?
-                       (let [c (char key)]
-                         (get uppercase c))
-                       (Character/toLowerCase (char key)))
-                 key-press (cond-> {:key key}
-                             alt? (assoc :meta? true)
-                             super? (assoc :super? true)
-                             ctrl? (assoc :ctrl? true))]
-             (when (and key
-                        (or alt?
-                            super?
-                            ctrl?))
-               (cons
-                [:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                               alt? (conj :alt)
-                                               super? (conj :super)
-                                               ctrl? (conj :ctrl?)))]
-                (find-match key-press))))
-           ;; release action
-           [[:update $modifiers
-             (fn [xs]
-               (cond-> (or xs #{})
-                 (#{:left_alt :right_alt} (skia/keymap key))
-                 (disj :alt)
-                 (#{:left_super :right_super} (skia/keymap key))
-                 (disj :super)
-                 (#{:left_control :right_control} (skia/keymap key))
-                 (disj :ctrl?)))]])))
-     body)))
+      :key-event
+      (fn [key scancode action mods]
+        (when (#{:press :repeat} action)
+          (let [alt?   (not (zero? (bit-and ui/ALT-MASK mods)))
+                super? (not (zero? (bit-and ui/SUPER-MASK mods)))
+                shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
+                ctrl?  (not (zero? (bit-and ui/CONTROL-MASK mods)))
+
+                key (skia/keymap key)
+                key (if (keyword? key)
+                      key
+                      (let [c (first key)]
+                        (if shift?
+                          (get uppercase c)
+                          (Character/toLowerCase c))))
+                key-press (cond-> {:key key}
+                            alt?   (assoc :meta? true)
+                            super? (assoc :super? true)
+                            ctrl?  (assoc :ctrl? true))]
+            (find-match key-press))))
+      body)))
 
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
