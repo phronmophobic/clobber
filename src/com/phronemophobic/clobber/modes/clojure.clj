@@ -1021,7 +1021,12 @@
                                   text-mode/editor-next-line
                                   editor-indent))
                        editor))
-            editor (assoc editor :cursor cursor)]
+            editor (text-mode/editor-goto-row-col
+                    editor
+                    (:row cursor)
+                    ;; slightly wrong
+                    ;; should be a grapheme cluster offset
+                    (:column-byte cursor))]
         editor))))
 
 (def word-whitespace
