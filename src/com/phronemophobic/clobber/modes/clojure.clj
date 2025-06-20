@@ -659,8 +659,9 @@
 
                 new-tree (when-let [^TSTree tree tree]
                            (let [tree (.copy tree)]
-                             (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
-                                                       (TSPoint. cursor-row cursor-column-byte)
+
+                             (.edit tree (TSInputEdit. prev-byte cursor-byte prev-byte
+                                                       (TSPoint. new-cursor-row new-cursor-column-byte)
                                                        (TSPoint. cursor-row cursor-column-byte)
                                                        (TSPoint. new-cursor-row new-cursor-column-byte)))
                              tree))
