@@ -819,10 +819,11 @@
                        current-offset)
 
         cursor-column-byte (-> editor :cursor :column-byte)
-        next-cursor-offset (if (> cursor-column-byte current-offset)
-                             (+ cursor-column-byte indent-diff)
-                             (+ current-offset indent-diff))
         
+        next-cursor-offset (if (> cursor-column-byte current-offset)
+                             (+ (-> editor :cursor :byte) indent-diff)
+                             (+ (-> bol-editor :cursor :byte) current-offset indent-diff))
+
         ;; fix the number of spaces
         next-editor 
         (cond
@@ -832,12 +833,7 @@
                                (text-mode/editor-snip bol-editor cursor-byte (+ cursor-byte (- indent-diff))))
           :else bol-editor)
 
-        next-editor (loop [n next-cursor-offset
-                           e next-editor]
-                      (if (pos? n)
-                        (recur (dec n)
-                               (text-mode/editor-forward-char e))
-                        e))]
+        next-editor (text-mode/editor-goto-byte next-editor next-cursor-offset)]
     next-editor))
 
 
@@ -1540,7 +1536,11 @@
                 ;; else
                 editor))
             
-            editor (assoc editor :cursor cursor)]
+            editor (text-mode/editor-goto-row-col editor
+                                                  (:row cursor)
+                                                  ;; slightly wrong
+                                                  ;; should be a grapheme cluster offset
+                                                  (:column-byte cursor))]
         editor))))
 
 (defn editor-toggle-comment-line [editor]
