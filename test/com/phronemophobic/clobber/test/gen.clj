@@ -117,8 +117,9 @@
                 ;; the editor works in the presence of
                 ;; invalid parses
                 (when (util/first-by (keep (fn [^TSNode node]
-                                             (or (.isMissing node)
-                                                 (.hasError node))))
+                                             (when (or (.isMissing node)
+                                                       (.hasError node))
+                                               true)))
                                      (util/tree-reducible (:tree new-editor)))
                   (throw (ex-info "Missing or error tree"
                                   {:type ::error})))
