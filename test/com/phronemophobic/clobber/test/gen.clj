@@ -142,7 +142,7 @@
                    (check-cursor (apply-ops editor op-list))))))
 
 
-(defn check-tree-prop [ops]
+(defn check-parse-prop [ops]
   (prop/for-all [op-list ops]
                 (let [editor (cui/make-editor)]
                   (ignore-bad-parses
@@ -181,7 +181,7 @@
 
   (let [aresults (tc/quick-check 
                   10000
-                  (check-tree-prop (s/gen
+                  (check-parse-prop (s/gen
                                     (s/coll-of testspec
                                                :into []
                                                :max-count 50))))]
