@@ -1364,6 +1364,8 @@
             (if (and (contains? coll-node-types (.getType node))
                      (< (.getStartByte node)
                         cursor-byte)
+                     (> (.getEndByte node)
+                        cursor-byte)
                      (= cursor-row (-> node .getEndPoint .getRow)))
               node
               result)))
