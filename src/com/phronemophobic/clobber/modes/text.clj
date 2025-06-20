@@ -761,7 +761,10 @@
            (let [next-char (.following bi char-index)]
              (if (or (= -1 next-char)
                      (= \newline (.charAt rope char-index))
-                     (= n target-column-byte))
+                     (= n target-column-byte)
+                     ;; hack because target-column-byte
+                     ;; doesn't quite make sense
+                     (> next-char cursor-char))
                [char-index (-> (.subSequence rope line-start-char char-index)
                                .toString
                                .getBytes
