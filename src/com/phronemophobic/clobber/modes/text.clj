@@ -229,10 +229,15 @@
                     (= n target-column)
                     ;; hack due to target column-byte being nonsense
                     (> next-char line-start-char))
-              [char-index (-> (.subSequence rope line-start-char char-index)
-                              .toString
-                              .getBytes
-                              alength)]
+              [char-index (if (zero? row)
+                            (-> (.subSequence rope 0 char-index)
+                                .toString
+                                .getBytes
+                                alength)
+                            (-> (.subSequence rope line-start-char char-index)
+                                .toString
+                                .getBytes
+                                alength))]
               (recur next-char
                      (inc n)))))]
     (let [diff-string (-> (.subSequence rope 0 char-index)
