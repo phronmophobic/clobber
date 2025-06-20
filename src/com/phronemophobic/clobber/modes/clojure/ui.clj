@@ -178,7 +178,7 @@
            cursor-char :char
            cursor-point :point
            cursor-row :row
-           cursor-column :column} cursor
+           cursor-column-byte :column-byte} cursor
           node (util/previous-named-child-for-byte tree cursor-byte)]
       (when node
         (let [eval-ns (:eval-ns editor)
@@ -233,7 +233,7 @@
            cursor-char :char
            cursor-point :point
            cursor-row :row
-           cursor-column :column} cursor]
+           cursor-column-byte :column-byte} cursor]
       (let [root-node (.getRootNode tree)
             cursor (TSTreeCursor. root-node)
             idx (.gotoFirstChildForByte cursor cursor-byte)]
@@ -640,35 +640,35 @@
                                     :char 0
                                     :point 0
                                     :row 0
-                                    :column 0})
+                                    :column-byte 0})
                     (text-mode/editor-update-viewport))]
      editor))
   ([]
-   (#_map->Editor
-    identity
-    {:tree nil
-     ;; all offsets in terms of bytes
-     ;; :offsets {:lines nil
-     ;;           :graphemes nil}
-     :cursor {:byte 0
-              :char 0
-              :point 0
-              :row 0
-              :column 0}
-     :viewport {:start-line 0
-                :num-lines 40}
-     :paragraph nil
-     :base-style #:text-style {:font-families ["Menlo"]
-                               :font-size 12
-                               :height 1.2
-                               :height-override true}
-     :eval-ns *ns*
-     :rope Rope/EMPTY
-     :language (TreeSitterClojure.)
-     :viscous? true
-     :parser (doto (TSParser.)
-               (.setLanguage (TreeSitterClojure.)))
-     :buf (byte-array 4096)})))
+   (let [lang (TreeSitterClojure.)
+         parser (doto (TSParser.)
+                (.setLanguage (TreeSitterClojure.)))
+         buf (byte-array 4096)
+         rope Rope/EMPTY
+         tree (.parse parser buf nil (util/->RopeReader rope) TSInputEncoding/TSInputEncodingUTF8)]
+     {:tree tree
+      :cursor {:byte 0
+               :char 0
+               :point 0
+               :row 0
+               :column-byte 0}
+      :viewport {:start-line 0
+                 :num-lines 40}
+      :paragraph nil
+      :base-style #:text-style {:font-families ["Menlo"]
+                                :font-size 12
+                                :height 1.2
+                                :height-override true}
+      :eval-ns *ns*
+      :rope rope
+      :language lang
+      :viscous? true
+      :parser parser
+      :buf buf})))
 
 
 (defn ^:private guess-ns [source]
@@ -1215,13 +1215,13 @@
             s (-> (.subSequence rope 0 (.start match))
                   .toString)
 
-            {:keys [row column]} (util/count-points s)
+            {:keys [row column-byte]} (util/count-row-column-bytes s)
 
             cursor {:byte (alength (.getBytes s "utf-8"))
                     :char (.length s)
                     :point (util/num-points s)
                     :row row
-                    :column column}]
+                    :column-byte column-byte}]
         (-> editor
             (assoc-in [::search :query] query)
             (assoc-in [::search :match] match)
@@ -1262,13 +1262,13 @@
             s (-> (.subSequence rope 0 (.start match))
                   .toString)
 
-            {:keys [row column]} (util/count-points s)
+            {:keys [row column-byte]} (util/count-row-column-bytes s)
 
             cursor {:byte (alength (.getBytes s "utf-8"))
                     :char (.length s)
                     :point (util/num-points s)
                     :row row
-                    :column column}]
+                    :column-byte column-byte}]
         (-> editor
             (assoc-in [::search :query] query)
             (assoc :cursor cursor)
@@ -1849,7 +1849,7 @@
                                                        :char 0
                                                        :point 0
                                                        :row 0
-                                                       :column 0})
+                                                       :column-byte 0})
                                        (dissoc :structure-state )
                                        (text-mode/editor-update-viewport))
                                    ]])})
@@ -1863,7 +1863,7 @@
                                                        :char 0
                                                        :point 0
                                                        :row 0
-                                                       :column 0})
+                                                       :column-byte 0})
                                        (text-mode/editor-update-viewport))
                                    ]])})
         (ant/button {:text  "reload"
@@ -1881,7 +1881,7 @@
                                                        :char 0
                                                        :point 0
                                                        :row 0
-                                                       :column 0})
+                                                       :column-byte 0})
                                        (text-mode/editor-update-viewport))
                                    ]])})]
        {:direction :row
@@ -2014,7 +2014,7 @@
                                                             :char 0
                                                             :point 0
                                                             :row 0
-                                                            :column 0})
+                                                            :column-byte 0})
                                             (text-mode/editor-self-insert-command source)
                                             (assoc :last-file-load update-time
                                                    :last-change update-time))
@@ -2024,11 +2024,11 @@
                                                    (:row end-cursor))
                                                 (and (= (:row old-cursor)
                                                         (:row end-cursor))
-                                                     (<= (:column old-cursor)
-                                                         (:column end-cursor))))
+                                                     (<= (:column-byte old-cursor)
+                                                         (:column-byte end-cursor))))
                                           (text-mode/editor-goto-row-col editor
                                                                          (:row old-cursor)
-                                                                         (:column old-cursor))
+                                                                         (:column-byte old-cursor))
                                           editor)
                                  editor (text-mode/editor-update-viewport editor)]
                              editor))))))))))

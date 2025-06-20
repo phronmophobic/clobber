@@ -309,7 +309,7 @@
                                     :char 0
                                     :point 0
                                     :row 0
-                                    :column 0})
+                                    :column-byte 0})
                     (text-mode/editor-update-viewport))]
      editor))
   ([]
@@ -319,7 +319,7 @@
                :char 0
                :point 0
                :row 0
-               :column 0}
+               :column-byte 0}
       :viewport {:start-line 0
                  :num-lines 40}
       :paragraph nil
@@ -874,13 +874,13 @@
             s (-> (.subSequence rope 0 (.start match))
                   .toString)
 
-            {:keys [row column]} (util/count-points s)
+            {:keys [row column-byte]} (util/count-row-column-bytes s)
 
             cursor {:byte (alength (.getBytes s "utf-8"))
                     :char (.length s)
                     :point (util/num-points s)
                     :row row
-                    :column column}]
+                    :column-byte column-byte}]
         (-> editor
             (assoc-in [::search :query] query)
             (assoc-in [::search :match] match)
@@ -921,13 +921,13 @@
             s (-> (.subSequence rope 0 (.start match))
                   .toString)
 
-            {:keys [row column]} (util/count-points s)
+            {:keys [row column-byte]} (util/count-row-column-bytes s)
 
             cursor {:byte (alength (.getBytes s "utf-8"))
                     :char (.length s)
                     :point (util/num-points s)
                     :row row
-                    :column column}]
+                    :column-byte column-byte}]
         (-> editor
             (assoc-in [::search :query] query)
             (assoc :cursor cursor)
@@ -1206,7 +1206,7 @@
                                                        :char 0
                                                        :point 0
                                                        :row 0
-                                                       :column 0})
+                                                       :column-byte 0})
                                        (dissoc :structure-state )
                                        (text-mode/editor-update-viewport))
                                    ]])})
@@ -1220,7 +1220,7 @@
                                                                        :char 0
                                                                        :point 0
                                             :row 0
-                                         :column 0})
+                                         :column-byte 0})
                                        (text-mode/editor-update-viewport))
                                    ]])})
         (ant/button {:text  "reload"
@@ -1271,7 +1271,7 @@
                                     :char 0
                                     :point 0
                                     :row 0
-                                    :column 0})
+                                    :column-byte 0})
                     (text-mode/editor-update-viewport))
          ;; editor (if file
          ;;          (assoc editor :file file)

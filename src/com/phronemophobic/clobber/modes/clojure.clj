@@ -85,7 +85,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
 
         ^TSNode
         wrap-node (util/named-child-for-byte tree cursor-byte)]
@@ -107,7 +107,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
 
         ^TSNode
         wrap-node (transduce
@@ -135,20 +135,20 @@
             diff-rope (.sliceBytes rope cursor-byte target-byte)
             diff-string (.toString diff-rope)
             diff-points (.size diff-rope)
-            point-offset (util/count-points diff-string)
+            rc-offset (util/count-row-column-bytes diff-string)
 
-            new-cursor-row (+ cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (+ (:column point-offset) cursor-column))
+            new-cursor-row (+ cursor-row (:row rc-offset))
+            new-cursor-column-byte (if (pos? (:row rc-offset))
+                                     (:column-byte rc-offset)
+                                     (+ (:column-byte rc-offset) cursor-column-byte))
 
             new-tree (when-let [^TSTree
                                 tree tree]
                        (let [tree (.copy tree)]
                          (.edit tree (TSInputEdit. (dec target-byte) target-byte (dec target-byte)
-                                                   (TSPoint. new-cursor-row (dec new-cursor-column))
-                                                   (TSPoint. new-cursor-row new-cursor-column)
-                                                   (TSPoint. new-cursor-row (dec new-cursor-column))))
+                                                   (TSPoint. new-cursor-row (dec new-cursor-column-byte))
+                                                   (TSPoint. new-cursor-row new-cursor-column-byte)
+                                                   (TSPoint. new-cursor-row (dec new-cursor-column-byte))))
                          tree))
 
             ^Rope
@@ -157,43 +157,23 @@
 
             ;; next, delete "(" at start of node
             target-byte (.getStartByte wrap-node)
+            editor (-> (assoc editor
+                              :tree new-tree
+                              :rope new-rope)
+                       (text-mode/editor-snip target-byte (inc target-byte)))
+
             diff-rope (.sliceBytes rope target-byte cursor-byte)
             diff-string (.toString diff-rope)
-            ;; diff-bytes (- cursor-byte target-byte)
-            ;; diff-char (.length diff-string)
-            ;; diff-points (.size diff-rope)
-            point-offset (util/count-points diff-string)
-
-            new-cursor-row (- cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (- cursor-column (:column point-offset)))
-
-            new-tree (do
-                       (.edit new-tree (TSInputEdit. target-byte (inc target-byte) target-byte 
-                                                     (TSPoint. new-cursor-row new-cursor-column)
-                                                     (TSPoint. new-cursor-row (inc new-cursor-column))
-                                                     (TSPoint. new-cursor-row new-cursor-column)
-                                                     ))
-                       new-tree)
-
-            new-rope (.concat (.sliceBytes new-rope 0 target-byte)
-                              (.sliceBytes new-rope (inc target-byte) (.numBytes new-rope)))
-            
-            reader (util/->RopeReader new-rope)
-            new-tree (.parse parser buf new-tree reader TSInputEncoding/TSInputEncodingUTF8 )
+            rc-offset (util/count-row-column-bytes diff-string)
 
             new-cursor {:byte (dec cursor-byte)
                         :char (dec cursor-char)
                         :point (dec cursor-point)
                         :row cursor-row
-                        :column (if (pos? (:row point-offset))
-                                  cursor-column
-                                  (dec cursor-column))}]
-        (assoc editor
-               :tree new-tree
-               :rope new-rope
-               :cursor new-cursor))
+                        :column-byte (if (pos? (:row rc-offset))
+                                       cursor-column-byte
+                                       (dec cursor-column-byte))}]
+        (assoc editor :cursor new-cursor))
       
       editor)))
 
@@ -205,7 +185,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor]
+         cursor-column-byte :column-byte} cursor]
     (if (= cursor-byte (.numBytes rope))
       editor
       (let [root-node (.getRootNode tree)
@@ -247,7 +227,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor]
+         cursor-column-byte :column-byte} cursor]
     (-> editor
         (text-mode/editor-self-insert-command (str open-char close-char))
         (text-mode/editor-backward-char))))
@@ -262,7 +242,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         next-node (util/next-named-child-for-byte tree cursor-byte)]
 
     (if (not next-node)
@@ -272,18 +252,18 @@
             diff-rope (.sliceBytes rope cursor-byte target-byte)
             diff-string (.toString diff-rope)
             diff-points (.size diff-rope)
-            point-offset (util/count-points diff-string)
+            rc-offset (util/count-row-column-bytes diff-string)
 
-            new-cursor-row (+ cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (+ (:column point-offset) cursor-column))
+            new-cursor-row (+ cursor-row (:row rc-offset))
+            new-cursor-column-byte (if (pos? (:row rc-offset))
+                                     (:column-byte rc-offset)
+                                     (+ (:column-byte rc-offset) cursor-column-byte))
 
             new-cursor {:byte target-byte
                         :char (+ cursor-char (.length diff-string))
                         :point (+ cursor-point diff-points)
                         :row new-cursor-row
-                        :column new-cursor-column}]
+                        :column-byte new-cursor-column-byte}]
         (assoc editor
                :cursor new-cursor)))))
 
@@ -293,7 +273,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         previous-node (util/previous-named-child-for-byte tree cursor-byte)]
     (if (not previous-node)
       editor
@@ -302,18 +282,30 @@
             diff-rope (.sliceBytes rope target-byte cursor-byte)
             diff-string (.toString diff-rope)
             diff-points (.size diff-rope)
-            point-offset (util/count-points diff-string)
+            rc-offset (util/count-row-column-bytes diff-string)
 
-            new-cursor-row (- cursor-row (:row point-offset))
-            new-cursor-column (if (pos? (:row point-offset))
-                                (:column point-offset)
-                                (- cursor-column (:column point-offset)))
+            new-cursor-row (- cursor-row (:row rc-offset))
+            new-cursor-char (- cursor-char (.length diff-string))
+
+            bi (doto (BreakIterator/getCharacterInstance)
+                 (.setText rope))
+            new-cursor-column-byte (if (pos? (:row rc-offset))
+                                     (loop [char-index new-cursor-char]
+                                       (let [prev-char (.preceding bi char-index)]
+                                         (if (or (= -1 prev-char)
+                                                 (= \newline (.charAt rope prev-char)))
+                                           (-> (.subSequence rope char-index new-cursor-char)
+                                               .toString
+                                               .getBytes
+                                               alength)
+                                           (recur prev-char))))
+                                     (- cursor-column-byte (:column-byte rc-offset)))
 
             new-cursor {:byte target-byte
-                        :char (- cursor-char (.length diff-string))
+                        :char new-cursor-char
                         :point (- cursor-point diff-points)
                         :row new-cursor-row
-                        :column new-cursor-column}]
+                        :column-byte new-cursor-column-byte}]
         (assoc editor
                :cursor new-cursor)))))
 
@@ -376,7 +368,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor]
+         cursor-column-byte :column-byte} cursor]
     (cond
       (>= (:point cursor) (.size rope)) editor
 
@@ -478,11 +470,11 @@
                                     tree tree]
                            (let [tree (.copy tree)]
                              (.edit tree (TSInputEdit. cursor-byte end-byte-offset cursor-byte
-                                                       (TSPoint. cursor-row cursor-column)
-                                                       (TSPoint. cursor-row (+ cursor-column
+                                                       (TSPoint. cursor-row cursor-column-byte)
+                                                       (TSPoint. cursor-row (+ cursor-column-byte
                                                                                (- end-byte-offset
                                                                                   cursor-byte)))
-                                                       (TSPoint. cursor-row cursor-column)))
+                                                       (TSPoint. cursor-row cursor-column-byte)))
                              tree))
 
                 new-rope (.concat (.sliceBytes rope 0 cursor-byte)
@@ -507,7 +499,7 @@
              cursor-char :char
              cursor-row :row
              cursor-point :point
-             cursor-column :column} cursor
+             cursor-column-byte :column-byte} cursor
             current-char (.charAt rope cursor-char)]
         (case current-char
           (\( \[ \{)
@@ -529,9 +521,9 @@
               (let [new-tree (when-let [^TSTree tree tree]
                                (let [tree (.copy tree)]
                                  (.edit tree (TSInputEdit. (dec cursor-byte) (inc cursor-byte) (dec cursor-byte)
-                                                           (TSPoint. cursor-row (dec cursor-column))
-                                                           (TSPoint. cursor-row (inc cursor-column))
-                                                           (TSPoint. cursor-row (dec cursor-column))))
+                                                           (TSPoint. cursor-row (dec cursor-column-byte))
+                                                           (TSPoint. cursor-row (inc cursor-column-byte))
+                                                           (TSPoint. cursor-row (dec cursor-column-byte))))
                                  tree))
 
                     new-rope (.concat (.slice rope 0 (dec cursor-point))
@@ -543,7 +535,7 @@
                                 :char (dec cursor-char)
                                 :point (dec cursor-point)
                                 :row cursor-row
-                                :column (dec cursor-column)}]
+                                :column-byte (dec cursor-column-byte)}]
                 (assoc editor
                        :tree new-tree
                        :cursor new-cursor
@@ -567,11 +559,11 @@
                 new-tree (when-let [^TSTree tree tree]
                            (let [tree (.copy tree)]
                              (.edit tree (TSInputEdit. cursor-byte next-byte cursor-byte
-                                                       (TSPoint. cursor-row cursor-column)
+                                                       (TSPoint. cursor-row cursor-column-byte)
                                                        (if newline?
                                                          (TSPoint. (inc cursor-row) 0)
-                                                         (TSPoint. cursor-row (inc cursor-column)))
-                                                       (TSPoint. cursor-row cursor-column)))
+                                                         (TSPoint. cursor-row (inc cursor-column-byte)))
+                                                       (TSPoint. cursor-row cursor-column-byte)))
                              tree))
 
                 new-rope (.concat (.slice rope 0 cursor-point)
@@ -595,7 +587,7 @@
              cursor-char :char
              cursor-row :row
              cursor-point :point
-             cursor-column :column} cursor
+             cursor-column-byte :column-byte} cursor
             bi (doto (BreakIterator/getCharacterInstance)
                  (.setText rope))
             prev (.preceding bi cursor-char)
@@ -615,9 +607,9 @@
             (let [new-tree (when-let [^TSTree tree tree]
                              (let [tree (.copy tree)]
                                (.edit tree (TSInputEdit. (dec cursor-byte) (inc cursor-byte) (dec cursor-byte)
-                                                         (TSPoint. cursor-row (dec cursor-column))
-                                                         (TSPoint. cursor-row (inc cursor-column))
-                                                         (TSPoint. cursor-row (dec cursor-column))))
+                                                         (TSPoint. cursor-row (dec cursor-column-byte))
+                                                         (TSPoint. cursor-row (inc cursor-column-byte))
+                                                         (TSPoint. cursor-row (dec cursor-column-byte))))
                                tree))
 
                   new-rope (.concat (.slice rope 0 (dec cursor-point))
@@ -629,7 +621,7 @@
                               :char (dec cursor-char)
                               :point (dec cursor-point)
                               :row cursor-row
-                              :column (dec cursor-column)}]
+                              :column-byte (dec cursor-column-byte)}]
               (assoc editor
                      :tree new-tree
                      :cursor new-cursor
@@ -645,28 +637,32 @@
                 prev-byte (- cursor-byte diff-bytes)
                 prev-char (.charAt rope prev)
                 prev-point (- cursor-point (util/num-points diff-string))
-                newline? (= prev-char \newline)
+                rc-offset (util/count-row-column-bytes diff-string)
                 
 
-                new-cursor-row (if newline?
-                                 (dec cursor-row)
-                                 cursor-row)
-                new-cursor-column (if newline?
-                                    (loop [n 0]
-                                      (let [start (.previous bi)]
-                                        (if (or (= BreakIterator/DONE start)
-                                                (= \newline (.charAt rope start)))
-                                          n
-                                          (recur (inc n)))))
-                                    (dec cursor-column))
+                new-cursor-row (- cursor-row (:row rc-offset))
+                new-cursor-char (- cursor-char (.length diff-string))
 
+                bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText rope))
+                new-cursor-column-byte (if (pos? (:row rc-offset))
+                                         (loop [char-index new-cursor-char]
+                                           (let [prev-char (.preceding bi char-index)]
+                                             (if (or (= -1 prev-char)
+                                                     (= \newline (.charAt rope prev-char)))
+                                               (-> (.subSequence rope char-index new-cursor-char)
+                                                   .toString
+                                                   .getBytes
+                                                   alength)
+                                               (recur prev-char))))
+                                         (- cursor-column-byte (:column-byte rc-offset)))
 
                 new-tree (when-let [^TSTree tree tree]
                            (let [tree (.copy tree)]
                              (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
-                                                       (TSPoint. cursor-row cursor-column)
-                                                       (TSPoint. cursor-row cursor-column)
-                                                       (TSPoint. new-cursor-row new-cursor-column)))
+                                                       (TSPoint. cursor-row cursor-column-byte)
+                                                       (TSPoint. cursor-row cursor-column-byte)
+                                                       (TSPoint. new-cursor-row new-cursor-column-byte)))
                              tree))
 
                 new-rope (.concat (.slice rope 0 prev-point)
@@ -680,7 +676,7 @@
                             :char prev
                             :point prev-point
                             :row new-cursor-row
-                            :column new-cursor-column}
+                            :column-byte new-cursor-column-byte}
                    :paragraph nil
                    :rope new-rope)))))))
 
@@ -742,9 +738,9 @@
         (if-let [[_ index] (and sym-name
                                 (find m sym-name))]
           (if index 
-              (and child
-                   (TSNode/eq child (.getNamedChild node (inc index))))
-              true)
+            (and child
+                 (TSNode/eq child (.getNamedChild node (inc index))))
+            true)
           ;; else
           (recur (.getParent node)
                  node
@@ -821,9 +817,9 @@
         indent-diff (- (+ parent-offset indent)
                        current-offset)
 
-        cursor-column (-> editor :cursor :column)
-        next-cursor-offset (if (> cursor-column current-offset)
-                             (+ cursor-column indent-diff)
+        cursor-column-byte (-> editor :cursor :column-byte)
+        next-cursor-offset (if (> cursor-column-byte current-offset)
+                             (+ cursor-column-byte indent-diff)
                              (+ current-offset indent-diff))
         
         ;; fix the number of spaces
@@ -891,9 +887,9 @@
             indent-diff (- arg-offset
                            current-offset)
 
-            cursor-column (-> editor :cursor :column)
-            next-cursor-offset (if (> cursor-column current-offset)
-                                 (+ cursor-column indent-diff)
+            cursor-column-byte (-> editor :cursor :column-byte)
+            next-cursor-offset (if (> cursor-column-byte current-offset)
+                                 (+ cursor-column-byte indent-diff)
                                  (+ current-offset indent-diff))
             
 
@@ -933,7 +929,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor]
+         cursor-column-byte :column-byte} cursor]
     (let [root-node (.getRootNode tree)
           cursor (TSTreeCursor. root-node)
           ;; find a collection node that starts before the current line
@@ -1478,7 +1474,7 @@
       ;; insert comments at start cursor 
       ;; insert comments for subsequent rows
       ;; only only rows that start or end that row
-      ;; use min column of those rows
+      ;; use min column-byte of those rows
       (let [
             
             merge-point (fn [min-cols [row col] ]
@@ -1492,8 +1488,8 @@
             (transduce
              (comp 
               (take-while (fn [^TSNode node]
-                                 (<= (-> node .getStartPoint .getRow)
-                                     end-row)))
+                            (<= (-> node .getStartPoint .getRow)
+                                end-row)))
               (mapcat (fn [^TSNode node]
                         (let [start (.getStartPoint node)
                               end (.getEndPoint node)
@@ -1574,7 +1570,7 @@
          nil
          (when (util/skip-to-byte-offset cursor cursor-byte)
            (util/tree-cursor-reducible cursor)))
-]
+        ]
     (if enclosing-comment-node
       (let [start-byte (.getStartByte enclosing-comment-node)
             
@@ -1594,7 +1590,7 @@
             cursor-byte (-> editor :cursor :byte)]
         (-> editor
             (text-mode/editor-snip cursor-byte
-                                          (+ cursor-byte diff-bytes))
+                                   (+ cursor-byte diff-bytes))
             editor-indent))
       ;; else
       (-> editor
@@ -1693,7 +1689,7 @@
             :char 0
             :point 0
             :row 0
-            :column 0}
+            :column-byte 0}
    :rope Rope/EMPTY
    :language (TreeSitterClojure.)
    :parser (doto (TSParser.)

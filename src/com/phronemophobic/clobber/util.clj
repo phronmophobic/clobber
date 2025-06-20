@@ -104,15 +104,16 @@
 (defn num-bytes [^String s]
   (-> s (.getBytes "utf-8") alength))
 
-(defn count-points
-  "Counts the number or rows and columns of s.
+(defn count-row-column-bytes
+  "Counts the number or rows and column-bytes of s.
 
-  returns {:row row :column column}."
+  returns {:row row :column-byte column}."
   [^CharSequence s]
+  ;; we could probably make this faster!
   (let [bi (doto (BreakIterator/getCharacterInstance)
              (.setText s))]
     (loop [row 0
-           column 0
+           line-start-offset 0
            start (.first bi)]
       (let [end (.next bi)]
         (if (not= end BreakIterator/DONE)
@@ -120,13 +121,16 @@
                               (= (.charAt s start) \newline))]
             (if newline?
               (recur (inc row)
-                     0
+                     end
                      end)
               (recur row
-                     (inc column)
+                     line-start-offset
                      end)))
           {:row row
-           :column column})))))
+           :column-byte (-> (.subSequence s line-start-offset start)
+                            .toString
+                            (.getBytes)
+                            alength)})))))
 
 (defn count-grapheme-clusters
   "Counts the number of grapheme clusters in s."

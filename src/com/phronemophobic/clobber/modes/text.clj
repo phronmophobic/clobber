@@ -23,20 +23,20 @@
           (> byte-index cursor-byte)
           (let [diff-rope (.sliceBytes rope cursor-byte byte-index)
                 diff-string (.toString diff-rope)
-                point-offset (util/count-points diff-string)
+                rc-offset (util/count-row-column-bytes diff-string)
                 new-char (+ (:char cursor)
                             (.length diff-string))
                 new-point (+ (:point cursor)
                              (util/num-points diff-string))
-                new-cursor-row (+ (:row cursor) (:row point-offset))
-                new-cursor-column (if (pos? (:row point-offset))
-                                    (:column point-offset)
-                                    (+ (:column point-offset) (:column cursor)))]
+                new-cursor-row (+ (:row cursor) (:row rc-offset))
+                new-cursor-column-byte (if (pos? (:row rc-offset))
+                                         (:column-byte rc-offset)
+                                         (+ (:column-byte rc-offset) (:column-byte cursor)))]
             {:byte byte-index
              :char new-char
              :point new-point
              :row new-cursor-row
-             :column new-cursor-column})
+             :column-byte new-cursor-column-byte})
 
           ;; byte-index before cursor
           :else
@@ -47,25 +47,28 @@
                 new-point (- (:point cursor)
                              (util/num-points diff-string))
 
-                point-offset (util/count-points diff-string)
+                rc-offset (util/count-row-column-bytes diff-string)
                 new-cursor-row (- (:row cursor)
-                              (:row point-offset))
+                                  (:row rc-offset))
 
                 bi (doto (BreakIterator/getCharacterInstance)
                      (.setText rope))
-                new-cursor-column
-                (loop [char-index new-char
-                       column 0]
+                new-cursor-column-byte
+                (loop [char-index new-char]
                   (let [prev-char-index (.preceding bi char-index)]
-                    (cond
-                      (= -1 prev-char-index) column
-                      (= \newline (.charAt rope prev-char-index)) column
-                      :else (recur prev-char-index (inc column)))))]
+                    (if (or (= -1 prev-char-index)
+                            (= \newline (.charAt rope prev-char-index)))
+                      (-> (.subSequence rope char-index new-char)
+                          .toString
+                          (.getBytes)
+                          alength)
+                      ;; else
+                      (recur prev-char-index))))]
             {:byte byte-index
              :char new-char
              :point new-point
              :row new-cursor-row
-             :column new-cursor-column}))]
+             :column-byte new-cursor-column-byte}))]
     (assoc editor
            :cursor cursor)))
 
@@ -74,54 +77,54 @@
 
   Inserts at current cursor if `byte-index` is not provided.
 
-  If `row` and `column` are not provided. Calculate the row and column automatically"
+  If `row` and `column-byte` are not provided. Calculate the row and column-byte automatically"
   ([editor s]
    (let [cursor (:cursor editor)]
      (editor-insert editor s
                     (:byte cursor)
                     (:row cursor)
-                    (:column cursor))))
+                    (:column-byte cursor))))
   ([editor ^String s byte-index]
    (let [cursor (:cursor editor)
          ^Rope
          rope (:rope editor)
          {cursor-byte :byte} cursor
 
-         {:keys [row column]} (if (= cursor-byte byte-index)
-                                {:row (:row cursor)
-                                 :column (:column cursor)}
-                                (let [diff-rope (if (> byte-index cursor-byte)
-                                                  (.sliceBytes rope cursor-byte byte-index)
-                                                  (.sliceBytes rope byte-index cursor-byte))
-                                      diff-string (.toString diff-rope)
+         {:keys [row column-byte]} (if (= cursor-byte byte-index)
+                                     {:row (:row cursor)
+                                      :column-byte (:column-byte cursor)}
+                                     (let [diff-rope (if (> byte-index cursor-byte)
+                                                       (.sliceBytes rope cursor-byte byte-index)
+                                                       (.sliceBytes rope byte-index cursor-byte))
+                                           diff-string (.toString diff-rope)
 
-                                      point-offset (util/count-points diff-string)
+                                           rc-offset (util/count-row-column-bytes diff-string)
 
-                                      new-cursor-row (+ (:row cursor) (:row point-offset))
-                                      new-cursor-column (if (pos? (:row point-offset))
-                                                          (:column point-offset)
-                                                          (+ (:column point-offset) (:column cursor)))]
-                                  {:row new-cursor-row
-                                   :column new-cursor-column}))]
-     (editor-insert editor s byte-index row column)))
-  ([editor ^String s byte-index row column]
+                                           new-cursor-row (+ (:row cursor) (:row rc-offset))
+                                           new-cursor-column-byte (if (pos? (:row rc-offset))
+                                                                    (:column-byte rc-offset)
+                                                                    (+ (:column-byte rc-offset) (:column-byte cursor)))]
+                                       {:row new-cursor-row
+                                        :column-byte new-cursor-column-byte}))]
+     (editor-insert editor s byte-index row column-byte)))
+  ([editor ^String s byte-index row column-byte]
    (let [sbytes (.getBytes s "utf-8")
-         point-offset (util/count-points s)
-         delta-rows (:row point-offset)
+         rc-offset (util/count-row-column-bytes s)
+         delta-rows (:row rc-offset)
          
          new-row (+ row delta-rows)
-         new-column (if (pos? delta-rows)
-                      (:column point-offset)
-                      (+ (:column point-offset) column))
+         new-column-byte (if (pos? delta-rows)
+                           (:column-byte rc-offset)
+                           (+ (:column-byte rc-offset) column-byte))
 
          tree (:tree editor)
          new-tree (when-let [^TSTree
                              tree tree]
                     (let [tree (.copy tree)]
                       (.edit tree (TSInputEdit. byte-index byte-index (+ byte-index (alength sbytes))
-                                                (TSPoint. row column)
-                                                (TSPoint. row column)
-                                                (TSPoint. new-row new-column)))
+                                                (TSPoint. row column-byte)
+                                                (TSPoint. row column-byte)
+                                                (TSPoint. new-row new-column-byte)))
                       tree))
 
          ^Rope
@@ -145,39 +148,39 @@
          rope (:rope editor)
          {cursor-byte :byte} cursor
 
-         {:keys [row column]} (if (= cursor-byte start-byte)
-                                {:row (:row cursor)
-                                 :column (:column cursor)}
-                                (let [diff-rope (if (> start-byte cursor-byte)
-                                                  (.sliceBytes rope cursor-byte start-byte)
-                                                  (.sliceBytes rope start-byte cursor-byte))
+         {:keys [row column-byte]} (if (= cursor-byte start-byte)
+                                     {:row (:row cursor)
+                                      :column-byte (:column-byte cursor)}
+                                     (let [diff-rope (if (> start-byte cursor-byte)
+                                                       (.sliceBytes rope cursor-byte start-byte)
+                                                       (.sliceBytes rope start-byte cursor-byte))
 
-                                      point-offset (util/count-points diff-rope)
+                                           rc-offset (util/count-row-column-bytes diff-rope)
 
-                                      new-cursor-row (+ (:row cursor) (:row point-offset))
-                                      new-cursor-column (if (pos? (:row point-offset))
-                                                          (:column point-offset)
-                                                          (+ (:column point-offset) (:column cursor)))]
-                                  {:row new-cursor-row
-                                   :column new-cursor-column}))
+                                           new-cursor-row (+ (:row cursor) (:row rc-offset))
+                                           new-cursor-column-byte (if (pos? (:row rc-offset))
+                                                                    (:column-byte rc-offset)
+                                                                    (+ (:column-byte rc-offset) (:column-byte cursor)))]
+                                       {:row new-cursor-row
+                                        :column-byte new-cursor-column-byte}))
 
          diff-rope (.sliceBytes rope start-byte end-byte)
-         point-offset (util/count-points diff-rope)
-         delta-rows (:row point-offset)
+         rc-offset (util/count-row-column-bytes diff-rope)
+         delta-rows (:row rc-offset)
          
          end-row (+ row delta-rows)
-         end-column (if (pos? delta-rows)
-                      (:column point-offset)
-                      (+ (:column point-offset) column))
+         end-column-byte (if (pos? delta-rows)
+                           (:column-byte rc-offset)
+                           (+ (:column-byte rc-offset) column-byte))
 
          ^TSTree
          tree (:tree editor)
          new-tree (when-let [tree tree]
                     (let [tree (.copy tree)]
                       (.edit tree (TSInputEdit. start-byte end-byte start-byte
-                                                (TSPoint. row column)
-                                                (TSPoint. end-row end-column)
-                                                (TSPoint. row column)))
+                                                (TSPoint. row column-byte)
+                                                (TSPoint. end-row end-column-byte)
+                                                (TSPoint. row column-byte)))
                       tree))
 
 
@@ -192,8 +195,9 @@
      (assoc editor
             :rope new-rope
             :tree new-tree)))
-)
+  )
 
+;; target column is in grapheme clusters
 (defn editor-goto-row-col [editor target-row target-column]
   (let [^Rope rope (:rope editor)
         
@@ -215,16 +219,22 @@
                 :else (recur next-char lines)))))
         
         ;; keep going until target column
-        [column char-index]
+        line-start-char char-index
+        [char-index column-byte]
         (loop [char-index char-index
-               column 0]
+               n 0]
           (let [next-char (.following bi char-index)]
-            (cond
-              
-              (= -1 next-char) [column char-index]
-              (= \newline (.charAt rope char-index)) [column char-index]
-              (= column target-column) [column char-index]
-              :else (recur next-char (inc column)))))]
+            (if (or (= -1 next-char)
+                    (= \newline (.charAt rope char-index))
+                    (= n target-column)
+                    ;; hack due to target column-byte being nonsense
+                    (> next-char line-start-char))
+              [char-index (-> (.subSequence rope line-start-char char-index)
+                              .toString
+                              .getBytes
+                              alength)]
+              (recur next-char
+                     (inc n)))))]
     (let [diff-string (-> (.subSequence rope 0 char-index)
                           .toString)
           num-bytes (alength (.getBytes diff-string "utf-8"))]
@@ -233,18 +243,18 @@
                       :char char-index
                       :point (util/num-points diff-string)
                       :row row
-                      :column column}))))
+                      :column-byte column-byte}))))
 
 (defn editor-set-string [editor s]
   (let [rope (Rope/from s)
         ^TSParser
-         parser (:parser editor)
-         tree (when parser
-                    (let [reader (util/->RopeReader rope)]
-                      (.parse parser (:buf editor) nil reader TSInputEncoding/TSInputEncodingUTF8)))]
+        parser (:parser editor)
+        tree (when parser
+               (let [reader (util/->RopeReader rope)]
+                 (.parse parser (:buf editor) nil reader TSInputEncoding/TSInputEncodingUTF8)))]
     (assoc editor
-      :rope rope
-      :tree tree)))
+           :rope rope
+           :tree tree)))
 
 ;; (defn editor-snip [editor])
 ;; (defn editor-slice [editor])
@@ -323,32 +333,44 @@
           cursor-char :char
           cursor-point :point
           cursor-row :row
-          cursor-column :column} cursor
+          cursor-column-byte :column-byte} cursor
          bi (doto (BreakIterator/getCharacterInstance)
               (.setText rope))
 
          rope-length (.length rope)
-         [end-char new-cursor-row new-cursor-column]
+         [end-char new-cursor-row new-cursor-column-byte]
          (loop [n n
                 char-index cursor-char
                 new-cursor-row cursor-row
-                new-cursor-column cursor-column]
+                last-line-char nil]
            (cond
              (or (>= char-index rope-length)
                  (<= n 0))
-             [char-index new-cursor-row new-cursor-column]
+             (let [new-cursor-column-byte (if last-line-char
+                                            (-> (.subSequence rope last-line-char char-index)
+                                                .toString
+                                                .getBytes
+                                                alength)
+                                            (+ cursor-column-byte
+                                               (-> (.subSequence rope cursor-char char-index)
+                                                   .toString
+                                                   .getBytes
+                                                   alength)))]
+               [char-index new-cursor-row new-cursor-column-byte])
+             
 
              (= \newline (.charAt rope char-index))
-             (recur (dec n)
-                    (.following bi char-index)
-                    (inc new-cursor-row)
-                    0)
+             (let [next-char (.following bi char-index)]
+               (recur (dec n)
+                      next-char
+                      (inc new-cursor-row)
+                      next-char))
 
              :else
              (recur (dec n)
                     (.following bi char-index)
                     new-cursor-row
-                    (inc new-cursor-column))))
+                    last-line-char)))
 
          diff-string (-> (.subSequence rope cursor-char end-char)
                          .toString)]
@@ -357,7 +379,7 @@
                      :char (+ cursor-char (.length diff-string))
                      :point (+ cursor-point (util/num-points diff-string))
                      :row new-cursor-row
-                     :column new-cursor-column}))))
+                     :column-byte new-cursor-column-byte}))))
 
 (defn editor-delete-backward-char [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor]
@@ -367,7 +389,7 @@
              cursor-char :char
              cursor-row :row
              cursor-point :point
-             cursor-column :column} cursor
+             cursor-column-byte :column-byte} cursor
             bi (doto (BreakIterator/getCharacterInstance)
                  (.setText rope))
             prev (.preceding bi cursor-char)
@@ -383,21 +405,26 @@
             new-cursor-row (if newline?
                              (dec cursor-row)
                              cursor-row)
-            new-cursor-column (if newline?
-                                (loop [n 0]
-                                  (let [start (.previous bi)]
-                                    (if (or (= BreakIterator/DONE start)
-                                            (= \newline (.charAt rope start)))
-                                      n
-                                      (recur (inc n)))))
-                                (dec cursor-column))
+
+            new-char prev
+            new-cursor-column-byte (if newline?
+                                     (loop [char-index new-char]
+                                       (let [prev-char (.preceding bi char-index)]
+                                         (if (or (= -1 prev-char)
+                                                 (= \newline (.charAt rope prev-char)))
+                                           (-> (.subSequence rope char-index new-char)
+                                               .toString
+                                               .getBytes
+                                               alength)
+                                           (recur prev-char))))
+                                     (- cursor-column-byte diff-bytes))
 
             new-tree (when-let [^TSTree tree tree]
                        (let [tree (.copy tree)]
                          (.edit tree (TSInputEdit. cursor-byte cursor-byte prev-byte
-                                                   (TSPoint. cursor-row cursor-column)
-                                                   (TSPoint. cursor-row cursor-column)
-                                                   (TSPoint. new-cursor-row new-cursor-column)))
+                                                   (TSPoint. cursor-row cursor-column-byte)
+                                                   (TSPoint. cursor-row cursor-column-byte)
+                                                   (TSPoint. new-cursor-row new-cursor-column-byte)))
                          tree))
 
             new-rope (.concat (.slice rope 0 prev-point)
@@ -412,7 +439,7 @@
                         :char prev
                         :point prev-point
                         :row new-cursor-row
-                        :column new-cursor-column}
+                        :column-byte new-cursor-column-byte}
                :paragraph nil
                :rope new-rope)))))
 
@@ -425,23 +452,43 @@
           cursor-char :char
           cursor-row :row
           cursor-point :point
-          cursor-column :column} cursor
+          cursor-column-byte :column-byte} cursor
          
          bi (doto (BreakIterator/getCharacterInstance)
               (.setText rope))
 
-         [char-index old-end-row old-end-column]
+         [char-index old-end-row old-end-column-byte]
          (loop [char-index cursor-char
                 row cursor-row
-                column cursor-column
+                last-line-char nil
                 n n]
            (if (zero? n)
-             [char-index row column]
+             [char-index row (if last-line-char
+                               (-> (.subSequence rope last-line-char char-index)
+                                   .toString
+                                   .getBytes
+                                   alength)
+                               (+ cursor-column-byte
+                                  (-> (.subSequence rope cursor-char char-index)
+                                      .toString
+                                      .getBytes
+                                      alength)))]
              (let [next-char (.following bi char-index)]
                (cond
-                 (= -1 next-char) [char-index row column]
-                 (= \newline (.charAt rope char-index)) (recur next-char (inc row) 0 (dec n))
-                 :else (recur next-char row (inc column) (dec n))))))
+                 (= -1 next-char) [char-index row
+                                   (if last-line-char
+                                     (-> (.subSequence rope last-line-char char-index)
+                                         .toString
+                                         .getBytes
+                                         alength)
+                                     (+ cursor-column-byte
+                                        (-> (.subSequence rope cursor-char char-index)
+                                            .toString
+                                            .getBytes
+                                            alength)))]
+                 
+                 (= \newline (.charAt rope char-index)) (recur next-char (inc row) next-char (dec n))
+                 :else (recur next-char row last-line-char (dec n))))))
 
          diff-string (-> (.subSequence rope cursor-char char-index)
                          .toString)
@@ -451,9 +498,9 @@
          new-tree (when-let [^TSTree tree tree]
                     (let [tree (.copy tree)]
                       (.edit tree (TSInputEdit. cursor-byte end-byte cursor-byte
-                                                (TSPoint. cursor-row cursor-column)
-                                                (TSPoint. old-end-row old-end-column)
-                                                (TSPoint. cursor-row cursor-column)))
+                                                (TSPoint. cursor-row cursor-column-byte)
+                                                (TSPoint. old-end-row old-end-column-byte)
+                                                (TSPoint. cursor-row cursor-column-byte)))
                       tree))
 
          new-rope (.concat (.sliceBytes rope 0 cursor-byte)
@@ -476,7 +523,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
 
@@ -485,28 +532,31 @@
       editor
       (let [diff-string (-> (.subSequence rope prev-char cursor-char)
                             .toString)
+            diff-bytes (alength (.getBytes diff-string "utf-8"))
             newline? (= "\n" diff-string)
             new-cursor-row (if newline?
                              (dec cursor-row)
                              cursor-row)
 
-            new-cursor-column (if newline?
-                                (loop [column 0
-                                       index (.previous bi)]
-                                  (if (>= index 0)
-                                    (let [c (.charAt rope index)]
-                                      (if (= \newline c)
-                                        column
-                                        (recur (inc column)
-                                               (.previous bi))))
-                                    column))
-                                (dec cursor-column))]
+            new-cursor-char prev-char
+            new-cursor-column-byte (if newline?
+                                     (loop [char-index prev-char]
+                                       (let [prev-char (.preceding bi char-index)]
+                                         (if (or (= -1 prev-char)
+                                                 (= \newline (.charAt rope prev-char)))
+                                           (-> (.subSequence rope char-index new-cursor-char)
+                                               .toString
+                                               .getBytes
+                                               alength)
+                                           (recur prev-char))))
+                                     (- cursor-column-byte
+                                        diff-bytes))]
         (assoc editor
-               :cursor {:byte (- cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (- cursor-char (.length diff-string))
+               :cursor {:byte (- cursor-byte diff-bytes)
+                        :char new-cursor-char
                         :point (- cursor-point (util/num-points diff-string))
                         :row new-cursor-row
-                        :column new-cursor-column})))))
+                        :column-byte new-cursor-column-byte})))))
 
 (defn editor-forward-word [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -515,7 +565,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getWordInstance)
              (.setText rope))
 
@@ -524,19 +574,18 @@
       editor
       (let [diff-string (-> (.subSequence rope cursor-char next-char)
                             .toString)
-            newline? (= "\n" diff-string)
-            new-cursor-row (if newline?
-                             (inc cursor-row)
-                             cursor-row)
-            new-cursor-column (if newline?
-                                0
-                                (inc cursor-column))]
+
+            rc-offset (util/count-row-column-bytes diff-string)
+            new-cursor-row (+ cursor-row (:row rc-offset))
+            new-cursor-column-byte (if (pos? (:row rc-offset))
+                                     (:column-byte rc-offset)
+                                     (+ (:column-byte rc-offset) cursor-column-byte))]
         (assoc editor
                :cursor {:byte (+ cursor-byte (alength (.getBytes diff-string "utf-8")))
                         :char (+ cursor-char (.length diff-string))
                         :point (+ cursor-point (util/num-points diff-string))
                         :row new-cursor-row
-                        :column new-cursor-column})))))
+                        :column-byte new-cursor-column-byte})))))
 (defn editor-backward-word [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
@@ -544,7 +593,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getWordInstance)
              (.setText rope))
 
@@ -553,19 +602,29 @@
       editor
       (let [diff-string (-> (.subSequence rope prev-char cursor-char )
                             .toString)
-            newline? (= "\n" diff-string)
-            new-cursor-row (if newline?
-                             (inc cursor-row)
-                             cursor-row)
-            new-cursor-column (if newline?
-                                0
-                                (inc cursor-column))]
+
+            rc-offset (util/count-row-column-bytes diff-string)
+            new-cursor-row (- cursor-row (:row rc-offset))
+            new-cursor-char prev-char
+            new-cursor-column-byte (if (pos? (:row rc-offset))
+                                     (loop [char-index prev-char]
+                                       (let [prev-char (.preceding bi char-index)]
+                                         (if (or (= -1 prev-char)
+                                                 (= \newline (.charAt rope prev-char)))
+                                           (-> (.subSequence rope char-index new-cursor-char)
+                                               .toString
+                                               .getBytes
+                                               alength)
+                                           (recur prev-char))))
+                                     (- cursor-column-byte
+                                        (:column-byte rc-offset)))]
         (assoc editor
                :cursor {:byte (- cursor-byte (alength (.getBytes diff-string "utf-8")))
-                        :char (- cursor-char (.length diff-string))
+                        :char new-cursor-char
                         :point (- cursor-point (util/num-points diff-string))
                         :row new-cursor-row
-                        :column new-cursor-column})))))
+                        :column-byte new-cursor-column-byte})))))
+
 (defn editor-forward-paragraph [editor]
   editor)
 (defn editor-backward-paragraph [editor]
@@ -577,7 +636,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
 
@@ -592,13 +651,13 @@
       (let [diff-string (-> (.subSequence rope char-index cursor-char)
                             .toString)
             num-bytes (alength (.getBytes diff-string "utf-8"))
-            new-cursor-column (- cursor-column num-bytes)]
+            new-cursor-column-byte (- cursor-column-byte num-bytes)]
         (assoc editor
                :cursor {:byte (- cursor-byte num-bytes)
                         :char (- cursor-char (.length diff-string))
                         :point (- cursor-point (util/num-points diff-string))
                         :row cursor-row
-                        :column new-cursor-column}))))
+                        :column-byte new-cursor-column-byte}))))
   )
 (defn editor-move-end-of-line [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
@@ -607,7 +666,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
 
@@ -622,13 +681,13 @@
       (let [diff-string (-> (.subSequence rope cursor-char char-index )
                             .toString)
             num-bytes (alength (.getBytes diff-string "utf-8"))
-            new-cursor-column (+ cursor-column num-bytes)]
+            new-cursor-column-byte (+ cursor-column-byte num-bytes)]
         (assoc editor
                :cursor {:byte (+ cursor-byte num-bytes)
                         :char (+ cursor-char (.length diff-string))
                         :point (+ cursor-point (util/num-points diff-string))
                         :row cursor-row
-                        :column new-cursor-column})))))
+                        :column-byte new-cursor-column-byte})))))
 
 (defn editor-back-to-indentation [editor]
   (let [{:keys [cursor ^Rope rope] :as editor}
@@ -638,7 +697,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
 
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
@@ -654,13 +713,13 @@
       (let [diff-string (-> (.subSequence rope cursor-char char-index )
                             .toString)
             num-bytes (alength (.getBytes diff-string "utf-8"))
-            new-cursor-column (+ cursor-column num-bytes)]
+            new-cursor-column-byte (+ cursor-column-byte num-bytes)]
         (assoc editor
                :cursor {:byte (+ cursor-byte num-bytes)
                         :char (+ cursor-char (.length diff-string))
                         :point (+ cursor-point (util/num-points diff-string))
                         :row cursor-row
-                        :column new-cursor-column})))))
+                        :column-byte new-cursor-column-byte})))))
 
 (defn editor-previous-line
   ([editor]
@@ -672,11 +731,11 @@
           cursor-char :char
           cursor-point :point
           cursor-row :row
-          cursor-target-column :target-column
-          cursor-column :column} cursor
+          cursor-target-column-byte :target-column-byte
+          cursor-column-byte :column-byte} cursor
 
-         target-column (or cursor-target-column
-                           cursor-column)
+         target-column-byte (or cursor-target-column-byte
+                                cursor-column-byte)
 
          bi (doto (BreakIterator/getCharacterInstance)
               (.setText rope))
@@ -692,16 +751,25 @@
                                                                           (recur prev-char (inc lines)))
                                   :else (recur prev-char lines))))
 
-         ;; keep going until target column
-         [char-index column]
+         ;; keep going until target column-byte
+         ;; target byte doesn't even make sense
+         ;; treat target byte as target grapheme cluster for now
+         line-start-char char-index
+         [char-index column-byte]
          (loop [char-index char-index
-                column 0]
+                n 0]
            (let [next-char (.following bi char-index)]
-             (cond
-               (= -1 next-char) [char-index column]
-               (= \newline (.charAt rope char-index)) [char-index column]
-               (= column target-column) [char-index column]
-               :else (recur next-char (inc column)))))]
+             (if (or (= -1 next-char)
+                     (= \newline (.charAt rope char-index))
+                     (= n target-column-byte)
+                     ;; hack due to target column-byte being nonsense
+                     (> next-char line-start-char))
+               [char-index (-> (.subSequence rope line-start-char char-index)
+                               .toString
+                               .getBytes
+                               alength)]
+               (recur next-char
+                      (inc n)))))]
      (if (= char-index cursor-char)
        editor
        (let [diff-string (-> (.subSequence rope char-index cursor-char)
@@ -713,8 +781,8 @@
                          :char (- cursor-char (.length diff-string))
                          :point (- cursor-point (util/num-points diff-string))
                          :row new-cursor-row
-                         :target-column target-column
-                         :column column}))))))
+                         :target-column-byte target-column-byte
+                         :column-byte column-byte}))))))
 
 
 (defn editor-self-insert-command [editor ^String s]
@@ -723,28 +791,28 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
 
-        point-offset (util/count-points s)
-        new-cursor-row (+ cursor-row (:row point-offset))
-        new-cursor-column (if (pos? (:row point-offset))
-                            (:column point-offset)
-                            (+ (:column point-offset) cursor-column))]
+        rc-offset (util/count-row-column-bytes s)
+        new-cursor-row (+ cursor-row (:row rc-offset))
+        new-cursor-column-byte (if (pos? (:row rc-offset))
+                                 (:column-byte rc-offset)
+                                 (+ (:column-byte rc-offset) cursor-column-byte))]
     (-> editor
         (assoc :cursor {:byte (+ cursor-byte (util/num-bytes s))
                         :char (+ cursor-char (.length s))
                         :point (+ cursor-point (util/num-points s))
                         :row new-cursor-row
-                        :column new-cursor-column})
-        (editor-insert s cursor-byte cursor-row cursor-column))))
+                        :column-byte new-cursor-column-byte})
+        (editor-insert s cursor-byte cursor-row cursor-column-byte))))
 
 (defn editor-append-history [editor past]
   (update editor :history
-    (fn [history]
-      (let [log (or (:log history)
-                    [])
-            log (conj log past)]
-        (assoc history :log log)))))
+          (fn [history]
+            (let [log (or (:log history)
+                          [])
+                  log (conj log past)]
+              (assoc history :log log)))))
 
 (defn editor-undo [editor]
   ;; not sure if history should
@@ -812,13 +880,16 @@
   (let [mark (:mark editor)
         history (:history mark)]
     (if (seq history)
-      (-> editor
-          (assoc :cursor (peek history))
-          (update-in [:mark :history] pop)
-          (update-in [:mark :popmode?] (fn [pm]
-                                         (if pm
-                                           (inc pm)
-                                           0))))
+      (let [{:keys [row column-byte]} (peek history)]
+        (-> editor
+            ;; goto-row-col takes a grapheme cluster index for col
+            ;; cheat for now.
+            (editor-goto-row-col row column-byte)
+            (update-in [:mark :history] pop)
+            (update-in [:mark :popmode?] (fn [pm]
+                                           (if pm
+                                             (inc pm)
+                                             0)))))
       ;; else
       editor)))
 
@@ -837,7 +908,7 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column :column} cursor
+         cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getCharacterInstance)
              (.setText rope))
 
@@ -920,11 +991,11 @@
           cursor-char :char
           cursor-point :point
           cursor-row :row
-          cursor-target-column :target-column
-          cursor-column :column} cursor
+          cursor-target-column-byte :target-column-byte
+          cursor-column-byte :column-byte} cursor
 
-         target-column (or cursor-target-column
-                           cursor-column)
+         target-column-byte (or cursor-target-column-byte
+                                cursor-column-byte)
 
          bi (doto (BreakIterator/getCharacterInstance)
               (.setText rope))
@@ -948,33 +1019,39 @@
                                                                              (recur next-char lines next-char)))
                                   :else (recur next-char lines last-line-char))))
 
-         ;; keep going until target column
-         [char-index column]
-         (if (= cursor-char char-index)
-           [char-index cursor-column]
-           (loop [char-index char-index
-                  column 0]
-             (let [next-char (.following bi char-index)]
-               (cond
-
-                 (= -1 next-char) [char-index column]
-                 (= \newline (.charAt rope char-index)) [char-index column]
-                 (= column target-column) [char-index column]
-                 :else (recur next-char (inc column))))))]
+         ;; keep going until target column-byte
+         ;; target byte doesn't even make sense
+         ;; treat target byte as target grapheme cluster for now
+         line-start-char char-index
+         [char-index column-byte]
+         (loop [char-index char-index
+                n 0]
+           (let [next-char (.following bi char-index)]
+             (if (or (= -1 next-char)
+                     (= \newline (.charAt rope char-index))
+                     (= n target-column-byte)
+                     ;; hack due to target column-byte being nonsense
+                     (> next-char line-start-char))
+               [char-index (-> (.subSequence rope line-start-char char-index)
+                               .toString
+                               .getBytes
+                               alength)]
+               (recur next-char
+                      (inc n)))))]
      (if (= char-index cursor-char)
        editor
        (let [diff-string (-> (.subSequence rope cursor-char char-index )
                              .toString)
              num-bytes (alength (.getBytes diff-string "utf-8"))
-             new-cursor-column (+ cursor-column num-bytes)
+             new-cursor-column-byte (+ cursor-column-byte num-bytes)
              new-cursor-row (+ cursor-row lines)]
          (assoc editor
                 :cursor {:byte (+ cursor-byte num-bytes)
                          :char (+ cursor-char (.length diff-string))
                          :point (+ cursor-point (util/num-points diff-string))
                          :row new-cursor-row
-                         :target-column target-column
-                         :column column}))))))
+                         :target-column-byte target-column-byte
+                         :column-byte column-byte}))))))
 
 (defn editor-scroll-down [editor]
   (let [to-scroll (quot (-> editor :viewport :num-lines)
@@ -993,7 +1070,7 @@
 (defn editor-end-of-buffer [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         ;; could probably be more efficient
-        {:keys [row column]} (util/count-points (.toString rope))]
+        {:keys [row column-byte]} (util/count-row-column-bytes (.toString rope))]
     
     (-> editor
         (editor-push-mark)
@@ -1001,7 +1078,7 @@
                         :char (-> rope .toCharSequence .length)
                         :point (-> rope .size)
                         :row row
-                        :column column}))))
+                        :column-byte column-byte}))))
 
 (defn editor-beginning-of-buffer [editor]
   (-> editor
@@ -1010,7 +1087,7 @@
                       :char 0
                       :point 0
                       :row 0
-                      :column 0})))
+                      :column-byte 0})))
 
 (defn editor-isearch-forward [editor]
   editor)
@@ -1024,7 +1101,7 @@
         cursor-byte  (-> editor :cursor :byte) 
 
         bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText rope))
+             (.setText rope))
 
         ;; counting spaces and spaces are single bytes
         diff-bytes
@@ -1082,7 +1159,7 @@
         
         ;; count spaces backwards
         bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText rope))
+             (.setText rope))
         backward-diff-bytes
         (loop [n 0
                char-index cursor-char]
@@ -1150,5 +1227,5 @@
              :char 0
              :point 0
              :row 0
-             :column 0}
+             :column-byte 0}
     :rope Rope/EMPTY}))
