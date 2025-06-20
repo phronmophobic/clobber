@@ -1516,7 +1516,8 @@
                (when (util/skip-to-byte-offset tree-cursor start-byte)
                  (util/tree-cursor-reducible tree-cursor))))
             
-            minnest-col (apply min (vals min-cols))
+            minnest-col (when (seq min-cols)
+                          (apply min (vals min-cols)))
             
             editor (if (not= start-row (:row cursor))
                      (assoc editor :cursor (:select-cursor editor))
