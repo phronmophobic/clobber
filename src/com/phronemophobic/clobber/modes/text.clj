@@ -761,9 +761,7 @@
            (let [next-char (.following bi char-index)]
              (if (or (= -1 next-char)
                      (= \newline (.charAt rope char-index))
-                     (= n target-column-byte)
-                     ;; hack due to target column-byte being nonsense
-                     (> next-char line-start-char))
+                     (= n target-column-byte))
                [char-index (-> (.subSequence rope line-start-char char-index)
                                .toString
                                .getBytes
@@ -1022,22 +1020,23 @@
          ;; keep going until target column-byte
          ;; target byte doesn't even make sense
          ;; treat target byte as target grapheme cluster for now
-         line-start-char char-index
          [char-index column-byte]
-         (loop [char-index char-index
-                n 0]
-           (let [next-char (.following bi char-index)]
-             (if (or (= -1 next-char)
-                     (= \newline (.charAt rope char-index))
-                     (= n target-column-byte)
-                     ;; hack due to target column-byte being nonsense
-                     (> next-char line-start-char))
-               [char-index (-> (.subSequence rope line-start-char char-index)
-                               .toString
-                               .getBytes
-                               alength)]
-               (recur next-char
-                      (inc n)))))]
+         (if (pos? lines)
+           (let [line-start-char char-index]
+             (loop [char-index char-index
+                    n 0]
+
+               (let [next-char (.following bi char-index)]
+                 (if (or (= -1 next-char)
+                         (= \newline (.charAt rope char-index))
+                         (= n target-column-byte))
+                   [char-index (-> (.subSequence rope line-start-char char-index)
+                                   .toString
+                                   .getBytes
+                                   alength)]
+                   (recur next-char
+                          (inc n))))))
+           [cursor-char cursor-column-byte])]
      (if (= char-index cursor-char)
        editor
        (let [diff-string (-> (.subSequence rope cursor-char char-index )
