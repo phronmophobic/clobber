@@ -9,7 +9,7 @@
         org.clojars.quoll/tiara {:mvn/version "0.3.7"}
         clope/clope {:mvn/version "1"}
         io.lacuna/bifurcan {:git/url "https://github.com/phronmophobic/bifurcan"
-                            :git/sha "c389a712269d9f89af66dc1f759559744f58ff6a"}
+                            :git/sha "0cb3c057cc87d3ac9fa7f1231a721caf74be6a57"}
 
         dev.weavejester/cljfmt {:mvn/version "0.13.1"}
 
