@@ -8,6 +8,7 @@
    [clojure.test.check.properties :as prop]
    [clojure.test.check :as tc]
    [clojure.datafy :as d]
+   [membrane.ui :as ui]
    [com.phronemophobic.clobber.modes.clojure.ui :as cui]
    [com.phronemophobic.clobber.util :as util]
    [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
@@ -148,6 +149,29 @@
                   (ignore-bad-parses
                     (check-parse (apply-ops editor op-list))))))
 
+(def test-editor
+  (delay (-> (cui/make-editor)
+             (text-mode/editor-set-string
+              (slurp (clojure.java.io/resource "com/phronemophobic/clobber/modes/clojure/ui.clj"))))))
+
+
+(defn check-cursor-view-prop [ops]
+  (prop/for-all [op-list ops]
+                (ignore-bad-parses
+                  (let [editor (-> @test-editor
+                                   (apply-ops op-list))
+                        para (cui/editor->paragraph editor)]
+                    (try
+                      (->> (cui/cursor-view (:rope editor)
+                                            para
+                                            (:cursor editor))
+                           (tree-seq ui/children ui/children)
+                           dorun)
+                      true
+                      (catch Exception e
+                        (tap> e)
+                        (throw e)))))))
+
 (def
   testspec
   (s/spec
@@ -182,6 +206,22 @@
   (let [aresults (tc/quick-check 
                   10000
                   (check-parse-prop (s/gen
+                                    (s/coll-of testspec
+                                               :into []
+                                               :max-count 50))))]
+    (def results aresults)
+    (clojure.pprint/pprint
+     
+     (-> aresults
+         :shrunk
+         :smallest))
+    (tap> results)
+    nil)
+
+
+  (let [aresults (tc/quick-check 
+                  1000
+                  (check-cursor-view-prop (s/gen
                                     (s/coll-of testspec
                                                :into []
                                                :max-count 50))))]
