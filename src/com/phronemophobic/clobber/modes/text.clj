@@ -281,16 +281,15 @@
                              new-start-line)]
         (assoc-in editor [:viewport :start-line] new-start-line))
 
-      (> row (+ start-line num-lines))
+      (>= row (+ start-line num-lines))
       (let [new-start-line (+ start-line
                               (quot num-lines 2))
 
-            new-start-line (if (> row (+ new-start-line num-lines))
+            new-start-line (if (>= row (+ new-start-line num-lines))
                              (max 0
                                   (- row
                                      (quot num-lines 2)))
-                             new-start-line
-                             )]
+                             new-start-line)]
         (assoc-in editor [:viewport :start-line] new-start-line))
 
       :else editor)))
