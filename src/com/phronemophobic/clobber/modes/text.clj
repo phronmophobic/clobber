@@ -226,9 +226,7 @@
           (let [next-char (.following bi char-index)]
             (if (or (= -1 next-char)
                     (= \newline (.charAt rope char-index))
-                    (= n target-column)
-                    ;; hack due to target column-byte being nonsense
-                    (> next-char line-start-char))
+                    (= n target-column))
               [char-index (if (zero? row)
                             (-> (.subSequence rope 0 char-index)
                                 .toString
