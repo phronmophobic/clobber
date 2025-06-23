@@ -38,6 +38,7 @@
 (comment
   (require 'virgil)
   (defonce recompile (virgil/compile-java ["/Users/adrian/workspace/bifurcan/src"]))
+  (import 'io.lacuna.bifurcan.Rope)
   ,)
 
 (extend-protocol p/Datafiable
