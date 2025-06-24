@@ -395,6 +395,73 @@
   (tap> editor)
   nil)
 
+(defui doc-viewer [{:keys [docstring]}]
+  (let [width (-> context
+                  :membrane.stretch/container-size
+                  first)]
+    (para/paragraph docstring width)))
+
+(defeffect ::show-doc [{:keys [editor $editor]}]
+  (when-let [^TSTree tree (:tree editor)]
+    (let [tc (TSTreeCursor. (.getRootNode tree))
+          cursor (:cursor editor)
+          cursor-byte (:byte cursor)
+          rope (:rope editor)
+
+          ^TSNode
+          node
+          (transduce
+           (comp (take-while (fn [^TSNode node]
+                               (<= (-> node .getStartByte)
+                                   cursor-byte)))
+                 (filter (fn [^TSNode node]
+                           (>= (-> node .getEndByte)
+                               cursor-byte)))
+                 (filter (fn [^TSNode node]
+                           (= "sym_lit" (.getType node)))))
+           (completing
+            (fn [result node]
+              node))
+           nil
+           (when (util/skip-to-byte-offset tc cursor-byte)
+             (util/tree-cursor-reducible tc)))]
+      (when node
+        (let [node-string (util/node->str rope node)
+              sym (read-string node-string)
+              v (ns-resolve (:eval-ns editor) sym)
+              mta (meta v)
+              doc (:doc mta)]
+          (when (string? doc)
+            (let [line (-> cursor :row)
+                  line-vals {line
+                             (viscous/wrap
+                              (with-meta (para/paragraph doc)
+                                         {:view true}))}
+                  
+                  arglists (when (seq? (:arglists mta))
+                             (str/join
+                              "\n"
+                              (eduction
+                               (map pr-str)
+                               (:arglists mta))))]
+              ;; This should really be a more general
+              ;; intent that easel's implementation catches and implements
+              (dispatch! 
+               :com.phronemophobic.easel/add-applet
+               {:id ::doc-viewer
+                :make-applet
+                (fn [_]
+                  ((requiring-resolve 
+                    'com.phronemophobic.easel/map->ComponentApplet)
+                   {:label "Doc"
+                    :component-var #'doc-viewer
+                    :initial-state {:docstring 
+                                    [node-string
+                                     "\n"
+                                     arglists
+                                     "\n"
+                                     doc]}}))}))))))))
+
 (defui file-picker [{:keys [base-style folder
                             focused?
                             width]
@@ -1178,6 +1245,7 @@
    (assoc clojure-mode/key-bindings
           "C-x C-s" ::save-editor
           "C-x C-f" ::file-picker
+          "C-c C-d" ::show-doc
           "C-g" #'editor-cancel
           "C-c t" ::tap-editor
           "C-c C-k" ::load-buffer
