@@ -1332,20 +1332,25 @@
      (dissoc editor ::search))))
 
 (defeffect ::cancel-search-forward [{:keys [$editor]}]
-  (dispatch! :update $editor
-             (fn [editor]
-               (let [initial-cursor (-> editor ::search :initial-cursor)
-                     editor (if initial-cursor
-                              (assoc editor :cursor initial-cursor)
-                              editor)]
-                 (text-mode/editor-update-viewport
-                  (dissoc editor ::search)))
-               )))
+  (dispatch! ::update-editor 
+             {:$editor $editor
+              :op (fn [editor]
+                    (let [initial-cursor (-> editor ::search :initial-cursor)
+                          editor (if initial-cursor
+                                   (assoc editor :cursor initial-cursor)
+                                   editor)]
+                      (text-mode/editor-update-viewport
+                       (dissoc editor ::search))))}))
 
 (defn finish-search-forward [editor]
   (-> editor
       (text-mode/editor-push-mark (-> editor ::search :initial-cursor))
       (dissoc ::search)))
+
+(defeffect ::finish-search-forward [{:keys [$editor]}]
+  (dispatch! ::update-editor
+             {:op finish-search-forward
+              :$editor $editor}))
 
 (defeffect ::show-completions [{:keys [$editor]}]
   (dispatch! ::update-editor
@@ -1376,10 +1381,6 @@
           "C-M-x" ::editor-eval-top-form
           "C-x C-e" ::editor-eval-last-sexp
           "C-s" #'init-search-forward)))
-
-(defeffect ::finish-search-forward [{:keys [$editor]}]
-  (dispatch! :update $editor
-             finish-search-forward))
 
 (defn editor-search-forward [editor query]
   (let [search-state (::search editor)
@@ -1470,24 +1471,26 @@
           (assoc-in [::search :match] nil)))))
 
 (defeffect ::append-search-forward [{:keys [$editor s]}]
-  (dispatch! :update $editor
-             (fn [editor]
-               (let [query (str (-> editor
-                                    ::search
-                                    :query)
-                                s)]
-                 (-> editor
-                     (editor-search-forward query)
-                     (assoc :search/last-search query))))))
+  (dispatch! ::update-editor
+             {:$editor $editor
+              :op (fn [editor]
+                    (let [query (str (-> editor
+                                         ::search
+                                         :query)
+                                     s)]
+                      (-> editor
+                          (editor-search-forward query)
+                          (assoc :search/last-search query))))}))
 
 (defeffect ::repeat-search-forward [{:keys [$editor s]}]
-  (dispatch! :update $editor
-             (fn [editor]
-               (if (-> editor ::search :query)
-                 (editor-repeat-search-forward editor)
-                 (if-let [query (:search/last-search editor)]
-                   (editor-search-forward editor query)
-                   editor)))))
+  (dispatch! ::update-editor
+             {:$editor $editor
+              :op (fn [editor]
+                    (if (-> editor ::search :query)
+                      (editor-repeat-search-forward editor)
+                      (if-let [query (:search/last-search editor)]
+                        (editor-search-forward editor query)
+                        editor)))}))
 
 (defui wrap-search [{:keys [editor body]
                      :as this}]
