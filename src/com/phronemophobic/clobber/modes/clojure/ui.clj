@@ -432,14 +432,9 @@
               v (ns-resolve (:eval-ns editor) sym)
               mta (meta v)
               doc (:doc mta)]
-          (when (string? doc)
-            (let [line (-> cursor :row)
-                  line-vals {line
-                             (viscous/wrap
-                              (with-meta (para/paragraph doc)
-                                         {:view true}))}
-                  
-                  arglists (when (seq? (:arglists mta))
+          (when (or (seq? (:arglists mta))
+                    (string? doc))
+            (let [arglists (when (seq? (:arglists mta))
                              (str/join
                               "\n"
                               (eduction
@@ -461,7 +456,8 @@
                                      "\n"
                                      arglists
                                      "\n"
-                                     doc]}}))}))))))))
+                                     (when (string? doc)
+                                       doc)]}}))}))))))))
 
 (defui file-picker [{:keys [base-style folder
                             focused?
