@@ -11,6 +11,7 @@
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
             [com.phronemophobic.viscous :as viscous]
+            compliment.core
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
@@ -581,100 +582,189 @@
 
 (defn update-arglist [{:keys [$editor editor dispatch!] :as m}]
   ;; TODO: should try to cache results
-  (try
-    (when-let [^TSTree tree (:tree editor)]
-      (let [rope (:rope editor)
-            tc (TSTreeCursor. (.getRootNode tree))
-            cursor (:cursor editor)
-            cursor-byte (:byte cursor)
-            
-            ;; find parent coll
-            ^TSNode
-            parent-coll
-            (transduce
-             (comp (take-while (fn [^TSNode node]
-                                 (< (-> node .getStartByte)
-                                    cursor-byte)))
-                   (filter (fn [^TSNode node]
-                             (contains? clojure-mode/coll-node-types (.getType node))
-                             ))
-                   (filter (fn [^TSNode node]
-                             (> (-> node .getEndByte)
-                                cursor-byte))))
-             (completing
-              (fn [result node]
-                node))
-             nil
-             (when (util/skip-to-byte-offset tc cursor-byte)
-               (util/tree-cursor-reducible tc)))]
-        (if (and parent-coll (= "list_lit" (.getType parent-coll)))
-          ;; try to find arglist
-          (let [named-child-count (.getNamedChildCount parent-coll)]
-            (when (pos? named-child-count)
-              (let [first-child (.getNamedChild parent-coll 0)]
-                (when (and (= "sym_lit" (.getType first-child))
-                           ;; not sure if we should show
-                           ;; arglists when cursor is
-                           ;; not in arg position
-                           #_(>= cursor-byte 
-                               (.getEndByte first-child)))
-                  (let [sym (read-string 
-                             (util/node->str rope first-child))
-                        v (ns-resolve (:eval-ns editor) sym)
-                        
-                        arglists (-> v meta :arglists)]
-                    (when arglists
-                      (let [cursor-index
-                            (loop [index 1]
-                              (if (>= index named-child-count)
-                                (dec index)
-                                (let [argnode (.getNamedChild parent-coll index)]
-                                  (if (<= cursor-byte (.getEndByte argnode))
-                                    (dec index)
-                                    (recur (inc index))))))
-                            
-                            base-style (:base-style editor)
-                            ps (into [(str 
-                                       (pr-str v)
-                                       " ")]
-                                     (comp
-                                      (map (fn [arglist]
-                                             ["["
-                                              (into []
-                                                    (comp
-                                                     (map-indexed (fn [i node]
-                                                                    (let [s (pr-str node)]
-                                                                      (if (= i cursor-index)
-                                                                        {:text s
-                                                                         :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
-                                                                        s))))
-                                                     (interpose " "))
-                                                    arglist)
-                                              "]"]))
-                                      (interpose " "))
-                                     arglists)
-                            p (para/paragraph
-                               ps
-                               nil
-                               {:paragraph-style/text-style (:base-style editor)}
-                               
-                               )]
-                        (dispatch! :update $editor
-                                   (fn [editor]
-                                     (assoc-in editor [:status :status] p)))))
-                    
-                    
-                    
-                    )))
-              ))
-          ;; else, remove arglist
-          (when (-> editor :status :status)
-            (dispatch! :update $editor
-                       (fn [editor]
-                         (assoc-in editor [:status :status] nil)))
-            ))))
-    (catch Exception e
-      (tap> e))))
+  (when-let [^TSTree tree (:tree editor)]
+    (let [rope (:rope editor)
+          tc (TSTreeCursor. (.getRootNode tree))
+          cursor (:cursor editor)
+          cursor-byte (:byte cursor)
+          
+          ;; find parent coll
+          ^TSNode
+          parent-coll
+          (transduce
+           (comp (take-while (fn [^TSNode node]
+                               (< (-> node .getStartByte)
+                                  cursor-byte)))
+                 (filter (fn [^TSNode node]
+                           (contains? clojure-mode/coll-node-types (.getType node))
+                           ))
+                 (filter (fn [^TSNode node]
+                           (> (-> node .getEndByte)
+                              cursor-byte))))
+           (completing
+            (fn [result node]
+              node))
+           nil
+           (when (util/skip-to-byte-offset tc cursor-byte)
+             (util/tree-cursor-reducible tc)))]
+      (if (and parent-coll (= "list_lit" (.getType parent-coll)))
+        ;; try to find arglist
+        (let [named-child-count (.getNamedChildCount parent-coll)]
+          (when (pos? named-child-count)
+            (let [first-child (.getNamedChild parent-coll 0)]
+              (when (and (= "sym_lit" (.getType first-child)))
+                (let [sym (read-string 
+                           (util/node->str rope first-child))
+                      v (ns-resolve (:eval-ns editor) sym)
+                      
+                      arglists (-> v meta :arglists)]
+                  (when arglists
+                    (let [cursor-index
+                          (loop [index 1]
+                            (if (>= index named-child-count)
+                              (dec index)
+                              (let [argnode (.getNamedChild parent-coll index)]
+                                (if (<= cursor-byte (.getEndByte argnode))
+                                  (dec index)
+                                  (recur (inc index))))))
+                          
+                          base-style (:base-style editor)
+                          ps (into [(str 
+                                     (pr-str v)
+                                     " ")]
+                                   (comp
+                                    (map (fn [arglist]
+                                           ["["
+                                            (into []
+                                                  (comp
+                                                   (map-indexed (fn [i node]
+                                                                  (let [s (pr-str node)]
+                                                                    (if (= i cursor-index)
+                                                                      {:text s
+                                                                       :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
+                                                                      s))))
+                                                   (interpose " "))
+                                                  arglist)
+                                            "]"]))
+                                    (interpose " "))
+                                   arglists)
+                          p (para/paragraph
+                             ps
+                             nil
+                             {:paragraph-style/text-style (:base-style editor)})]
+                      (dispatch! :update $editor
+                                 (fn [editor]
+                                   (assoc-in editor [:status :status] p))))))))))
+        ;; else, remove arglist
+        (when (-> editor :status :status)
+          (dispatch! :update $editor
+                     (fn [editor]
+                       (assoc-in editor [:status :status] nil))))))))
+
+(defn update-completions [{:keys [$editor editor dispatch!] :as m}]
+  (when (::completion editor)
+    (let [^TSTree tree (:tree editor)
+          rope (:rope editor)
+          tc (TSTreeCursor. (.getRootNode tree))
+          cursor (:cursor editor)
+          cursor-byte (:byte cursor)
+          
+          ^TSNode
+           [sym-node slash?]
+          (transduce
+           (comp (take-while (fn [^TSNode node]
+                               (<= (-> node .getStartByte)
+                                   cursor-byte)))
+                 (filter (fn [^TSNode node]
+                           (let [type (.getType node)]
+                             (or (= "sym_lit" type)
+                                 (= "/" type)))))
+                 (filter (fn [^TSNode node]
+                           ;; inc because of slashes
+                           (>= (inc 
+                                (-> node .getEndByte))
+                               cursor-byte))))
+           (completing
+            (fn [[sym-node slash? last-node :as result] node]
+              (let [type (.getType node)]
+                (if (= "sym_lit" type)
+                  (if (>= (-> node .getEndByte)
+                          cursor-byte)
+                    [node false nil]
+                    [nil false node])
+                  ;; special handling for incomplete symbols
+                  ;; that end with a / like "clojure.string/"
+                  (if (and (= "/" type)
+                           last-node
+                           (= (.getEndByte last-node)
+                              (.getStartByte node)))
+                    [last-node true nil]
+                    result)))))
+           
+           nil
+           (when (util/skip-to-byte-offset tc 
+                                           ;; make sure to check include
+                                           ;; nodes ending 1 byte before
+                                           ;; current cursor byte
+                                           ;; because of slash
+                                           (dec cursor-byte))
+             (util/tree-cursor-reducible tc)))]
+      (if sym-node
+        (let [sym-str (util/node->str rope sym-node)
+              sym-str (if slash?
+                        (str sym-str "/")
+                        sym-str)
+              completions (into
+                           []
+                           (compliment.core/completions sym-str
+                                                        {:ns (:eval-ns editor)}))]
+          
+          (if (seq completions)
+            (let [para (editor->paragraph editor)
+                  
+                  sym-cursor (-> (text-mode/editor-goto-byte editor (.getStartByte sym-node))
+                                 :cursor)
+                  sym-char(:char sym-cursor)
+
+                  start-char (- sym-char
+                                (:char-offset para))
+                  end-char (let [bi (doto (BreakIterator/getCharacterInstance)
+                                      (.setText rope))]
+                             (- (.following bi sym-char)
+                                (:char-offset para)))
+                  
+                  {:keys [x y width height] :as rect}
+                  (first
+                   (para/get-rects-for-range para start-char end-char
+                                             :max
+                                             :tight))]
+              ;; view can get very slightly out of sync from editor
+              ;; but that's ok
+              (dispatch! :update $editor
+                         (fn [editor]
+                           (assoc editor
+                                  ::completion
+                                  {:completions completions
+                                   :->view (fn [{:keys [completions offset]}]
+                                             (ui/translate
+                                              x (+ y height)
+                                              (ui/fill-bordered
+                                               [0.9 0.9 0.9]
+                                               4
+                                               (para/paragraph (str/join 
+                                                                "\n"
+                                                                (eduction
+                                                                 (map :candidate)
+                                                                 (drop (or offset 0))
+                                                                 (take 20)
+                                                                 completions))
+                                                               nil
+                                                               {:paragraph-style/text-style (:base-style editor)}))))
+                                   :offset 0}))))
+            (dispatch! :update $editor dissoc ::completion)))
+        ;; else
+        (when (::completion editor)
+          (dispatch! :update $editor dissoc ::completion))))))
 
 (defn arglist-watcher []
   (let [ch (async/chan (async/sliding-buffer 1))]
@@ -683,11 +773,27 @@
        (loop [last-editor nil]
          (let [msg (async/<!! ch)
                editor (:editor msg)
-               editor (select-keys editor [:rope :cursor])]
-           (when (not= editor last-editor)
-             (update-arglist msg))
+
+               rope-or-cursor-changed?
+               (not= (select-keys editor [:rope :cursor]) 
+                     (select-keys last-editor [:rope :cursor]))]
+           (when rope-or-cursor-changed?
+             (try
+               (update-arglist msg)
+               (catch Exception e
+                 (tap> e))))
+           
+           (when (or rope-or-cursor-changed?
+                     ;; there's probably a better way to do this
+                     (and (= {} (::completion editor))
+                          (not (::completion last-editor))))
+             (try
+               (update-completions msg)
+               (catch Exception e
+                 (tap> e))))
+           
            (recur editor)))
-       (catch Exception e
+       (catch Throwable e
          (prn e))))
     ch))
 
@@ -1201,7 +1307,11 @@
        paren-highlight-view
        para
        line-vals
-       status-bar])))
+       status-bar
+       (when-let [completion (-> editor
+                                 ::completion)]
+         (when-let [->view (:->view completion)]
+           (->view completion)))])))
 
 
 (defn init-search-forward [editor]
@@ -1240,6 +1350,21 @@
       (text-mode/editor-push-mark (-> editor ::search :initial-cursor))
       (dissoc ::search)))
 
+(defeffect ::show-completions [{:keys [$editor]}]
+  (dispatch! ::update-editor
+             {:op (fn [editor]
+                    (tap> (::completion editor))
+                    (if (::completion editor)
+                      (update editor ::completion
+                              (fn [{:keys [offset completions] :as m}]
+                                (let [offset (or offset 0)
+                                      next-offset (+ offset 10)]
+                                  (if (>= next-offset (count completions))
+                                    (assoc m :offset 0)
+                                    (assoc m :offset next-offset)))))
+                      (assoc editor ::completion {})))
+              :$editor $editor}))
+
 (def clojure-keytree
   (key-bindings->keytree
    (assoc clojure-mode/key-bindings
@@ -1249,6 +1374,7 @@
           "C-g" #'editor-cancel
           "C-c t" ::tap-editor
           "C-c C-k" ::load-buffer
+          "M-TAB" ::show-completions
           ;; "C-c C-v" ::editor-paste
           "C-M-x" ::editor-eval-top-form
           "C-x C-e" ::editor-eval-last-sexp

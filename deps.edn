@@ -12,6 +12,7 @@
                             :git/sha "0cb3c057cc87d3ac9fa7f1231a721caf74be6a57"}
 
         dev.weavejester/cljfmt {:mvn/version "0.13.1"}
+        compliment/compliment {:mvn/version "0.7.0"}
 
         com.ibm.icu/icu4j {:mvn/version "68.1"}
         com.ibm.icu/icu4j-charset {:mvn/version "68.1"}
