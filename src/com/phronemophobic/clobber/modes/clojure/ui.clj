@@ -123,9 +123,9 @@
 
 (defeffect ::update-editor [{:keys [$editor op] :as m}]
   (dispatch! :update $editor editor-upkeep op)
-  ;; check and do arglist-update
+  ;; check and do background updates
   (let [editor (dispatch! :get $editor)]
-    (when-let [ch (:arglist-chan editor)]
+    (when-let [ch (:background-chan editor)]
       (async/put! ch {:editor editor
                       :$editor $editor
                       :dispatch! dispatch!}))))
@@ -762,7 +762,7 @@
         (when (::completion editor)
           (dispatch! :update $editor dissoc ::completion))))))
 
-(defn arglist-watcher []
+(defn editor-background-runner []
   (let [ch (async/chan (async/sliding-buffer 1))]
     (async/thread
      (try
@@ -797,7 +797,7 @@
 (defn make-editor
   ([{:keys [file eval-ns source] :as m}]
    (let [editor (-> (make-editor)
-                    (assoc :arglist-chan (arglist-watcher)))
+                    (assoc :background-chan (editor-background-runner)))
          
          editor (cond-> editor
                   file (assoc :file file)
