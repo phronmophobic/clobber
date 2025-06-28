@@ -974,7 +974,8 @@
                                        :tight))))
         ]
     (if (not rect)
-      (println "no cursor rect!")
+      (throw (ex-info "No cursor rect."
+                      {}))
       (let [width (if (zero? width)
                     (-> (para/get-rects-for-range (assoc para :paragraph " ")
                                                   0 1
