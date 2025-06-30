@@ -666,7 +666,7 @@
           cursor-byte (:byte cursor)
           
           ^TSNode
-           [sym-node slash?]
+          [sym-node slash?]
           (transduce
            (comp (take-while (fn [^TSNode node]
                                (<= (-> node .getStartByte)
