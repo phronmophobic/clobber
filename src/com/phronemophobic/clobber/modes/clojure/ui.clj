@@ -1355,7 +1355,6 @@
 (defeffect ::show-completions [{:keys [$editor]}]
   (dispatch! ::update-editor
              {:op (fn [editor]
-                    (tap> (::completion editor))
                     (if (::completion editor)
                       (update editor ::completion
                               (fn [{:keys [offset completions] :as m}]
