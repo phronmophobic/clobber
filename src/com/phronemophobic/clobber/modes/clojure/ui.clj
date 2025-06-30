@@ -657,6 +657,7 @@
                      (fn [editor]
                        (assoc-in editor [:status :status] nil))))))))
 
+(declare editor->paragraph)
 (defn update-completions [{:keys [$editor editor dispatch!] :as m}]
   (when (::completion editor)
     (let [^TSTree tree (:tree editor)
