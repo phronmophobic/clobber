@@ -627,10 +627,101 @@
                         :row new-cursor-row
                         :column-byte new-cursor-column-byte})))))
 
-(defn editor-forward-paragraph [editor]
-  editor)
+
 (defn editor-backward-paragraph [editor]
-  editor)
+  (let [^Rope
+        rope (:rope editor)
+        bi (doto (BreakIterator/getCharacterInstance)
+              (.setText rope))
+
+        cursor (:cursor editor)
+        cursor-char (:char cursor)
+        ;; loop backward past newline
+        char-index
+        (loop [char-index cursor-char]
+                     (let [prev-char (.preceding bi char-index)]
+                       (cond
+                         (= -1 prev-char) char-index
+                         (= \newline (.charAt rope prev-char)) prev-char
+                         :else (recur prev-char))))
+
+        ;; goto to next newline where the whole line
+        ;; is whitespace
+        [char-index column-byte] 
+        (loop [char-index char-index
+               all-whitespace? true
+               last-end-line char-index]
+          (let [prev-char (.preceding bi char-index)]
+            (if (= -1 prev-char)
+              [char-index 0]
+              (let [c (.charAt rope prev-char)]
+                (cond
+                  (= \newline c) (if all-whitespace?
+                                   [last-end-line (-> (.subSequence rope char-index last-end-line)
+                                                      .toString
+                                                      .getBytes
+                                                      alength)]
+                                   (recur prev-char true prev-char))
+                  (= \space c) (recur prev-char all-whitespace? last-end-line)
+                  :else (recur prev-char false last-end-line))))))
+        
+        diff-string (-> (.subSequence rope char-index cursor-char)
+                        .toString)]
+    (assoc editor
+           :cursor {:byte (- (:byte cursor) (alength (.getBytes diff-string "utf-8")))
+                    :char char-index
+                    :point (- (:point cursor) (util/num-points diff-string))
+                    :row (- (:row cursor)
+                            (:row (util/count-row-column-bytes diff-string)))
+                    :column-byte column-byte})))
+
+
+(defn editor-forward-paragraph [editor]
+  (let [^Rope
+        rope (:rope editor)
+        bi (doto (BreakIterator/getCharacterInstance)
+              (.setText rope))
+
+        cursor (:cursor editor)
+        cursor-char (:char cursor)
+        ;; loop forward past newline
+        char-index (loop [char-index cursor-char]
+                     (let [next-char (.following bi char-index)]
+                       (cond
+                         (= -1 next-char) char-index
+                         (= \newline (.charAt rope char-index)) next-char
+                         :else (recur next-char))))
+
+        ;; goto to next newline where the whole line
+        ;; is whitespace
+        char-index (loop [char-index char-index
+                          all-whitespace? true]
+                     (let [next-char (.following bi char-index)]
+                       (if (= -1 next-char)
+                         char-index
+                         (let [c (.charAt rope char-index)]
+                           (cond
+                             (= \newline c) (if all-whitespace?
+                                              char-index
+                                              (recur next-char true))
+                             (= \space c) (recur next-char all-whitespace?)
+                             :else (recur next-char false))))))
+        
+        diff-string (-> (.subSequence rope cursor-char char-index)
+                        .toString)
+        
+        rc-offset (util/count-row-column-bytes diff-string)
+        new-cursor-column-byte (if (pos? (:row rc-offset))
+                                 (:column-byte rc-offset)
+                                 (+ (:column-byte rc-offset) (:column-byte cursor)))]
+    (assoc editor
+           :cursor {:byte (+ (:byte cursor) (alength (.getBytes diff-string "utf-8")))
+                    :char char-index
+                    :point (+ (:point cursor) (util/num-points diff-string))
+                    :row (+ (:row cursor)
+                            (:row (util/count-row-column-bytes diff-string)))
+                    :column-byte new-cursor-column-byte})))
+
 (defn editor-move-beginning-of-line [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         

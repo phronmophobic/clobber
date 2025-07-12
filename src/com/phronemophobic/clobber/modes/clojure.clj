@@ -1690,6 +1690,9 @@
    "C-c }" #'paredit-forward-barf-sexp
    "C-_" #'text-mode/editor-undo
 
+   "M-{" #'text-mode/editor-backward-paragraph
+   "M-}" #'text-mode/editor-forward-paragraph
+
    ,})
 
 (defn make-editor []
