@@ -748,7 +748,8 @@
                                               (ui/fill-bordered
                                                [0.9 0.9 0.9]
                                                4
-                                               (para/paragraph (str/join 
+                                               (ui/vertical-layout
+                                                (para/paragraph (str/join
                                                                 "\n"
                                                                 (eduction
                                                                  (map :candidate)
@@ -756,7 +757,12 @@
                                                                  (take 20)
                                                                  completions))
                                                                nil
-                                                               {:paragraph-style/text-style (:base-style editor)}))))
+                                                               {:paragraph-style/text-style (:base-style editor)})
+                                                (when (> (count completions)
+                                                         (+ (or offset 0) 20))
+                                                  (para/paragraph "..."
+                                                                  nil
+                                                                  {:paragraph-style/text-style (:base-style editor)}))))))
                                    :offset 0}))))
             (dispatch! :update $editor dissoc ::completion)))
         ;; else
