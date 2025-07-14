@@ -103,7 +103,7 @@
        (assoc-in m chord
                  ;; wrap intent so we can tell it apart from a regular map
                  {::intent intent})))
-   (->KeyBindingMap)
+   {}
    key-bindings))
 
 

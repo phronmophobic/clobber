@@ -15,7 +15,8 @@
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
-            [com.phronemophobic.clobber.util :as util])
+            [com.phronemophobic.clobber.util :as util]
+            [com.phronemophobic.clobber.util.ui.key-binding :as key-binding])
   (:import (org.treesitter TSLanguage
                            TSQuery
                            TSParser
@@ -368,14 +369,6 @@
       (if press
         (conj chord press)
         chord))))
-
-(defn key-bindings->keytree [key-bindings]
-  (reduce
-   (fn [m [chord-str var]]
-     (let [chord (key-chord->map chord-str)]
-       (assoc-in m chord var)))
-   {}
-   key-bindings))
 
 (defeffect ::save-editor [{:keys [editor $editor]}]
   (future
@@ -1373,8 +1366,8 @@
                       (assoc editor ::completion {})))
               :$editor $editor}))
 
-(def clojure-keytree
-  (key-bindings->keytree
+(def clojure-key-tree
+  (key-binding/key-bindings->key-tree
    (assoc clojure-mode/key-bindings
           "C-x C-s" ::save-editor
           "C-x C-f" ::file-picker
@@ -1645,80 +1638,32 @@
                 \= \+
                 \` \~})
 
-(defui clojure-keymap [{:keys [bindings body editor]}]
-  (let [next-bindings (get extra ::next-bindings)
-        modifiers (get extra ::modifiers)
-        find-match
-        (fn [key-press]
-          (if-let [match (get (or next-bindings bindings) key-press)]
-            (if (map? match)
-              [[:set $next-bindings match]]
-              [[:set $next-bindings nil]
-               (if (keyword? match)
-                 [match {:editor editor
-                         :$editor $editor}]
-                 [::update-editor {:op match
-                                   :editor editor
-                                   :$editor $editor}])])
-            ;; no match
-            (when next-bindings
-              [[:set $next-bindings nil]])))]
-    (ui/on
-     :key-press
-     (fn [s]
-       (let [intents (if (empty? modifiers)
-                       (when (not (#{:left_shift :right_shift}
-                                   s))
-                         (find-match {:key (if (string? s)
-                                             (first s)
-                                             s)}))
-                       (if (keyword? s)
-                         (find-match
-                          (cond-> {:key s}
-                            (:alt modifiers) (assoc :meta? true)
-                            (:super modifiers) (assoc :super? true)
-                            (:ctrl? modifiers) (assoc :ctrl? true)))))]
-         (if (seq intents)
-           intents
-           (when (and (not next-bindings)
-                      (string? s)
-                      (empty? modifiers)
-                      (-> (.getBytes ^String s)
-                          first
-                          pos?))
-             [[::update-editor {:op #(text-mode/editor-self-insert-command % s)
-                                :$editor $editor}]]))))
-     :key-event
-     (fn [key scancode action mods]
-       (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
-             super? (not (zero? (bit-and ui/SUPER-MASK mods)))
-             shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-             ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-         (if (#{:press :repeat} action)
-           (let [key (if shift?
-                       (let [c (char key)]
-                         (get uppercase c))
-                       (Character/toLowerCase (char key)))
-                 key-press (cond-> {:key key}
-                             alt? (assoc :meta? true)
-                             super? (assoc :super? true)
-                             ctrl? (assoc :ctrl? true))]
-             (when (and key
-                        (or alt?
-                            super?
-                            ctrl?))
-               (cons
-                [:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                               alt? (conj :alt)
-                                               super? (conj :super)
-                                               ctrl? (conj :ctrl?)))]
-                (find-match key-press))))
-           ;; release action
-           [[:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                           (not alt?) (disj :alt)
-                                           (not super?) (disj :super)
-                                           (not ctrl?) (disj :ctrl?)))]])))
-     body)))
+(defui clojure-keymap [{:keys [key-tree body editor]}]
+  (let [body (key-binding/wrap-key-tree 
+              {:body body
+               :$body nil
+               :key-tree key-tree})
+        body (ui/on
+              ::key-binding/miss
+              (fn [{:keys [key-binding]}]
+                (when (= 1 (count key-binding))
+                  (let [chord (first key-binding)
+                        key (:key chord)]
+                    (when (and key
+                               (not (:meta? chord))
+                               (not (:ctrl? chord)))
+                      [[::update-editor {:op #(text-mode/editor-self-insert-command % (str key))
+                                         :$editor $editor}]]))))
+              ::key-binding/press
+              (fn [{:keys [intent]}]
+                (if (keyword? intent)
+                  [[intent {:editor editor
+                            :$editor $editor}]]
+                  [[::update-editor {:op intent
+                                     :editor editor
+                                     :$editor $editor}]]))
+              body)]
+    body))
 
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
@@ -1751,7 +1696,7 @@
 
         focused? (= $editor focus)
         body (if focused?
-               (clojure-keymap {:bindings clojure-keytree
+               (clojure-keymap {:key-tree clojure-key-tree
                                 :editor editor
                                 :$editor $editor
                                 :body body})
