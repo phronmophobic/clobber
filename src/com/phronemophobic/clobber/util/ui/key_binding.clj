@@ -147,6 +147,16 @@
                 \` \~})
 
 
+(def normalize-key
+  {:enter :enter
+   :kp_enter :enter
+   :backspace :backspace
+   :left :left
+   :right :right
+   :up :up
+   :down :down
+   :tab :tab})
+
 (defui wrap-chord [{:keys [body]}]
   (let [modifiers (get extra ::modifiers)]
     (ui/on
@@ -157,18 +167,21 @@
              shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
              ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
          (if (#{:press :repeat} action)
-           (let [key-char (if shift?
-                            (let [c (char key)]
-                              (or (get uppercase c)
-                                  c))
-                            (Character/toLowerCase (char key)))
-                 key-press (cond-> {:key key-char}
-                             alt? (assoc :meta? true)
-                             super? (assoc :super? true)
-                             ctrl? (assoc :ctrl? true))]
+           (let [normalized-key (if-let [k (get normalize-key (get skia/keymap key))]
+                                  k
+                                  ;; else
+                                  (if shift?
+                                    (let [c (char key)]
+                                      (or (get uppercase c)
+                                          c))
+                                    (Character/toLowerCase (char key))))
+                 chord (cond-> {:key normalized-key}
+                         alt? (assoc :meta? true)
+                         super? (assoc :super? true)
+                         ctrl? (assoc :ctrl? true))]
              (let [intents [[:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                                           alt? (conj :alt)
-                                                           super? (conj :super)
+                                                           alt? (conj :alt?)
+                                                           super? (conj :super?)
                                                            ctrl? (conj :ctrl?)))]]
                    mod-keys #{:left_shift
                               :left_control
@@ -180,13 +193,13 @@
                               :right_super}
                    intents (if (not (contains? mod-keys (get skia/keymap key)))
                              (conj intents
-                                   [::chord-press {:chord key-press}])
+                                   [::chord-press {:chord chord}])
                              intents)]
                intents))
            ;; release action
            [[:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                           (not alt?) (disj :alt)
-                                           (not super?) (disj :super)
+                                           (not alt?) (disj :alt?)
+                                           (not super?) (disj :super?)
                                            (not ctrl?) (disj :ctrl?)))]])))
      body)))
 
@@ -198,7 +211,9 @@
          (fn [{:keys [chord]}]
            (if-let [match (get (or sub-key-tree key-tree) chord)]
              (if-let [intent (::intent match)]
-               [[::key-binding-press {:intent intent}]]
+               [[::press {:intent intent}]
+                [:set $current-key-binding []]
+                [:set $sub-key-tree nil]]
                ;; else assume a sub key-tree 
                [[:set $sub-key-tree match]
                 [:update $current-key-binding
@@ -208,7 +223,7 @@
              ;; miss!
              [[:set $sub-key-tree nil]
               [:set $current-key-binding []]
-              [::key-binding-miss {:key-binding (conj (or current-key-binding []) chord)}]]))
+              [::miss {:key-binding (conj (or current-key-binding []) chord)}]]))
          (wrap-chord {:body body
                       :$body nil}))]
     body))
@@ -266,10 +281,10 @@
                   [[:set $focus $extra]])
                 body))]
     (ui/on
-     ::key-binding-miss
+     ::miss
      (fn [m]
        [[:update $bindings conj {:miss m}]])
-     ::key-binding-press
+     ::press
      (fn [m]
        [[:update $bindings conj {:press m}]])
      
@@ -305,6 +320,7 @@
      {:key-tree
       (key-bindings->key-tree 
        {"C-X C-s" {:my-map ::foo}})})
-  )
+
+  ,)
 
 
