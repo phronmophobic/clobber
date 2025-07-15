@@ -316,60 +316,6 @@
                                     :msg "Exception!"})
           (prn e))))))
 
-(def special-keys {"DEL" :backspace
-                   "RET" :enter
-                   "SPC" \space
-                   "TAB" :tab
-                   "<right>" :right
-                   "<left>" :left
-                   "<up>" :up
-                   "<down>" :down})
-
-(defn key-chord->map [s]
-  (loop [cs (seq s)
-         chord []
-         press nil]
-    (if cs
-      (let [c (first cs)]
-        (case c
-          \C
-          (if (= \- (second cs))
-            (recur (nnext cs)
-                   chord
-                   (assoc press :ctrl? true))
-            (recur (next cs)
-                   chord
-                   (assoc press :key c)))
-
-          \M
-          (if (= \- (second cs))
-            (recur (nnext cs)
-                   chord
-                   (assoc press :meta? true))
-            (recur (next cs)
-                   chord
-                   (assoc press :key c)))
-
-          \space
-          (recur (next cs)
-                 (conj chord press)
-                 nil)
-
-
-          ;; else
-          (if-let [[s key] (some (fn [[s key]]
-                                   (when (= (seq s)
-                                            (take (count s) cs))
-                                     [s key]))
-                                 special-keys)]
-            (recur (seq (drop (count s) cs))
-                   chord
-                   (assoc press :key key))
-            (recur (next cs) chord (assoc press :key c)))))
-      (if press
-        (conj chord press)
-        chord))))
-
 (defeffect ::save-editor [{:keys [editor $editor]}]
   (future
     (when-let [file (:file editor)]
@@ -1638,33 +1584,6 @@
                 \= \+
                 \` \~})
 
-(defui clojure-keymap [{:keys [key-tree body editor]}]
-  (let [body (key-binding/wrap-key-tree 
-              {:body body
-               :$body nil
-               :key-tree key-tree})
-        body (ui/on
-              ::key-binding/miss
-              (fn [{:keys [key-binding]}]
-                (when (= 1 (count key-binding))
-                  (let [chord (first key-binding)
-                        key (:key chord)]
-                    (when (and key
-                               (not (:meta? chord))
-                               (not (:ctrl? chord)))
-                      [[::update-editor {:op #(text-mode/editor-self-insert-command % (str key))
-                                         :$editor $editor}]]))))
-              ::key-binding/press
-              (fn [{:keys [intent]}]
-                (if (keyword? intent)
-                  [[intent {:editor editor
-                            :$editor $editor}]]
-                  [[::update-editor {:op intent
-                                     :editor editor
-                                     :$editor $editor}]]))
-              body)]
-    body))
-
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
                             focus]
@@ -1696,10 +1615,13 @@
 
         focused? (= $editor focus)
         body (if focused?
-               (clojure-keymap {:key-tree clojure-key-tree
-                                :editor editor
-                                :$editor $editor
-                                :body body})
+               (key-binding/wrap-editor-key-tree {:key-tree clojure-key-tree
+                                                  :editor editor
+                                                  ;; hack, otherwise, $editor is slightly different
+                                                  :$editor $editor
+                                                  :update-editor-intent ::update-editor
+                                                  :body body
+                                                  :$body nil})
                (let [[w h] (ui/bounds body)
                      gray 0.98]
                  [(when (not= [$editor :file-picker]

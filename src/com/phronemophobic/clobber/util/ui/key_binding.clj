@@ -228,6 +228,35 @@
                       :$body nil}))]
     body))
 
+(defui wrap-editor-key-tree [{:keys [key-tree body editor update-editor-intent]}]
+  (let [body (wrap-key-tree 
+              {:body body
+               :$body nil
+               :key-tree key-tree})
+        body (ui/on
+              ::miss
+              (fn [{:keys [key-binding]}]
+                (when (= 1 (count key-binding))
+                  (let [chord (first key-binding)
+                        key (:key chord)]
+                    (when (and key
+                               (not (:meta? chord))
+                               (not (:ctrl? chord)))
+                      [[(or update-editor-intent ::update-editor)
+                        {:op #(text-mode/editor-self-insert-command % (str key))
+                         :$editor $editor}]]))))
+              ::press
+              (fn [{:keys [intent]}]
+                (if (keyword? intent)
+                  [[intent {:editor editor
+                            :$editor $editor}]]
+                  [[(or update-editor-intent ::update-editor)
+                    {:op intent
+                     :editor editor
+                     :$editor $editor}]]))
+              body)]
+    body))
+
 
 
 (defui debug-key-chords [{:keys []}]
