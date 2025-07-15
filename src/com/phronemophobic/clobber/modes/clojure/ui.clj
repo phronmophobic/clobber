@@ -653,8 +653,8 @@
               completions (into
                            []
                            (compliment.core/completions sym-str
-                                                        {:ns (:eval-ns editor)}))]
-          
+                                                        {:ns (:eval-ns editor)
+                                                         :sort-order :by-name}))]
           (if (seq completions)
             (let [para (editor->paragraph editor)
                   
