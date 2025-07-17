@@ -76,7 +76,7 @@
     (b/write-pom {:class-dir (.getCanonicalPath queries-class-dir)
                   :pom-data pom-data
                   :lib queries-coord
-                  :version "0.1-SNAPSHOT"
+                  :version "1.0"
                   :basis basis})
     (doseq [[repo-name {:keys [git/sha]}] tree-sitter-libs]
       (let [queries-url (io/as-url (str "https://raw.githubusercontent.com/tree-sitter/"repo-name "/" sha "/queries/highlights.scm"))
