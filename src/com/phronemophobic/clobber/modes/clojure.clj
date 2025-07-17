@@ -1709,14 +1709,15 @@
    ,})
 
 (defn make-editor []
-  {:tree nil
-   :cursor {:byte 0
-            :char 0
-            :point 0
-            :row 0
-            :column-byte 0}
-   :rope Rope/EMPTY
-   :language (TreeSitterClojure.)
-   :parser (doto (TSParser.)
-             (.setLanguage (TreeSitterClojure.)))
-   :buf (byte-array 4096)})
+  (let [lang (TreeSitterClojure.)]
+    {:tree nil
+     :cursor {:byte 0
+              :char 0
+              :point 0
+              :row 0
+              :column-byte 0}
+     :rope Rope/EMPTY
+     :language lang
+     :parser (doto (TSParser.)
+               (.setLanguage lang))
+     :buf (byte-array 4096)}))
