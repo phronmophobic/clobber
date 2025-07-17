@@ -39,6 +39,85 @@
            java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
+(def default-theme
+  {"punctuation"
+   #:text-style{:color
+                [0.3058823529411765
+                 0.3058823529411765
+                 0.3058823529411765]},
+   "string" #:text-style{:color [0.0 0.5294117647058824 0.0]},
+   "punctuation.delimiter"
+   #:text-style{:color
+                [0.3058823529411765
+                 0.3058823529411765
+                 0.3058823529411765]},
+   "type.builtin"
+   {:text-style/color [0.0 0.37254901960784315 0.37254901960784315],
+    :font-style #:font-style{:weight :bold}},
+   "constant"
+   #:text-style{:color [0.5294117647058824 0.37254901960784315 0.0]},
+   "operator"
+   {:text-style/color
+    [0.3058823529411765 0.3058823529411765 0.3058823529411765],
+    :font-style #:font-style{:weight :bold}},
+   "attribute"
+   {:text-style/color [0.6862745098039216 0.0 0.0],
+    :font-style #:font-style{:slant :italic}},
+   "string.special"
+   #:text-style{:color [0.0 0.5294117647058824 0.5294117647058824]},
+   "tag" #:text-style{:color [0.0 0.0 0.5294117647058824]},
+   "module"
+   #:text-style{:color [0.6862745098039216 0.5294117647058824 0.0]},
+   "punctuation.bracket"
+   #:text-style{:color
+                [0.3058823529411765
+                 0.3058823529411765
+                 0.3058823529411765]},
+   "punctuation.special"
+   #:text-style{:color
+                [0.3058823529411765
+                 0.3058823529411765
+                 0.3058823529411765]},
+   "variable"
+   #:text-style{:color
+                [0.8156862745098039
+                 0.8156862745098039
+                 0.8156862745098039]},
+   "keyword"
+   #:text-style{:color [0.37254901960784315 0.0 0.8431372549019608]},
+   "number"
+   {:text-style/color [0.5294117647058824 0.37254901960784315 0.0],
+    :font-style #:font-style{:weight :bold}},
+   "property" #:text-style{:color [0.6862745098039216 0.0 0.0]},
+   "function"
+   #:text-style{:color [0.0 0.37254901960784315 0.8431372549019608]},
+   "function.builtin"
+   {:text-style/color [0.0 0.37254901960784315 0.8431372549019608],
+    :font-style #:font-style{:weight :bold}},
+   "type"
+   #:text-style{:color [0.0 0.37254901960784315 0.37254901960784315]},
+   "constant.builtin"
+   {:text-style/color [0.5294117647058824 0.37254901960784315 0.0],
+    :font-style #:font-style{:weight :bold}},
+   "property.builtin"
+   {:text-style/color [0.6862745098039216 0.0 0.0],
+    :font-style #:font-style{:weight :bold}},
+   "comment"
+   {:text-style/color
+    [0.5411764705882353 0.5411764705882353 0.5411764705882353],
+    :font-style #:font-style{:slant :italic}},
+   "variable.parameter"
+   #:text-style{:color
+                [0.8156862745098039
+                 0.8156862745098039
+                 0.8156862745098039]},
+   "constructor"
+   #:text-style{:color [0.6862745098039216 0.5294117647058824 0.0]},
+   "variable.builtin"
+   {:text-style/color
+    [0.8156862745098039 0.8156862745098039 0.8156862745098039],
+    :font-style #:font-style{:weight :bold}}})
+
 
 
 (defn editor-upkeep [editor op]
@@ -299,6 +378,21 @@
           end-byte (max cursor-byte select-cursor-byte)]
       {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
 
+(defn highlight-search [editor {:keys [char-offset start-byte-offset end-byte-offset]}]
+  (when-let [^java.util.regex.MatchResult
+             match (-> editor ::search :match)]
+    (when (>= (.start match)
+              char-offset)
+      (let [^Rope
+            rope (:rope editor)
+            diff-string (.toString
+                         (.subSequence rope char-offset (.start match)))
+            diff-bytes (alength (.getBytes diff-string "utf-8"))
+
+            start-byte (+ start-byte-offset diff-bytes)
+            end-byte (+ start-byte (alength (.getBytes (.group match) "utf-8")))]
+        {[start-byte end-byte] {:text-style/background-color {:color [0 0 1 0.2]}}}))))
+
 (defn debug-selection-style [editor viewport]
   (when-let [^TSNode debug-node (get (:debug-node editor)
                                      (:rope editor))]
@@ -306,56 +400,45 @@
           end-byte (.getEndByte debug-node)]
       {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
 
+(defn syntax-style [editor
+                    queries
+                    theme
+                    {:keys [start-byte-offset end-byte-offset]}]
+  (let [^TSQueryCursor qc (TSQueryCursor.)
+        ^TSQuery query (TSQuery. (:language editor)
+                                 queries)
 
-(defn ^:private find-line-byte-offsets
-  "Find byte offsets for the given lines. `lines` should be sorted in ascending order."
-  [tree rope lines]
-  (if tree
-    (into []
-          (map #(util/find-byte-offset-for-line tree rope %))
-          lines)
-    ;; else, do it the hard way
-    
-    (let [newline-byte (byte \newline)
-          bytes (eduction
-                 (mapcat  
-                  (fn [^ByteBuffer bb]
-                    (let [arr (.array bb )]
-                      (eduction
-                       (drop (.arrayOffset bb))
-                       arr))))
-                 (iterator-seq (.bytes ^Rope rope)))
-          bytes-iter (.iterator ^Iterable bytes)]
-      (loop [byte-offsets []
-             current-line 0
-             current-byte 0
-             line (first lines)
-             lines (next lines)]
 
-        (if (= line current-line)
-          (let [line (first lines)
-                lines (next lines)
-                byte-offsets (conj byte-offsets current-byte)]
-            (if line
-              (recur byte-offsets
-                     current-line
-                     current-byte
-                     line 
-                     lines)
-              byte-offsets))
-          (if (.hasNext bytes-iter)
-            (let [b (.next bytes-iter)
-                  next-byte (inc current-byte)
-                  next-line (if (= b newline-byte)
-                              (inc current-line)
-                              current-line)]
-              (recur byte-offsets
-                     next-line
-                     next-byte
-                     line
-                     lines))
-            ;; else
-            byte-offsets))))))
+        base-style (:base-style editor)
+        ^TSTree tree (:tree editor)
+        ^Rope rope (:rope editor)
+
+        _ (.setByteRange qc start-byte-offset end-byte-offset)
+        _ (.exec qc query (.getRootNode tree))
+        matches (.getCaptures qc)
+        styles (loop [offset start-byte-offset
+                      styles {}]
+                 (if (.hasNext matches)
+                   (let [match (.next matches)
+                         ^TSQueryCapture
+                         capture (aget (.getCaptures match) (.getCaptureIndex match))
+                         capture-name (.getCaptureNameForId query (.getIndex capture))
+                         node (.getNode capture)]
+                       ;; else
+                       (let [start-byte (min end-byte-offset (.getStartByte node))
+                             end-byte (min end-byte-offset (.getEndByte node))
+
+                             styles (if (> end-byte start-byte)
+                                      (let [style (get theme capture-name)]
+                                        (assoc styles [start-byte end-byte] style))
+                                      ;; else
+                                      styles)]
+                         (recur end-byte
+                                styles)))
+                   ;; else
+                   styles))]
+    styles))
+
 
 (defn editor->paragraph [editor]
   (let [tree (:tree editor)
@@ -384,12 +467,26 @@
                             :byte)
         
         char-offset (-> start-editor :cursor :char)
+        extent {:start-byte-offset start-byte-offset
+                :end-byte-offset end-byte-offset
+                :char-offset char-offset}
 
         base-style (:base-style editor)
         
-        ;; p (node->styled-text (.getRootNode tree) rope base-style start-byte-offset end-byte-offset)
-        para (para/paragraph (-> (.sliceBytes rope start-byte-offset end-byte-offset)
-                                 .toString)
+        text (styled-text rope
+                          (:base-style editor)
+                          [(when tree
+                             (when-let [queries (:queries editor)]
+                               (when-let [theme (:theme editor)]
+                                 (syntax-style editor
+                                               queries
+                                               theme
+                                               extent))))
+                           (selection-style editor extent)
+                           (highlight-search editor extent)]
+                          start-byte-offset
+                          end-byte-offset)
+        para (para/paragraph text
                              nil {:paragraph-style/text-style (:base-style editor)})
         para (assoc para
                     :char-offset char-offset
@@ -569,23 +666,53 @@
 
 
 
+(defn ^:private file-ext [^File f]
+  (let [fname (.getName f)
+        idx (.lastIndexOf fname ".")]
+    (when (not= -1 idx)
+      (subs fname idx))))
+
+(defn set-language [editor lang-kw]
+  (let [lang-str (name lang-kw)
+        class-name (str "org.treesitter.TreeSitter" (str/capitalize lang-str))
+        class (Class/forName class-name)
+        lang (.newInstance class)]
+    (assoc editor
+           :language lang
+           :parser (doto (TSParser.)
+                     (.setLanguage lang))
+           :buf (byte-array 4096)
+           :theme default-theme
+           :queries (slurp (io/resource (str "com/phronemophobic/clobber/queries/tree-sitter-"
+                                             lang-str
+                                             "/highlights.scm"))))))
+
+(def suffix->language-kw
+  {".json" :json
+   ".sh" :bash
+   ".cpp" :cpp
+   ".html" :html
+   ".java" :java
+   ".js" :javascript
+   ".py" :python})
+
 (defn dev
   ([f]
-   (let [editor (-> (make-editor)
+   (let [editor (make-editor)
+         editor (if-let [lang-kw (suffix->language-kw (file-ext f))]
+                  (set-language editor lang-kw)
+                  editor)
+         editor (-> editor
                     (text-mode/editor-self-insert-command
                      (slurp f))
                     (assoc :file f)
                     (text-mode/editor-beginning-of-buffer)
                     (text-mode/editor-update-viewport))]
      (dev/add-component-as-applet #'debug
-                                  {:editor editor}))
-   )
+                                  {:editor editor})))
   ([]
-   (let [
-         
-         editor (-> (make-editor)
-                    (text-mode/editor-update-viewport))
-]
+   (let [editor (-> (make-editor)
+                    (text-mode/editor-update-viewport))]
      (dev/add-component-as-applet #'debug
                                   {:editor editor}))))
 
@@ -598,5 +725,6 @@
 (comment
   (dev)
   (dev (io/file "Readme.md"))
+  (dev (io/file "../../todo.org"))
 
   ,)
