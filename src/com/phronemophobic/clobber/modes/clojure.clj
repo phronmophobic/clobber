@@ -204,21 +204,34 @@
                     (recur parent)))))]
         (if (not parent-coll-node)
           editor
-          (let [;; find end of last named node
-                ;; snip from there to end of coll
-                num-children (.getNamedChildCount parent-coll-node)
-                editor (if (pos? num-children)
-                         (let [last-child (.getNamedChild parent-coll-node (dec num-children))
-                               last-child-byte (.getEndByte last-child)
-                               end-byte (.getEndByte parent-coll-node)
-                               editor (if (not= last-child-byte (dec end-byte) )
-                                        (-> editor
-                                            (text-mode/editor-goto-byte last-child-byte)
-                                            (text-mode/editor-snip last-child-byte (dec end-byte))
-                                            (text-mode/editor-forward-char))
-                                        (text-mode/editor-goto-byte editor end-byte))]
-                           editor)
-                         (text-mode/editor-goto-byte editor (.getEndByte parent-coll-node)))]
+          (let [;; starting from (dec end-byte)
+                ;; go backwards until we hit newlines or spaces
+                ;; (we're essentially looking for commas)
+                end-byte (.getEndByte parent-coll-node)
+                
+                editor (text-mode/editor-goto-byte editor (dec end-byte))
+                ^Rope
+                rope (:rope editor)
+                bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText rope))
+                
+                start-char-index (-> editor :cursor :char)
+                char-index
+                (loop [char-index start-char-index]
+                  (let [prev-char (.preceding bi char-index)]
+                    (cond
+                      (= -1 prev-char) char-index
+                      (#{\space \newline} (.charAt rope prev-char)) (recur prev-char)
+                      :else char-index)))
+                ;; char-index diff is same as bytes
+                ;; because we're only counting spaces and newlines
+                target-byte (- (dec end-byte)
+                               (- start-char-index
+                                  char-index))
+                editor (-> editor
+                           (text-mode/editor-goto-byte target-byte)
+                           (text-mode/editor-snip target-byte (dec end-byte))
+                           (text-mode/editor-forward-char))]
             editor))))))
 
 (defn editor-paredit-open-coll [editor open-char close-char]
