@@ -79,7 +79,7 @@
                   :version "0.1-SNAPSHOT"
                   :basis basis})
     (doseq [[repo-name {:keys [git/sha]}] tree-sitter-libs]
-      (let [queries-url (io/as-url (str "https://github.com/tree-sitter/" repo-name "/blob/" sha "/queries/highlights.scm"))
+      (let [queries-url (io/as-url (str "https://raw.githubusercontent.com/tree-sitter/"repo-name "/" sha "/queries/highlights.scm"))
             target-dir (doto (io/file queries-class-dir "com" "phronemophobic" "clobber" "queries" repo-name)
                          (.mkdirs))
             target-file (io/file target-dir "highlights.scm")]
