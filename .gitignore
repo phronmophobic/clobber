@@ -16,3 +16,4 @@
 *.mp4
 *.mov
 *.org
+/build
