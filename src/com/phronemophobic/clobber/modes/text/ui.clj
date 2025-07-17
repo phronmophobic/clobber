@@ -574,6 +574,7 @@
    (let [editor (-> (make-editor)
                     (text-mode/editor-self-insert-command
                      (slurp f))
+                    (assoc :file f)
                     (text-mode/editor-beginning-of-buffer)
                     (text-mode/editor-update-viewport))]
      (dev/add-component-as-applet #'debug
