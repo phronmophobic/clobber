@@ -1281,6 +1281,8 @@
 (defn editor-newline [editor]
   (editor-self-insert-command editor "\n"))
 
+(defn editor-indent [editor]
+  (editor-self-insert-command editor "    "))
 
 
 (def key-bindings
@@ -1312,7 +1314,7 @@
    "M-SPC" editor-single-space
    "M-\\" editor-delete-horizontal-space
    "C-_" editor-undo
-
+   "TAB" editor-indent
    ,})
 
 
