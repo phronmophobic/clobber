@@ -106,7 +106,9 @@
     new-editor))
 
 (defn editor-cancel [editor]
-  (dissoc editor :select-cursor))
+  (-> editor
+      (dissoc :select-cursor)
+      (dissoc ::completion)))
 
 (defn editor-set-height [editor height]
   (let [base-style (:base-style editor)
