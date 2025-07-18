@@ -12,6 +12,7 @@
         io.github.bonede/tree-sitter-javascript {:mvn/version "0.23.1"}
         io.github.bonede/tree-sitter-org {:mvn/version "1.3.1a"}
         io.github.bonede/tree-sitter-python {:mvn/version "0.23.4"}
+        io.github.bonede/tree-sitter-css {:mvn/version "0.23.1"}
         com.phronemophobic.clobber/tree-sitter-queries {:mvn/version "1.0"}
 
         io.github.IGJoshua/ropes {:git/sha "de6efb90dbabb290878ca498919ce40646f6811b"}

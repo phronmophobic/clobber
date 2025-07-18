@@ -48,7 +48,8 @@
    "tree-sitter-bash" {:git/sha "56b54c61fb48bce0c63e3dfa2240b5d274384763"}
    "tree-sitter-html" {:git/sha "cbb91a0ff3621245e890d1c50cc811bffb77a26b"}
    "tree-sitter-java" {:git/sha "a7db5227ec40fcfe94489559d8c9bc7c8181e25a"}
-   "tree-sitter-python" {:git/sha "710796b8b877a970297106e5bbc8e2afa47f86ec"}})
+   "tree-sitter-python" {:git/sha "710796b8b877a970297106e5bbc8e2afa47f86ec"}
+   "tree-sitter-css" {:git/sha "6e327db434fec0ee90f006697782e43ec855adf5"}})
 
 
 
@@ -76,7 +77,7 @@
     (b/write-pom {:class-dir (.getCanonicalPath queries-class-dir)
                   :pom-data pom-data
                   :lib queries-coord
-                  :version "1.0"
+                  :version "1.1"
                   :basis basis})
     (doseq [[repo-name {:keys [git/sha]}] tree-sitter-libs]
       (let [queries-url (io/as-url (str "https://raw.githubusercontent.com/tree-sitter/"repo-name "/" sha "/queries/highlights.scm"))
