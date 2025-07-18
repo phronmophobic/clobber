@@ -255,7 +255,7 @@
                                (not (:meta? chord))
                                (not (:ctrl? chord))
                                (not (:super? chord))
-                               (string? key))
+                               (not (keyword? key)))
                       [[(or update-editor-intent ::update-editor)
                         {:op #(text-mode/editor-self-insert-command % (str key))
                          :$editor $editor}]]))))
