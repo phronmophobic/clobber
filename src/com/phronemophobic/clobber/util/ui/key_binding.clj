@@ -165,16 +165,27 @@
        (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
              super? (not (zero? (bit-and ui/SUPER-MASK mods)))
              shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-             ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
+             ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))
+             caps-lock? (not (zero? (bit-and ui/CAPS-LOCK-MASK mods)))]
+
          (if (#{:press :repeat} action)
            (let [normalized-key (if-let [k (get normalize-key (get skia/keymap key))]
                                   k
                                   ;; else
-                                  (if shift?
+                                  (cond
+                                    (and caps-lock?
+                                         (not (or alt? super? ctrl?)))
                                     (let [c (char key)]
-                                      (or (get uppercase c)
-                                          c))
-                                    (Character/toLowerCase (char key))))
+                                      (if shift?
+                                        (or (get uppercase c)
+                                            c)
+                                        c))
+
+                                    shift? (let [c (char key)]
+                                             (or (get uppercase c)
+                                                 c))
+                                    
+                                    :else (Character/toLowerCase (char key))))
                  chord (cond-> {:key normalized-key}
                          alt? (assoc :meta? true)
                          super? (assoc :super? true)
@@ -190,7 +201,8 @@
                               :right_shift
                               :right_control
                               :right_alt
-                              :right_super}
+                              :right_super
+                              :caps_lock}
                    intents (if (not (contains? mod-keys (get skia/keymap key)))
                              (conj intents
                                    [::chord-press {:chord chord}])
