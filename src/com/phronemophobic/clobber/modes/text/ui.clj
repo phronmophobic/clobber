@@ -692,6 +692,7 @@
    ".sh" :bash
    ".cpp" :cpp
    ".html" :html
+   ".css" :css
    ".java" :java
    ".js" :javascript
    ".py" :python})
