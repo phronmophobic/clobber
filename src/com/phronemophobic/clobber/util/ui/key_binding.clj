@@ -242,7 +242,8 @@
                     (when (and key
                                (not (:meta? chord))
                                (not (:ctrl? chord))
-                               (not (:super? chord)))
+                               (not (:super? chord))
+                               (string? key))
                       [[(or update-editor-intent ::update-editor)
                         {:op #(text-mode/editor-self-insert-command % (str key))
                          :$editor $editor}]]))))
