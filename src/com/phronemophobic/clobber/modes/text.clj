@@ -248,7 +248,11 @@
                       :row row
                       :column-byte column-byte}))))
 
-(defn editor-set-string [editor s]
+(defn editor-set-string
+  "Updates the editor's contents, but nothing else.
+
+  Notably, the cursor remains unchanged."
+  [editor s]
   (let [rope (Rope/from s)
         ^TSParser
         parser (:parser editor)
