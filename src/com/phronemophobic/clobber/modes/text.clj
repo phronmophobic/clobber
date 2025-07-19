@@ -259,6 +259,16 @@
            :rope rope
            :tree tree)))
 
+(defn editor-clear [editor]
+  (-> editor
+      (assoc :rope Rope/EMPTY)
+      (dissoc :tree)
+      (assoc :cursor {:byte 0
+                      :char 0
+                      :point 0
+                      :row 0
+                      :column-byte 0})))
+
 ;; (defn editor-snip [editor])
 ;; (defn editor-slice [editor])
 ;; (defn editor-concat [editor])
