@@ -1160,7 +1160,13 @@
 
 
 (defn editor-goto-line [editor n]
-  editor)
+  (-> editor
+      (assoc :cursor {:byte 0
+                      :char 0
+                      :point 0
+                      :row 0
+                      :column-byte 0})
+      (editor-next-line n)))
 
 (defn editor-end-of-buffer [editor]
   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
