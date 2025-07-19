@@ -549,6 +549,11 @@
           (named-node-children node)))
   )
 
+(defmethod node->styled-text* "info_string" [ctx ^TSNode node]
+  ;; used for fenced code blocks
+  )
+
+
 (defmethod node->styled-text* "fenced_code_block" [ctx ^TSNode node]
   (conj
    (style-children ctx node)
@@ -571,8 +576,9 @@
 
 (defmethod node->styled-text* "loose_list" [ctx ^TSNode node]
   (conj
-   (style-children node)
+   (style-children ctx node)
    "\n"))
+
 
 (defmethod node->styled-text* "list_item" [ctx ^TSNode node]
   (style-children ctx node))
@@ -592,12 +598,16 @@
                    (min (:end-byte ctx) (.getEndByte node)))
    :style (:style ctx)})
 
+(defmethod node->styled-text* "backslash_escape" [ctx ^TSNode node]
+  nil)
+
+
 
 (defmethod node->styled-text* "soft_line_break" [ctx ^TSNode node]
   (with-meta
-   {:text "\n"
-    :style (:style ctx)}
-   {:node {:type (.getType node)}}))
+    {:text "\n"
+     :style (:style ctx)}
+    {:node {:type (.getType node)}}))
 
 (defmethod node->styled-text* "link" [ctx ^TSNode node]
   (let [style (merge-styles [(:style ctx)
@@ -657,11 +667,30 @@
                "atx_h4_marker" 4
                "atx_h5_marker" 5
                "atx_h6_marker" 6)
+        header-font-sizes {1 32
+                           2 24
+                           3 18
+                           4 16
+                           5 13
+                           6 10}
+        font-size (if-let [base-font-size (-> (:base-style ctx)
+                                              :text-style/font-size)]
+                    (long (* base-font-size
+                             (case hnum
+                               1 2
+                               2 1.5
+                               3 1.17
+                               4 1
+                               5 0.83
+                               6 0.67
+                               ;; else
+                               1)))
+                    (get header-font-sizes hnum 16))
         base-style (:style ctx)
         style (merge-styles [base-style
                              #:text-style
                              {
-                              :font-size 60
+                              :font-size font-size
                               :font-style #:font-style{:weight :bold}
                               }
                              ])
@@ -683,6 +712,14 @@
         ctx (assoc ctx :style style)]
     (style-children ctx node)))
 
+
+(defmethod node->styled-text* "emphasis" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
+                             #:text-style
+                             {:font-style #:font-style{:slant :italic}}])
+        ctx (assoc ctx :style style)]
+    (style-children ctx node)))
+
 (def my-base-style #:text-style
   {:font-families ["Menlo"]
    :font-size 12
@@ -696,7 +733,9 @@
   (style-children ctx node))
 
 (defn node->styled-text [ctx ^TSNode node]
-  (node->styled-text* ctx node))
+  (node->styled-text* (assoc ctx
+                             :base-style (:style ctx))
+                      node))
 
 #_(do
   (ns-unmap *ns* 'node->styled-text)
@@ -1172,7 +1211,20 @@
        [body
         (ui/spacer 0 50)]))))
 
-
+(defn editor->styled-text
+  "Given an editor, return styled 
+  text suitable for passing to para/paragraph.
+  
+  Editor must have a :tree parsed using TreeSitterMarkdown."
+  [editor]
+  (let [^TSTree
+        tree (:tree editor)]
+    (node->styled-text
+     {:rope (:rope editor)
+      :style (:base-style editor)
+      :start-byte 0
+      :end-byte (.numBytes (:rope editor))}
+     (-> tree .getRootNode))))
 
 
 (defui debug [{:keys [editor]}]
