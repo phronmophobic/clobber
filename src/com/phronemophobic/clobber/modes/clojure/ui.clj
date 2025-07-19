@@ -32,6 +32,7 @@
                            TreeSitterJson
                            TSInputEdit
                            TSInputEncoding)
+           (java.util.jar JarFile)
            java.nio.charset.Charset
            java.util.Arrays
            java.nio.ByteBuffer
@@ -1314,6 +1315,71 @@
                       (assoc editor ::completion {})))
               :$editor $editor}))
 
+(defeffect ::jump-to-definition [{:keys [editor]}]
+  (let [^TSTree tree (:tree editor)
+        rope (:rope editor)
+        tc (TSTreeCursor. (.getRootNode tree))
+        cursor (:cursor editor)
+        cursor-byte (:byte cursor)
+        
+        ^TSNode
+         sym-node
+        
+        (util/first-by
+         (comp (take-while (fn [^TSNode node]
+                             (<= (-> node .getStartByte)
+                                 cursor-byte)))
+               (filter (fn [^TSNode node]
+                         (let [type (.getType node)]
+                           (= "sym_lit" type))))
+               (filter (fn [^TSNode node]
+                         (>= (-> node .getEndByte)
+                             cursor-byte))))
+         
+         
+         (when (util/skip-to-byte-offset tc cursor-byte)
+           (util/tree-cursor-reducible tc)))]
+    (when sym-node
+      (let [sym-str (util/node->str rope sym-node)
+            sym (read-string sym-str)
+            v (ns-resolve (:eval-ns editor) sym)
+            mta (meta v)]
+        (when-let [file (:file mta)]
+          (when (string? file)
+            (when-let [resource (io/resource file)]
+              (case (.getProtocol resource)
+                
+                "jar"
+                (let [jar-url-str (.getPath resource)
+                      jar-url (io/as-url jar-url-str)
+                      [jar-path file-entry-path] (str/split (.getPath jar-url) #"!/" 2)]
+                  (if-let [jar (JarFile. jar-path)]
+                    (if-let [entry (.getJarEntry jar file-entry-path)]
+                      (let [contents (with-open [is (.getInputStream jar entry)]
+                                       (slurp is))]
+                        (dispatch! :com.phronemophobic.easel/add-applet
+                                   {:make-applet
+                                    (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                                      #(f % (merge {:string contents}
+                                                   (when-let [line (:line mta)]
+                                                     {:line (max 0 (dec line))}))))})))))
+
+                "file"
+                (let [file (io/as-file  resource)]
+                  (when (and file
+                             (.exists file))
+                    (dispatch! :com.phronemophobic.easel/add-applet
+                                                       {:make-applet
+                              (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                                #(f % (merge {:file file}
+                                             (when-let [line (:line mta)]
+                                               {:line (max 0 (dec line))}))))})))
+
+                ("http" "https") nil
+                
+                ;; else
+                nil))))))))
+
 (def clojure-key-tree
   (key-binding/key-bindings->key-tree
    (assoc clojure-mode/key-bindings
@@ -1327,6 +1393,7 @@
           ;; "C-c C-v" ::editor-paste
           "C-M-x" ::editor-eval-top-form
           "C-x C-e" ::editor-eval-last-sexp
+          "M-." ::jump-to-definition
           "C-s" #'init-search-forward)))
 
 (defn editor-search-forward [editor query]
