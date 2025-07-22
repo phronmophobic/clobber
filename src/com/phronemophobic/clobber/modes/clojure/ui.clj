@@ -214,21 +214,31 @@
                             (util/node->str rope node))))
                     (.setLineNumber line-number))
               
-              val (clojure.lang.Compiler/load rdr source-path source-name)
+              [err val] (try
+                          [nil (clojure.lang.Compiler/load rdr source-path source-name)]
+                          (catch Exception e
+                            [e nil]))
               
-              temp-view (ui/translate 0 -4
+              ]
+          (if err
+            (do 
+              (dispatch! ::temp-status {:$editor $editor
+                                        :msg "Exception!"})
+              (prn err))
+            ;; else
+            (let [temp-view (ui/translate 0 -4
                                       (viscous/inspector
                                        {:obj (viscous/wrap val)
                                         :width 40
                                         :height 1
                                         :show-context? false}))]
-          (dispatch! :update $editor
-                     update :line-val
-                     (fn [m]
-                       (let [line-val (get m rope)]
-                         {rope (assoc line-val line-number (viscous/wrap val))})))
-          (dispatch! ::temp-status {:$editor $editor
-                                    :msg temp-view}))))))
+              (dispatch! :update $editor
+                         update :line-val
+                         (fn [m]
+                           (let [line-val (get m rope)]
+                             {rope (assoc line-val line-number (viscous/wrap val))})))
+              (dispatch! ::temp-status {:$editor $editor
+                                    :msg temp-view}))))))))
 
 (defeffect ::editor-eval-top-form [{:keys [editor $editor]}]
   (future
