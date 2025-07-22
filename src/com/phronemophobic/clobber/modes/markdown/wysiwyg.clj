@@ -643,6 +643,7 @@
                    (let [child (.getNamedChild node i)]
                      (case (.getType child)
                        "link_text" [:text (util/node->str rope child)]
+                       "text" [:text (util/node->str rope child)]
                        "link_destination" [:destination (util/node->str rope child)]
                        nil))))
             (range (.getNamedChildCount node)))})))
@@ -651,6 +652,22 @@
   (with-meta (style-children ctx node)
     {:node {:type (.getType node)}}))
 
+
+(defmethod node->styled-text* "link_title" [ctx ^TSNode node]
+  (with-meta (style-children ctx node)
+    {:node {:type (.getType node)}}))
+
+(defmethod node->styled-text* "image_description" [ctx ^TSNode node]
+  (with-meta (style-children ctx node)
+    {:node {:type (.getType node)}}))
+
+(defmethod node->styled-text* "image" [ctx ^TSNode node]
+  (let [style (merge-styles [(:style ctx)
+                             #:text-style
+                             {:color [0.0 0.36470588235294116 0.8156862745098039]}])
+        ctx (assoc ctx :style style)
+        rope (:rope ctx)]
+    (style-children ctx node)))
 
 
 (defmethod node->styled-text* "link_destination" [ctx ^TSNode node]
@@ -741,26 +758,106 @@
   (ns-unmap *ns* 'node->styled-text)
   (ns-unmap *ns* 'node->styled-text*))
 
+(defn styled-text-length [styled-text]
+  (loop [stack (list styled-text)
+         offset 0]
+    (if stack
+      (let [node (first stack)]
+        (cond
+          (string? node) (recur (next stack)
+                                (+ offset (count node)))
+          (vector? node) (recur (into (next stack) node)
+                                offset)
+          (map? node) (recur (next stack)
+                             (+ offset (count (:text node))))
+          (nil? node) (recur (next stack)
+                             offset)
+          :else (throw (ex-info "Unknown type"
+                                {:styled-text styled-text
+                                 :node node}))))
+      ;; else
+      offset)))
+
+(defn styled-text->handlers [styled-text]
+  (loop [stack (list styled-text)
+         offset 0
+         handlers []]
+    (if stack
+      (let [node (first stack)
+            mta (meta node)
+            handlers (if (#{"uri_autolink" "link"} (-> mta :node :type))
+                       (conj handlers
+                             {:char-start offset
+                              :char-end (+ offset (styled-text-length node))
+                              :event [(:node mta)]})
+                       handlers)]
+        (cond
+          (string? node) (recur (next stack)
+                                (+ offset (count node))
+                                handlers)
+          (vector? node) (recur (into (next stack) (reverse node))
+                                offset
+                                handlers)
+          (map? node) (recur (next stack)
+                             (+ offset (count (:text node)))
+                             handlers)
+          (nil? node) (recur (next stack)
+                             offset
+                             handlers)
+          :else (throw (ex-info "Unknown type"
+                                {:styled-text styled-text
+                                 :node node}))))
+      ;; else
+      handlers)))
+
+
+(defn wrap-events
+  [p]
+  (ui/on
+   :mouse-down
+   (fn [[mx my]]
+     (let [styled-text (:paragraph p)
+           handlers (styled-text->handlers styled-text)]
+       (util/first-by
+        (comp (mapcat (fn [{:keys [char-start char-end event]}]
+                        (let [rects (para/get-rects-for-range p 
+                                                              char-start
+                                                              char-end
+                                                              :max
+                                                              :max)]
+                          (eduction
+                           (map #(assoc % :event event))
+                           rects))))
+              (keep (fn [{:keys [event x y width height]}]
+                      (when (and (>= mx x)
+                                 (>= my y)
+                                 (< mx (+ x width))
+                                 (< my (+ y height)))
+                        [[::markdown-event event]]))))
+        handlers)))
+   p))
+
+
 
 (comment
-  (let [rope (Rope/from "[foo](bar)")]
-  (-> (util/parse (TreeSitterMarkdown.) rope)
-    .getRootNode
-      
-      (node->styled-text
-     rope
-     #:text-style
-     {
-     :font-size 12
-     :height 1.2
-     :height-override true}
-     0
-     (.numBytes rope)) 
-      (->> (tree-seq seqable? seq )
-           (keep meta))
-
-      tap>)
-  )
+  (let [rope (Rope/from "https://foo.com/foo.png")
+        tree (util/parse (TreeSitterMarkdown.) rope)
+        node (.getRootNode tree)
+        styled-text (node->styled-text
+                     {:rope rope
+                      :style #:text-style
+                      {
+                      :font-size 12
+                      :height 1.2
+                      :height-override true}
+                      :start-byte 0
+                      :end-byte (.numBytes rope)}
+                     node)]
+    (->> (tree-seq vector?
+                   seq
+                   styled-text)
+         (keep meta))
+    #_(tap> (styled-text->handlers styled-text)))
   ,)
 
 (defn editor->paragraph [editor]
