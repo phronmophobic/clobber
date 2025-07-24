@@ -21,6 +21,7 @@ The connection between a lisp developer's program and dev tools is critical. How
 ## "Roadmap"
 
 - [X] clojure-mode
+- [ ] Make instarepl evaluate namespace incrementally
 - [ ] formatted-text mode
 - [ ] Status bar with line/column, file, ns info
 - [ ] Improve file open UI
