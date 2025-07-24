@@ -22,6 +22,9 @@ The connection between a lisp developer's program and dev tools is critical. How
 
 - [X] clojure-mode
 - [ ] formatted-text mode
+- [ ] Status bar with line/column, file, ns info
+- [ ] Improve file open UI
+- [ ] Implement search backward and improve search UI
 - [-] text mode
 - [-] markdown mode
 - [ ] org mode
