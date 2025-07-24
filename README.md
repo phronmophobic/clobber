@@ -4,6 +4,8 @@ A text editor
 
 Status: alpha
 
+See https://youtu.be/kRd4JYIiWb0?si=SBLUkxu_ptnFB2h9 for a design overview.
+
 ## Design goals
 - Full featured code and text editor
 - First class `clojure-mode`
