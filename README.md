@@ -1,6 +1,6 @@
 # clobber
 
-A text editor
+A text editor. Built for [easel](https://github.com/phronmophobic/easel/), but designed to be embeddable in a variety of environments.
 
 Status: alpha
 
