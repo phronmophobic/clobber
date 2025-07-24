@@ -10,6 +10,7 @@ See https://youtu.be/kRd4JYIiWb0?si=SBLUkxu_ptnFB2h9 for a design overview.
 - Full featured code and text editor
 - First class `clojure-mode`
 - Idiomatic clojure API
+- Persistent, Immutable data representation
 - Full unicode support 😄🤩😜🚀🍩
 - Headless-mode (ie. UI entirely decoupled and optional)
 - Support additional modes in the future for all your text editing needs
