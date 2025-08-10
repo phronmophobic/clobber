@@ -119,9 +119,10 @@
                        (- (quot height row-height)
                           ;; reserve two lines for status bar
                           ;; and one line for cursor info
-                          4))]
+                          2))]
     (-> editor
         (assoc-in [:viewport :num-lines] (long num-lines))
+        (assoc-in [:viewport :text-height] (* row-height num-lines))
         (assoc-in [:viewport :height] height))))
 
 
@@ -1223,7 +1224,7 @@
                         :line-val line-val}))
 
           status-bar (when-let [status (:status editor)]
-                       (when-let [height (-> editor :viewport :height)]
+                       (when-let [height (-> editor :viewport :text-height)]
                          (let [view (or 
                                      (when (and (:file-picker status)
                                                 (:file editor))
