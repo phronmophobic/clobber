@@ -797,6 +797,7 @@
       :language lang
       :viscous? true
       :parser parser
+      :key-tree clojure-key-tree
       :buf buf})))
 
 
@@ -1390,22 +1391,24 @@
                 
                 ;; else
                 nil))))))))
+(def clojure-key-bindings
+  (assoc clojure-mode/key-bindings
+         "C-x C-s" ::save-editor
+         "C-x C-f" ::file-picker
+         "C-c C-d" ::show-doc
+         "C-g" #'editor-cancel
+         "C-c t" ::tap-editor
+         "C-c C-k" ::load-buffer
+         "M-TAB" ::show-completions
+         ;; "C-c C-v" ::editor-paste
+         "C-M-x" ::editor-eval-top-form
+         "C-x C-e" ::editor-eval-last-sexp
+         "M-." ::jump-to-definition
+         "C-s" #'init-search-forward))
 
 (def clojure-key-tree
   (key-binding/key-bindings->key-tree
-   (assoc clojure-mode/key-bindings
-          "C-x C-s" ::save-editor
-          "C-x C-f" ::file-picker
-          "C-c C-d" ::show-doc
-          "C-g" #'editor-cancel
-          "C-c t" ::tap-editor
-          "C-c C-k" ::load-buffer
-          "M-TAB" ::show-completions
-          ;; "C-c C-v" ::editor-paste
-          "C-M-x" ::editor-eval-top-form
-          "C-x C-e" ::editor-eval-last-sexp
-          "M-." ::jump-to-definition
-          "C-s" #'init-search-forward)))
+   clojure-key-bindings))
 
 (defn editor-search-forward [editor query]
   (let [search-state (::search editor)
@@ -1695,7 +1698,7 @@
 
         focused? (= $editor focus)
         body (if focused?
-               (key-binding/wrap-editor-key-tree {:key-tree clojure-key-tree
+               (key-binding/wrap-editor-key-tree {:key-tree (:key-tree editor)
                                                   :editor editor
                                                   ;; hack, otherwise, $editor is slightly different
                                                   :$editor $editor
