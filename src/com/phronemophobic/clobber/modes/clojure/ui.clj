@@ -512,11 +512,6 @@
              (fn [editor]
                (-> editor
                    (assoc-in [:status :file-picker] {}))))
-  ;; ugly
-  (dispatch! :set 
-             ['(keypath :membrane.component/context)
-              '(keypath :focus)]
-             [$editor :file-picker])
   nil)
 
 (defeffect ::reload-editor [{:keys [editor $editor]}]
@@ -1209,8 +1204,7 @@
                 #(f % {:file file}))}))
 
 (defui editor-view [{:keys [editor
-                            ^:membrane.component/contextual
-                            focus]}]
+                            focused?]}]
   (when-let [tree (:tree editor)]
     (let [lang (:language editor)
           rope (:rope editor)
@@ -1245,14 +1239,14 @@
                                                  (and ctrl?
                                                       (= (char key) \G))
                                                  [[:update $editor update :status dissoc :file-picker]
-                                                  [:set $focus $editor]]
+                                                  [::request-focus]]
                                                  
                                                  :else (handler key scancode action mods)))))
                                          
                                          (file-picker {:folder (.getParentFile ^File (:file editor))
                                                        :extra (:file-picker status)
                                                        :base-style (:base-style editor)
-                                                       :focused? (= [$editor :file-picker] focus)}))))
+                                                       :focused? focused?}))))
                                      (:temp status)
                                      (:status status))
                                status-bar (if (string? view)
@@ -1668,12 +1662,10 @@
                 \` \~})
 
 (defui code-editor [{:keys [editor
-                            ^:membrane.component/contextual
-                            focus]
+                            focused?]
                      :as this}]
   (let [body (editor-view {:editor editor
-                           ;; hack, otherwise, $editor is slightly different
-                           :$editor $editor})
+                           :focused? focused?})
 
         structure-state (get editor ::structure-state)
         body (ui/wrap-on
@@ -1696,8 +1688,11 @@
                                       :$structure-state $structure-state}]])))
               body)
 
-        focused? (= $editor focus)
-        body (if focused?
+        editor-focused? (and focused?
+                             (not
+                              (and (:file-picker (:status editor))
+                                   (:file editor))))
+        body (if editor-focused?
                (key-binding/wrap-editor-key-tree {:key-tree (:key-tree editor)
                                                   :editor editor
                                                   ;; hack, otherwise, $editor is slightly different
@@ -1705,13 +1700,14 @@
                                                   :update-editor-intent ::update-editor
                                                   :body body
                                                   :$body nil})
-               (let [[w h] (ui/bounds body)
-                     gray 0.98]
-                 [(when (not= [$editor :file-picker]
-                              focus)
-                    (ui/filled-rectangle [gray gray gray]
-                                         (max 800 w) (max 100 h)))
-                  body]))
+               (if focused?
+                 body
+                 ;; else not focused at all
+                 (let [[w h] (ui/bounds body)
+                       gray 0.98]
+                   [(ui/filled-rectangle [gray gray gray]
+                                         (max 800 w) (max 100 h))
+                    body])))
 
         body (if focused?
                (wrap-search
@@ -1731,7 +1727,7 @@
               :mouse-down
               (fn [handler mpos]
                 (let [intents (handler mpos)]
-                  (cons [:set $focus $editor]
+                  (cons [::request-focus]
                         intents)))
               body)
 
