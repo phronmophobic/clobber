@@ -749,6 +749,7 @@
     ch))
 
 
+(declare clojure-key-tree)
 (defn make-editor
   ([{:keys [file eval-ns source] :as m}]
    (let [editor (-> (make-editor)
