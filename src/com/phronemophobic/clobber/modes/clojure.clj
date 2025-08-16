@@ -1656,6 +1656,7 @@
    "M-d" #'paredit-forward-kill-word
    "M-b" #'editor-backward-word
    "M-f" #'editor-forward-word
+   "M-l" #'text-mode/editor-downcase-word
    "M-v" #'text-mode/editor-scroll-up
    
    "M-<" #'text-mode/editor-beginning-of-buffer

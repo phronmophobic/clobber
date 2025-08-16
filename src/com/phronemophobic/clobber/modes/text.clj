@@ -1,5 +1,6 @@
 (ns com.phronemophobic.clobber.modes.text
-  (:require [com.phronemophobic.clobber.util :as util])
+  (:require [com.phronemophobic.clobber.util :as util]
+            [clojure.string :as str])
   (:import com.ibm.icu.text.BreakIterator
            (org.treesitter TSTree
                            TSInputEdit
@@ -640,6 +641,23 @@
                         :point (- cursor-point (util/num-points diff-string))
                         :row new-cursor-row
                         :column-byte new-cursor-column-byte})))))
+
+(defn editor-downcase-word [editor]
+  (let [start-editor editor
+        start-cursor (:cursor editor)
+        editor (editor-forward-word editor)
+        end-cursor (:cursor editor)
+        
+        start-byte (:byte start-cursor)
+        end-byte (:byte end-cursor)
+        _ (assert (>= end-byte start-byte))
+        word (-> (.sliceBytes ^Rope (:rope start-editor) start-byte end-byte)
+                 .toString)
+        
+        editor (-> start-editor
+                   (editor-snip start-byte end-byte)
+                   (editor-self-insert-command (str/lower-case word)))]
+    editor))
 
 
 (defn editor-backward-paragraph [editor]
@@ -1322,6 +1340,7 @@
    "M-v" editor-scroll-up
    "M-<" editor-beginning-of-buffer
    "M->" editor-end-of-buffer
+   "M-l" editor-downcase-word
    "DEL" editor-delete-backward-char
    "<right>" editor-forward-char
    "<up>" editor-previous-line
