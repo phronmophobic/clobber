@@ -642,22 +642,7 @@
                         :row new-cursor-row
                         :column-byte new-cursor-column-byte})))))
 
-(defn editor-downcase-word [editor]
-  (let [start-editor editor
-        start-cursor (:cursor editor)
-        editor (editor-forward-word editor)
-        end-cursor (:cursor editor)
-        
-        start-byte (:byte start-cursor)
-        end-byte (:byte end-cursor)
-        _ (assert (>= end-byte start-byte))
-        word (-> (.sliceBytes ^Rope (:rope start-editor) start-byte end-byte)
-                 .toString)
-        
-        editor (-> start-editor
-                   (editor-snip start-byte end-byte)
-                   (editor-self-insert-command (str/lower-case word)))]
-    editor))
+
 
 
 (defn editor-backward-paragraph [editor]
@@ -931,6 +916,23 @@
                         :row new-cursor-row
                         :column-byte new-cursor-column-byte})
         (editor-insert s cursor-byte cursor-row cursor-column-byte))))
+
+(defn editor-downcase-word [editor]
+  (let [start-editor editor
+        start-cursor (:cursor editor)
+        editor (editor-forward-word editor)
+        end-cursor (:cursor editor)
+        
+        start-byte (:byte start-cursor)
+        end-byte (:byte end-cursor)
+        _ (assert (>= end-byte start-byte))
+        word (-> (.sliceBytes ^Rope (:rope start-editor) start-byte end-byte)
+                 .toString)
+        
+        editor (-> start-editor
+                   (editor-snip start-byte end-byte)
+                   (editor-self-insert-command (str/lower-case word)))]
+    editor))
 
 (defn editor-append-history [editor past]
   (update editor :history
