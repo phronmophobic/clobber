@@ -1085,7 +1085,7 @@
 
 (defn highlight-search [editor {:keys [char-offset start-byte-offset end-byte-offset]}]
   (when-let [^java.util.regex.MatchResult
-             match (-> editor ::search :match)]
+             match (-> editor ::text-mode/search :match)]
     (when (>= (.start match)
               char-offset)
       (let [^Rope
@@ -1250,31 +1250,20 @@
          (when-let [->view (:->view completion)]
            (->view completion)))])))
 
-
-(defn init-search-forward [editor]
-  (assoc editor
-         ::search {:initial-cursor (:cursor editor)
-                   :initial-rope (:rope editor)}))
-
 (defeffect ::cancel-search-forward [{:keys [$editor]}]
   (dispatch! ::update-editor 
              {:$editor $editor
               :op (fn [editor]
-                    (let [initial-cursor (-> editor ::search :initial-cursor)
+                    (let [initial-cursor (-> editor ::text-mode/search :initial-cursor)
                           editor (if initial-cursor
                                    (assoc editor :cursor initial-cursor)
                                    editor)]
                       (text-mode/editor-update-viewport
-                       (dissoc editor ::search))))}))
-
-(defn finish-search-forward [editor]
-  (-> editor
-      (text-mode/editor-push-mark (-> editor ::search :initial-cursor))
-      (dissoc ::search)))
+                       (dissoc editor ::text-mode/search))))}))
 
 (defeffect ::finish-search-forward [{:keys [$editor]}]
   (dispatch! ::update-editor
-             {:op finish-search-forward
+             {:op text-mode/finish-search-forward
               :$editor $editor}))
 
 (defeffect ::show-completions [{:keys [$editor]}]
@@ -1364,129 +1353,33 @@
          "C-c t" ::tap-editor
          "C-c C-k" ::load-buffer
          "M-TAB" ::show-completions
+         "TAB" ::indent-or-complete
          ;; "C-c C-v" ::editor-paste
          "C-M-x" ::editor-eval-top-form
          "C-x C-e" ::editor-eval-last-sexp
-         "M-." ::jump-to-definition
-         "C-s" #'init-search-forward))
-
-(def clojure-key-tree
-  (key-binding/key-bindings->key-tree
-   clojure-key-bindings))
-
-(defn editor-search-forward [editor query]
-  (let [search-state (::search editor)
-        _ (assert search-state)
-        
-        search-cursor (or (:cursor search-state)
-                          (:initial-cursor search-state))
-        search-index (:char search-cursor)
-        regexp (Pattern/compile query
-                                (bit-or
-                                 Pattern/CASE_INSENSITIVE
-                                 Pattern/LITERAL))
-        ^Rope
-        rope (:rope editor)
-        matcher (.matcher regexp rope)
-
-        match (if (.find matcher search-index)
-                (.toMatchResult matcher)
-                (when (.find matcher 0)
-                  (.toMatchResult matcher)))]
-    (if match
-      (let [
-            ;; calculate new cursor
-            s (-> (.subSequence rope 0 (.start match))
-                  .toString)
-
-            {:keys [row column-byte]} (util/count-row-column-bytes s)
-
-            cursor {:byte (alength (.getBytes s "utf-8"))
-                    :char (.length s)
-                    :point (util/num-points s)
-                    :row row
-                    :column-byte column-byte}]
-        (-> editor
-            (assoc-in [::search :query] query)
-            (assoc-in [::search :match] match)
-            (assoc :cursor cursor)
-            (text-mode/editor-update-viewport)))
-      (-> editor
-          (assoc-in [::search :query] query)
-          (assoc-in [::search :match] nil)))))
-
-(defn editor-repeat-search-forward [editor]
-  (let [search-state (::search editor)
-        _ (assert search-state)
-
-        query (:query search-state)
-        
-        search-cursor (:cursor editor)
-        search-index (:char search-cursor)
-        regexp (Pattern/compile query
-                                (bit-or
-                                 Pattern/CASE_INSENSITIVE
-                                 Pattern/LITERAL))
-        ^Rope
-        rope (:rope editor)
-        matcher (.matcher regexp rope)
-
-        match (if (.find matcher search-index)
-                (.toMatchResult matcher)
-                (when (.find matcher 0)
-                  (.toMatchResult matcher)))
-        ;; now do it again
-        match (when match
-                (if (.find matcher)
-                  (.toMatchResult matcher)
-                  (when (.find matcher 0)
-                    (.toMatchResult matcher))))]
-    (if match
-      (let [ ;; calculate new cursor
-            s (-> (.subSequence rope 0 (.start match))
-                  .toString)
-
-            {:keys [row column-byte]} (util/count-row-column-bytes s)
-
-            cursor {:byte (alength (.getBytes s "utf-8"))
-                    :char (.length s)
-                    :point (util/num-points s)
-                    :row row
-                    :column-byte column-byte}]
-        (-> editor
-            (assoc-in [::search :query] query)
-            (assoc :cursor cursor)
-            (assoc-in [::search :match] match)
-            (text-mode/editor-update-viewport)))
-      (-> editor
-          (assoc-in [::search :query] query)
-          (assoc-in [::search :match] nil)))))
+         "M-." ::jump-to-definition))
 
 (defeffect ::append-search-forward [{:keys [$editor s]}]
   (dispatch! ::update-editor
              {:$editor $editor
               :op (fn [editor]
                     (let [query (str (-> editor
-                                         ::search
+                                         ::text-mode/search
                                          :query)
                                      s)]
                       (-> editor
-                          (editor-search-forward query)
+                          (text-mode/editor-isearch-forward query)
                           (assoc :search/last-search query))))}))
 
 (defeffect ::repeat-search-forward [{:keys [$editor s]}]
   (dispatch! ::update-editor
              {:$editor $editor
-              :op (fn [editor]
-                    (if (-> editor ::search :query)
-                      (editor-repeat-search-forward editor)
-                      (if-let [query (:search/last-search editor)]
-                        (editor-search-forward editor query)
-                        editor)))}))
+              :op #'text-mode/editor-isearch-forward}))
 
 (defui wrap-search [{:keys [editor body]
                      :as this}]
-  (let [search-state (::search editor)
+
+  (let [search-state (::text-mode/search editor)
         body (if search-state
                (ui/on
                 :key-event

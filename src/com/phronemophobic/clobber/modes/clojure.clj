@@ -1683,9 +1683,7 @@
    "TAB" #'editor-indent
    "C-M-q" #'editor-indent-region
 
-   "C-c a" identity
-   "C-c b" identity
-
+   "C-s" #'text-mode/editor-isearch-forward
    "C-y" #'text-mode/editor-yank
    "C-SPC" #'text-mode/editor-set-mark
    "C-u C-SPC" #'text-mode/editor-pop-mark

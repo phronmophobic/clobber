@@ -2,6 +2,7 @@
   (:require [com.phronemophobic.clobber.util :as util]
             [clojure.string :as str])
   (:import com.ibm.icu.text.BreakIterator
+           java.util.regex.Pattern
            (org.treesitter TSTree
                            TSInputEdit
                            TSInputEncoding
@@ -1224,10 +1225,238 @@
                       :row 0
                       :column-byte 0})))
 
-(defn editor-isearch-forward [editor]
-  editor)
 (defn editor-kill-ring-save [editor]
   editor)
+
+(defn editor-isearch-forward 
+  ([editor]
+   (if (::search editor)
+     (let [search-state (::search editor)
+           query (:query search-state)]
+       (if query
+         (let [search-cursor (:cursor editor)
+               search-index (:char search-cursor)
+               regexp (Pattern/compile query
+                                       (bit-or
+                                        Pattern/CASE_INSENSITIVE
+                                        Pattern/LITERAL))
+               ^Rope
+               rope (:rope editor)
+               matcher (.matcher regexp rope)
+               
+               match (if (.find matcher search-index)
+                       (.toMatchResult matcher)
+                       (when (.find matcher 0)
+                         (.toMatchResult matcher)))
+               ;; now do it again
+               match (when match
+                       (if (.find matcher)
+                         (.toMatchResult matcher)
+                         (when (.find matcher 0)
+                           (.toMatchResult matcher))))
+               
+               search-state (-> search-state
+                                (assoc :query query)
+                                (assoc :match match))
+               
+               editor (assoc editor ::search search-state)]
+           (if match
+             (let [ ;; calculate new cursor
+                   s (-> (.subSequence rope 0 (.start match))
+                         .toString)
+                   
+                   {:keys [row column-byte]} (util/count-row-column-bytes s)
+                   
+                   cursor {:byte (alength (.getBytes s "utf-8"))
+                           :char (.length s)
+                           :point (util/num-points s)
+                           :row row
+                           :column-byte column-byte}]
+               (assoc editor :cursor cursor))
+             ;; else, no match
+             editor))
+         (if-let [query (:search/last-search editor)]
+           (editor-isearch-forward editor query)
+           editor)))
+     ;; No current query, try to repeat last search.
+     ;; this may seem like it's not doing anything,
+     ;; but this can signal to the UI that a search is happening
+     (assoc editor ::search {:initial-cursor (:cursor editor)
+                             :initial-rope (:rope editor)})))
+  ([editor query]
+   (let [search-state (or (::search editor)
+                          {:initial-cursor (:cursor editor)
+                           :initial-rope (:rope editor)})
+         
+         search-cursor (or (:cursor search-state)
+                           (:initial-cursor search-state))
+         search-index (:char search-cursor)
+         regexp (Pattern/compile query
+                                 (bit-or
+                                  Pattern/CASE_INSENSITIVE
+                                  Pattern/LITERAL))
+         ^Rope
+         rope (:rope editor)
+         matcher (.matcher regexp rope)
+         
+         match (if (.find matcher search-index)
+                 (.toMatchResult matcher)
+                 (when (.find matcher 0)
+                   (.toMatchResult matcher)))
+         
+         search-state (-> search-state
+                          (assoc :query query)
+                          (assoc :match match))
+         
+         editor (assoc editor ::search search-state)]
+     (if match
+       (let [
+             ;; calculate new cursor
+             s (-> (.subSequence rope 0 (.start match))
+                   .toString)
+             
+             {:keys [row column-byte]} (util/count-row-column-bytes s)
+             
+             cursor {:byte (alength (.getBytes s "utf-8"))
+                     :char (.length s)
+                     :point (util/num-points s)
+                     :row row
+                     :column-byte column-byte}]
+         (assoc editor :cursor cursor))
+       ;; else, no match
+       editor))))
+
+(comment
+  (-> (make-editor)
+      )
+  
+  ,)
+
+(defn editor-repeat-isearch-forward [editor]
+  (let [search-state (::search editor)
+        _ (assert search-state)
+
+        query (:query search-state)
+        
+        search-cursor (:cursor editor)
+        search-index (:char search-cursor)
+        regexp (Pattern/compile query
+                                (bit-or
+                                 Pattern/CASE_INSENSITIVE
+                                 Pattern/LITERAL))
+        ^Rope
+        rope (:rope editor)
+        matcher (.matcher regexp rope)
+
+        match (if (.find matcher search-index)
+                (.toMatchResult matcher)
+                (when (.find matcher 0)
+                  (.toMatchResult matcher)))
+        ;; now do it again
+        match (when match
+                (if (.find matcher)
+                  (.toMatchResult matcher)
+                  (when (.find matcher 0)
+                    (.toMatchResult matcher))))
+        
+        search-state (-> search-state
+                         (assoc :query query)
+                         (assoc :match match))
+        
+        editor (assoc editor ::search search-state)]
+    (if match
+      (let [ ;; calculate new cursor
+            s (-> (.subSequence rope 0 (.start match))
+                  .toString)
+            
+            {:keys [row column-byte]} (util/count-row-column-bytes s)
+            
+            cursor {:byte (alength (.getBytes s "utf-8"))
+                    :char (.length s)
+                    :point (util/num-points s)
+                    :row row
+                    :column-byte column-byte}]
+        (assoc editor :cursor cursor))
+      ;; else, no match
+      editor)))
+
+
+
+(defn ^:private reverse-char-sequence [^CharSequence cs]
+  (reify 
+    CharSequence
+    (length [_ ]
+      (.length cs))
+    (charAt [_ idx]
+      (.charAt cs (dec (- (.length cs) idx))))
+    (subSequence [_ start  end]
+      (let [len (.length cs)]
+        (reverse-char-sequence
+         (.subSequence cs
+                       (- len end)
+                       (- len start)))))
+    (toString [this]
+      (.toString (StringBuilder. this)))))
+
+(defn editor-isearch-backward [editor query]
+  (let [search-state (or (::search editor)
+                         {:initial-cursor (:cursor editor)
+                          :initial-rope (:rope editor)})
+        
+        search-cursor (or (:cursor search-state)
+                          (:initial-cursor search-state))
+        search-index (:char search-cursor)
+        
+        ;; There is no built in way to search backwards with regex (afaik)
+        ;; Instead, search the reversed string and convert the indices.
+        regexp (Pattern/compile (str/reverse query)
+                                (bit-or
+                                 Pattern/CASE_INSENSITIVE
+                                 Pattern/LITERAL))
+        ^Rope
+        rope (:rope editor)
+        reversed-cs  (reverse-char-sequence rope)
+        matcher (.matcher regexp reversed-cs)
+
+        match (if (.find matcher search-index)
+                (.toMatchResult matcher)
+                (when (.find matcher 0)
+                  (.toMatchResult matcher)))
+        
+        search-state (-> search-state
+                         (assoc :query query)
+                         (assoc :match match))
+        
+        editor (assoc editor ::search search-state)]
+    (if match
+      (let [;; calculate new cursor
+            ;; we're calculating to `.end` instead of `.start`
+            ;; because we searched in reverse.
+            s (-> (.subSequence rope 0 (- (.length rope) (.end match)))
+                  .toString)
+
+            {:keys [row column-byte]} (util/count-row-column-bytes s)
+
+            cursor {:byte (alength (.getBytes s "utf-8"))
+                    :char (.length s)
+                    :point (util/num-points s)
+                    :row row
+                    :column-byte column-byte}]
+        (assoc editor :cursor cursor))
+      ;; else, no match
+      editor)))
+
+(defn editor-cancel-search [editor]
+  (let [initial-cursor (-> editor ::search :initial-cursor)
+        editor (if initial-cursor
+                 (assoc editor :cursor initial-cursor)
+                 editor)]
+    (dissoc editor ::search)))
+
+(defn finish-search-forward [editor]
+  (-> editor
+      (editor-push-mark (-> editor ::search :initial-cursor))
+      (dissoc ::search)))
 
 (defn editor-single-space [editor]
   (let [^Rope rope (:rope editor)
@@ -1355,6 +1584,7 @@
    "M-SPC" editor-single-space
    "M-\\" editor-delete-horizontal-space
    "C-_" editor-undo
+   "C-s" editor-isearch-forward
    "TAB" editor-indent
    ,})
 
