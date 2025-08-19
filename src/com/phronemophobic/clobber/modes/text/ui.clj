@@ -163,8 +163,7 @@
                      new-editor)]
     new-editor))
 
-(defn editor-cancel [editor]
-  (dissoc editor :select-cursor))
+
 
 (defn editor-set-height [editor height]
   (let [base-style (:base-style editor)
@@ -243,6 +242,8 @@
           #(text-mode/editor-set-string % source))))))
   nil)
 
+(defn editor-cancel [editor]
+  (dissoc editor :select-cursor))
 
 (def key-bindings
   (assoc text-mode/key-bindings
@@ -253,6 +254,30 @@
          "C-c t" ::tap-editor))
 
 (defn make-editor
+  ([{:keys [file source] :as m}]
+   (let [editor (-> (make-editor)
+                    #_(assoc :background-chan (editor-background-runner)))
+         
+         ;; contents
+         editor
+         (cond
+           source (text-mode/editor-insert editor source 0 0 0)
+           
+           file (let [source (slurp file)
+                      last-file-load (java.time.Instant/now)]
+                  (-> editor
+                      (text-mode/editor-insert source 0 0 0)
+                      (assoc :last-file-load last-file-load)))
+           
+           :else editor)
+         
+         ;; set separately from contents:
+         ;; - may override file from eval-ns
+         ;; - may be explicitly provided with :source
+         editor (if file
+                  (assoc editor :file file)
+                  editor)]
+     editor))
   ([]
    (-> (text-mode/make-editor)
        (assoc :viewport {:num-lines 52
@@ -530,9 +555,7 @@
               (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
                 #(f % {:file file}))}))
 
-(defui editor-view [{:keys [editor
-                            ^:membrane.component/contextual
-                            focus]}]
+(defui editor-view [{:keys [editor]}]
   
   (let [lang (:language editor)
         rope (:rope editor)

@@ -749,25 +749,62 @@
          (prn e))))
     ch))
 
+(defn ^:private guess-ns [source]
+  (let [[_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" source)]
+    (when ns-str
+      (symbol ns-str))))
 
 (declare clojure-key-bindings)
 (defn make-editor
-  ([{:keys [file eval-ns source] :as m}]
+  ([{:keys [file ns source] :as m}]
    (let [editor (-> (make-editor)
                     (assoc :background-chan (editor-background-runner)))
-         
-         editor (cond-> editor
-                  file (assoc :file file)
-                  eval-ns (assoc :eval-ns eval-ns )
-                  source (text-mode/editor-self-insert-command source))
 
-         editor (-> editor
-                    (assoc :cursor {:byte 0
-                                    :char 0
-                                    :point 0
-                                    :row 0
-                                    :column-byte 0})
-                    (text-mode/editor-update-viewport))]
+         ;; contents
+         editor
+         (cond
+           source (text-mode/editor-insert editor source 0 0 0)
+
+           file (let [source (slurp file)
+                      last-file-load (java.time.Instant/now)]
+                  (-> editor
+                      (text-mode/editor-insert source 0 0 0)
+                      (assoc :last-file-load last-file-load)))
+
+           ns (let [eval-ns (the-ns ns)
+                    ns-sym (ns-name eval-ns)
+                    resource-path (ns-sym->resource-path ns-sym)
+                    resource (io/resource resource-path)
+                    source (slurp resource)
+                    file (when (= "file" (.getProtocol resource))
+                           (io/as-file resource))
+                    last-file-load (when file
+                                     (java.time.Instant/now))
+                    source (when resource
+                             (slurp resource))
+                    editor (assoc editor :eval-ns eval-ns)]
+                (cond-> editor
+                  file (assoc :file file)
+                  source (text-mode/editor-insert source 0 0 0)
+                  last-file-load (assoc :last-file-load last-file-load)))
+           :else editor)
+
+         ;; set separately from contents:
+         ;; - may override file from eval-ns
+         ;; - may be explicitly provided with :source
+         editor (if file
+                  (assoc editor :file file)
+                  editor)
+
+
+         ;; eval-ns
+         editor (if-not (:eval-ns editor)
+                  (let [eval-ns (when-let [ns-sym (guess-ns (:rope editor))]
+                                  (create-ns ns-sym))]
+                    (if eval-ns
+                      (assoc editor :eval-ns eval-ns)
+                      editor))
+                  editor)]
      editor))
   ([]
    (let [lang (TreeSitterClojure.)
@@ -798,39 +835,13 @@
       :buf buf})))
 
 
-(defn ^:private guess-ns [source]
-  (let [[_ ns-str] (re-find #"\(ns ([a-z0-9A-A.\-]+)" source)]
-    (when ns-str
-      (symbol ns-str))))
+
 
 (defn make-editor-from-file [f]
-  (let [last-file-load (java.time.Instant/now)
-        source (slurp f)
-        eval-ns (when-let [ns-sym (guess-ns source)]
-                  (create-ns ns-sym))]
-    (-> (make-editor 
-         (cond-> {:file f
-                  :source source}
-           eval-ns (assoc :eval-ns eval-ns)))
-        (assoc :last-file-load last-file-load))))
+  (make-editor {:file f}))
 
 (defn make-editor-from-ns [ns]
-  (let [eval-ns (the-ns ns)
-        ns-sym (ns-name eval-ns)
-        resource-path (ns-sym->resource-path ns-sym)
-        resource (io/resource resource-path)
-        source (slurp resource)
-        file (when (= "file" (.getProtocol resource))
-               (io/as-file resource))
-        last-file-load (when file
-                         (java.time.Instant/now))
-        source (when resource
-                 (slurp resource))]
-    (cond-> (make-editor 
-             (cond-> {:eval-ns eval-ns}
-               file (assoc :file file)
-               source (assoc :source source)))
-      last-file-load (assoc :last-file-load last-file-load))))
+  (make-editor {:ns ns}))
 
 (defn paren-highlight [editor para]
   (let [cursor-byte (-> editor :cursor :byte)
