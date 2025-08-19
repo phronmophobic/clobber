@@ -303,7 +303,8 @@
               )
             (catch Exception e
               (dispatch! ::temp-status {:$editor $editor
-                                        :msg "Exception!"})
+                                        :msg (str (-> e class .getName) ": " (.getMessage e) "\n"
+                                                  (-> e .getCause .getMessage))})
               (prn e))))))))
 
 (defeffect ::load-buffer [{:keys [editor $editor]}]
