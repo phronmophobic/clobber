@@ -691,6 +691,7 @@
                            (assoc editor
                                   ::completion
                                   {:completions completions
+                                   :prefix sym-str
                                    :->view (fn [{:keys [completions offset]}]
                                              (ui/translate
                                               x (+ y height)
@@ -1289,6 +1290,50 @@
                                     (assoc m :offset next-offset)))))
                       (assoc editor ::completion {})))
               :$editor $editor}))
+
+(defn ^:private shared-prefix
+  [^String prefix ^String completion]
+  (let [plen (.length prefix)
+        clen (.length completion)
+        shared-len 
+        (loop [idx 0]
+          (if (or (>= idx plen)
+                  (>= idx clen))
+            idx
+            (let [pc1 (.charAt prefix idx)
+                  cc1 (.charAt completion idx)]
+              (if (not= pc1 cc1)
+                idx
+                (if (Character/isHighSurrogate pc1)
+                  (let [idx* (inc idx)]
+                    (if (not= (.charAt prefix idx*)
+                              (.charAt completion idx*))
+                      idx
+                      (recur (inc idx*))))
+                  (recur (inc idx)))))))]
+    (if (= shared-len plen)
+      prefix
+      (subs prefix 0 shared-len))))
+
+(defeffect ::indent-or-complete [{:keys [$editor]}]
+  (dispatch! ::update-editor
+             {:op (fn [editor]
+                    (if-let [{:keys [completions prefix]} (::completion editor)] 
+                      (if (= 1 (count completions))
+                        (-> (text-mode/editor-self-insert-command editor (subs (-> completions first :candidate) (count prefix)))
+                            (dissoc ::completion))
+                        ;; else
+                        (let [longest-shared-prefix (transduce
+                                                     (map :candidate)
+                                                     (completing shared-prefix)
+                                                     (-> completions first :candidate)
+                                                     (rest completions))]
+                          (if (= prefix longest-shared-prefix)
+                            editor
+                            (text-mode/editor-self-insert-command editor (subs longest-shared-prefix (count prefix))))))
+                      (clojure-mode/editor-indent editor)))
+              :$editor $editor}))
+
 
 (defeffect ::jump-to-definition [{:keys [editor]}]
   (let [^TSTree tree (:tree editor)
