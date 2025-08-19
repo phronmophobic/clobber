@@ -1515,22 +1515,7 @@
                  body
                  (ui/label (:query search-state))))
 
-               body
-               #_(ui/wrap-on
-                  :key-event
-                  (fn [handler key scancode action mods]
-                    (when (#{:press :repeat} action)
-                      (let [alt? (not (zero? (bit-and ui/ALT-MASK mods)))
-                            super? (not (zero? (bit-and ui/SUPER-MASK mods)))
-                            shift? (not (zero? (bit-and ui/SHIFT-MASK mods)))
-                            ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))
-
-                            search? (and ctrl?
-                                         (= (char key) \S))]
-                        (if search?
-                          [[::init-search-forward this]]
-                          (handler key scancode action mods)))))
-                  body))]
+               body)]
     body))
 
 (defeffect ::update-instarepl [{:keys [editor $editor]}]
