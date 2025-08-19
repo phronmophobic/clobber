@@ -244,13 +244,26 @@
   nil)
 
 
+(def key-bindings
+  (assoc text-mode/key-bindings
+         "C-x C-s" ::save-editor
+         ;; "C-x C-f" ::file-picker
+         ;; "C-c C-d" ::show-doc
+         "C-g" #'editor-cancel
+         "C-c t" ::tap-editor))
 
 (defn make-editor
   ([]
    (-> (text-mode/make-editor)
        (assoc :viewport {:num-lines 52
-                         :start-line 0
-                         :height 811}))))
+                         :start-line 0}
+              :key-bindings key-bindings
+              :base-style
+              #:text-style
+              {:font-families ["Menlo"]
+              :font-size 12
+              :height 1.2
+              :height-override true}))))
 
 (defn make-editor-from-file [f]
   (let [source (slurp f)]
@@ -540,48 +553,42 @@
      status-bar]))
 
 
-(def key-tree
-  (key-binding/key-bindings->key-tree
-   (assoc text-mode/key-bindings
-          "C-x C-s" ::save-editor
-          ;; "C-x C-f" ::file-picker
-          ;; "C-c C-d" ::show-doc
-          "C-g" #'editor-cancel
-          "C-c t" ::tap-editor)))
+
 
 
 (defui text-editor [{:keys [editor
-                            ^:membrane.component/contextual
-                            focus]
+                            focused?]
                      :as this}]
-  (let [body (editor-view {:editor editor
-                           ;; hack, otherwise, $editor is slightly different
-                           :$editor $editor})
+  (let [body (editor-view {:editor editor})
 
-        focused? (= $editor focus)
-        body (if focused?
-               (key-binding/wrap-editor-key-tree {:key-tree key-tree
-                                                  :editor editor
-                                                  ;; hack, otherwise, $editor is slightly different
-                                                  :$editor $editor
-                                                  :update-editor-intent ::update-editor
-                                                  :body body
-                                                  :$body nil})
+        editor-focused? (and focused?
+                             (not
+                              (and (:file-picker (:status editor))
+                                   (:file editor))))
+
+        body (if editor-focused?
+               (key-binding/wrap-editor-key-bindings 
+                {:key-bindings (:key-bindings editor)
+                 :editor editor
+                 :update-editor-intent ::update-editor
+                 :body body
+                 :$body nil})
                ;; else
                (let [[w h] (ui/bounds body)
                      gray 0.98]
-                 [(when (not= [$editor :file-picker]
-                              focus)
-                    (ui/filled-rectangle [gray gray gray]
-                                         (max 800 w) (max 100 h)))
-                  body]))
+                 
+                 (if focused?
+                   body
+                   [(ui/filled-rectangle [gray gray gray]
+                                           (max 800 w) (max 100 h))
+                    body])))
 
         
         body (ui/wrap-on
               :mouse-down
               (fn [handler mpos]
                 (let [intents (handler mpos)]
-                  (cons [:set $focus $editor]
+                  (cons [:com.phronemophobic.clobber.modes.clojure.ui/request-focus]
                         intents)))
               body)
 

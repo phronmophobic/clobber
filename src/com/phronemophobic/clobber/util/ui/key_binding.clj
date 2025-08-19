@@ -240,11 +240,29 @@
                       :$body nil}))]
     body))
 
-(defui wrap-editor-key-tree [{:keys [key-tree body editor update-editor-intent]}]
-  (let [body (wrap-key-tree 
+(defui wrap-key-bindings [{:keys [body key-bindings]}]
+
+  (let [key-tree-cache (get extra :key-tree-cache)
+        key-tree (get key-tree-cache key-bindings)]
+    (if key-tree
+      (wrap-key-tree {:body body
+                      :key-tree key-tree})
+      (ui/on-key-event
+       (fn [key scancode action mods]
+         (let [key-tree (key-bindings->key-tree key-bindings)
+               elem (wrap-key-tree {:body body
+                                    :key-tree key-tree})
+               intents (ui/key-event elem key scancode action mods)]
+           (cons [:set $key-tree-cache {key-bindings key-tree}]
+                 intents)))
+       body))))
+
+
+(defui wrap-editor-key-bindings [{:keys [key-bindings body editor update-editor-intent]}]
+  (let [body (wrap-key-bindings
               {:body body
                :$body nil
-               :key-tree key-tree})
+               :key-bindings key-bindings})
         body (ui/on
               ::miss
               (fn [{:keys [key-binding]}]
@@ -303,9 +321,9 @@
        {:paragraph-style/text-style
         #:text-style
         {:font-families ["Menlo"]
-        :font-size 12
-        :height 1.2
-        :height-override true}})
+         :font-size 12
+         :height 1.2
+         :height-override true}})
       
       body))))
 

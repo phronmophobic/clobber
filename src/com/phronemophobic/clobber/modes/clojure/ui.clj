@@ -750,7 +750,7 @@
     ch))
 
 
-(declare clojure-key-tree)
+(declare clojure-key-bindings)
 (defn make-editor
   ([{:keys [file eval-ns source] :as m}]
    (let [editor (-> (make-editor)
@@ -794,7 +794,7 @@
       :language lang
       :viscous? true
       :parser parser
-      :key-tree clojure-key-tree
+      :key-bindings clojure-key-bindings
       :buf buf})))
 
 
@@ -1498,11 +1498,11 @@
                               (and (:file-picker (:status editor))
                                    (:file editor))))
         body (if editor-focused?
-               (key-binding/wrap-editor-key-tree {:key-tree (:key-tree editor)
-                                                  :editor editor
-                                                  :update-editor-intent ::update-editor
-                                                  :body body
-                                                  :$body nil})
+               (key-binding/wrap-editor-key-bindings {:key-bindings (:key-bindings editor)
+                                                      :editor editor
+                                                      :update-editor-intent ::update-editor
+                                                      :body body
+                                                      :$body nil})
                (if focused?
                  body
                  ;; else not focused at all
