@@ -826,7 +826,6 @@
                                 :font-size 12
                                 :height 1.2
                                 :height-override true}
-      :eval-ns *ns*
       :rope rope
       :language lang
       :viscous? true
