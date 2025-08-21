@@ -1453,10 +1453,15 @@
                  editor)]
     (dissoc editor ::search)))
 
-(defn finish-search-forward [editor]
-  (-> editor
-      (editor-push-mark (-> editor ::search :initial-cursor))
-      (dissoc ::search)))
+(defn editor-finish-search-forward [editor]
+  (let [last-search (-> editor ::search :query)
+        editor (-> editor
+                   (editor-push-mark (-> editor ::search :initial-cursor))
+                   (dissoc ::search))
+        editor (if (seq last-search)
+                 (assoc editor :search/last-search last-search)
+                 editor)]
+    editor))
 
 (defn editor-single-space [editor]
   (let [^Rope rope (:rope editor)

@@ -16,6 +16,7 @@
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util :as util]
+            [com.phronemophobic.clobber.util.ui :as util.ui]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding])
   (:import (org.treesitter TSLanguage
                            TSQuery
@@ -894,151 +895,6 @@
 (def builtin?
   #{"def" "defn" "fn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "reify" "if-let" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
 
-(defn cursor-view [^Rope rope para cursor]
-  (let [cursor-char (- (:char cursor)
-                       (get para :char-offset 0))
-        rope (.sliceBytes rope
-                          (:start-byte-offset para)
-                          (:end-byte-offset para))
-        {:keys [x y width height] :as rect}
-        (cond
-
-          (zero? (.size rope))
-          (first
-           (para/get-rects-for-range (assoc para :paragraph " ")
-                                     0 1
-                                     :max
-                                     :tight))
-
-          (>= cursor-char (.length rope))
-          (first
-           (para/get-rects-for-range (assoc para :paragraph [(:paragraph para)
-                                                             " "])
-                                     cursor-char (inc cursor-char)
-                                     :max
-                                     :tight))
-
-          :else
-          (let [
-                bi (doto (BreakIterator/getCharacterInstance)
-                     (.setText rope))
-
-                next-char (.following bi cursor-char)
-                diff-string (-> (.subSequence rope cursor-char next-char)
-                                .toString)]
-            (first
-             (para/get-rects-for-range para cursor-char (+ cursor-char (.length diff-string))
-                                       :max
-                                       :tight))))
-        ]
-    (if (not rect)
-      (throw (ex-info "No cursor rect."
-                      {}))
-      (let [width (if (zero? width)
-                    (-> (para/get-rects-for-range (assoc para :paragraph " ")
-                                                  0 1
-                                                  :max
-                                                  :tight)
-                        first
-                        :width)
-                    width)]
-        (ui/translate x y
-                      (ui/filled-rectangle
-                       [0.5725490196078431
-                        0.5725490196078431
-                        0.5725490196078431
-                        0.4]
-                       width height))))))
-
-(defn merge-styles [styles]
-  (apply merge-with
-         (fn [s1 s2]
-           (if (map? s1)
-             (merge-styles [s1 s2])
-             s2))
-         styles))
-
-(defn styles-by-index [styles]
-  (let [all-styles
-        (into []
-              (comp
-               (map-indexed
-                (fn [i m]
-                  (eduction
-                   (map-indexed
-                    (fn [j [[start end] style]]
-                      [{:op :start
-                        :index start
-                        :style style
-                        :id [i j]}
-                       {:op :end
-                        :index end
-                        :style style
-                        :id [i j]}]))
-                   cat
-                   m)))
-               cat)
-              styles)
-        by-index (sort-by :index all-styles)]
-    by-index))
-
-(defn styled-text [rope base-style styles start-byte-offset end-byte-offset]
-  (let [by-index (styles-by-index styles)]
-    (loop [offset start-byte-offset
-           by-index (seq by-index)
-           ;; unprioritized for now
-           active-styles {}
-           p []]
-      (if (and by-index
-               (< offset end-byte-offset))
-        (let [event (first by-index)
-              end-offset (min (:index event) end-byte-offset)
-              p (if (> end-offset offset)
-                  (let [text (util/rope->str rope offset end-offset)]
-                    (conj p
-                          (if (seq active-styles)
-                            (let [style (merge-styles (cons base-style (vals active-styles)))]
-                              {:text text
-                               :style style})
-                            text)))
-                  ;; else
-                  p)
-
-              active-styles (if (= :start (:op event))
-                              (assoc active-styles (:id event) (:style event))
-                              (dissoc active-styles (:id event)))]
-          (recur (max end-offset offset)
-                 (next by-index)
-                 active-styles
-                 p))
-        ;;else
-        (if (< offset end-byte-offset)
-          (let [text (util/rope->str rope offset end-byte-offset)]
-            (conj p
-                  (if (seq active-styles)
-                    (let [style (merge-styles (cons base-style (vals active-styles)))]
-                      {:text text
-                       :style style})
-                    text)))
-          p)))))
-
-(defn selection-style [editor viewport]
-  (when-let [select-cursor (:select-cursor editor)]
-    (let [cursor (:cursor editor)
-          cursor-byte (:byte cursor)
-          select-cursor-byte (:byte select-cursor)
-
-          start-byte (min cursor-byte select-cursor-byte)
-          end-byte (max cursor-byte select-cursor-byte)]
-      {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
-
-(defn debug-selection-style [editor viewport]
-  (when-let [^TSNode debug-node (get (:debug-node editor)
-                                     (:rope editor))]
-    (let [start-byte (.getStartByte debug-node )
-          end-byte (.getEndByte debug-node)]
-      {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
-
 (defn syntax-style [editor
                     {:keys [start-byte-offset end-byte-offset]}]
   (let [^TSQueryCursor qc (TSQueryCursor.)
@@ -1128,14 +984,14 @@
                   :char-offset char-offset
                   :end-byte-offset end-byte-offset}
 
-        p (styled-text rope
-                       (:base-style editor)
-                       [(syntax-style editor viewport)
-                        (selection-style editor viewport)
-                        (debug-selection-style editor viewport)
-                        (highlight-search editor viewport)]
-                       start-byte-offset
-                       end-byte-offset)
+        p (util.ui/styled-text rope
+                               (:base-style editor)
+                               [(syntax-style editor viewport)
+                                (util.ui/selection-style editor viewport)
+                                (util.ui/debug-selection-style editor viewport)
+                                (util.ui/highlight-search editor viewport)]
+                               start-byte-offset
+                               end-byte-offset)
         para (para/paragraph p nil {:paragraph-style/text-style (:base-style editor)})
         para (assoc para
                     :char-offset char-offset
@@ -1251,7 +1107,7 @@
                            (ui/translate 0
                                          (- height 8 (ui/height status-bar))
                                          status-bar))))]
-      [(cursor-view rope para (:cursor editor))
+      [(util.ui/cursor-view rope para (:cursor editor))
        paren-highlight-view
        para
        line-vals
@@ -1274,7 +1130,7 @@
 
 (defeffect ::finish-search-forward [{:keys [$editor]}]
   (dispatch! ::update-editor
-             {:op text-mode/finish-search-forward
+             {:op text-mode/editor-finish-search-forward
               :$editor $editor}))
 
 (defeffect ::show-completions [{:keys [$editor]}]
