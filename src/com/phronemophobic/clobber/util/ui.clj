@@ -450,3 +450,117 @@
             (fn [m]
               (assoc m ::search-editor (text-mode/make-editor))))
     new-editor))
+
+(defui file-picker [{:keys [editor update-editor-intent] :as m}]
+  (let [file-picker-state (::file-picker-state editor)
+        ^File current-folder (get file-picker-state :current-folder)
+        
+        search-editor (get file-picker-state :search-editor)
+        base-style (:base-style search-editor)
+        offset (get extra :offset 0)
+        search-str (-> search-editor :rope .toString)
+
+        fs (into 
+            []
+            (comp (filter (fn [^File f]
+                            (str/includes? (.getName f)
+                                           search-str)))
+                  (drop offset))
+            (sort (.listFiles current-folder)))
+        ps (into 
+            [{:text (str (.getCanonicalPath current-folder) "/")
+              :style (assoc base-style :text-style/color [0 0 0.843])}
+             search-str
+             " | "]
+            (comp (map-indexed 
+                   (fn [i ^File f]
+                     (let [style (if (zero? i)
+                                   (assoc base-style 
+                                          :text-style/font-style
+                                          {:font-style/weight :bold})
+                                   base-style)]
+                       (if (.isFile f)
+                         {:style style
+                          :text (.getName f)}
+                         {:text (str (.getName f) "/")
+                          :style (assoc style :text-style/color [0.909 0.2784 0.3411])}))))
+                  (interpose " | "))
+            fs)
+        
+        search-editor-body 
+        (para/paragraph
+         ps
+         nil
+         {:paragraph-style/text-style base-style})]
+
+    (ui/on
+     ::cancel-search
+     (fn [m]
+       [[update-editor-intent {:editor editor
+                               :$editor $editor
+                               :op #(dissoc % ::file-picker-state)}]])
+     ::select-file
+     (fn [m]
+       (when-let [^File f (first fs)]
+         (if (.isFile f)
+           [[::select-file {:file f}]
+            [update-editor-intent {:editor editor
+                               :$editor $editor
+                               :op #(dissoc % ::file-picker-state)}]]
+           [[:set $current-folder f]
+            [:update $search-editor (fn [editor]
+                                      (-> editor
+                                          (text-mode/editor-beginning-of-buffer)
+                                          (text-mode/editor-set-string "")))]
+            [:set $offset 0]])))
+     ::next-offset
+     (fn [m]
+       [[:update $offset 
+                       (fn [offset]
+                         (if (>= offset (count fs))
+                           0
+                           (inc offset)))]])
+     ::backspace
+     (fn [m]
+       (if (= search-str "")
+         (when-let [parent (-> current-folder
+                               .getCanonicalFile
+                               .getParentFile)]
+           [[:set $current-folder parent]
+            [:set $offset 0]])
+         [[:update $search-editor #'text-mode/editor-delete-backward-char]
+          [:set $offset 0]]))
+     ::update-search-editor
+     (fn [{:keys [;; shadowing with $editor is buggy
+                  ;; use $search-editor directly
+                  #_$editor
+                  op] :as m}]
+       
+       [[:update $search-editor op]])
+     (key-binding/wrap-editor-key-bindings
+      {:body search-editor-body
+       :$body nil
+       :editor search-editor
+       :update-editor-intent ::update-search-editor
+       :key-bindings {"C-g" ::cancel-search
+                      "RET" ::select-file
+                      "C-s" ::next-offset
+                      "DEL" ::backspace }}))))
+
+
+(defeffect ::select-file [{:keys [file]}]
+  (dispatch! :com.phronemophobic.easel/add-applet
+             {:make-applet
+              (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                #(f % {:file file}))}))
+
+(defeffect ::file-picker [{:keys [editor $editor]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (if-let [file (:file editor)]
+                 (assoc editor ::file-picker-state
+                        {:current-folder (.getParentFile ^File (:file editor))
+                         :search-editor (-> (text-mode/make-editor)
+                                            (assoc :base-style (:base-style editor)))})
+                 ;; else
+                 editor))))

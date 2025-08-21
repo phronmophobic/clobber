@@ -204,7 +204,7 @@
 (def key-bindings
   (assoc text-mode/key-bindings
          "C-x C-s" ::save-editor
-         ;; "C-x C-f" ::file-picker
+         "C-x C-f" ::util.ui/file-picker
          ;; "C-c C-d" ::show-doc
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor))
@@ -256,12 +256,6 @@
 
 
 
-(defeffect ::select-file [{:keys [file]}]
-  #_(dispatch! :com.phronemophobic.easel/add-applet
-             {:make-applet
-              (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
-                #(f % {:file file}))}))
-
 (defui editor-view [{:keys [editor]}]
   
   (let [lang (:language editor)
@@ -288,11 +282,9 @@
                      :as this}]
   (let [body (editor-view {:editor editor})
         
-        file-picker-focused? (and (:file-picker (:status editor))
-                                  (:file editor))
+        file-picker-state (::util.ui/file-picker-state editor)
         search-state (::text-mode/search editor)
-        editor-focused? (and focused?
-                             (not file-picker-focused?))
+
         body 
         (cond
           (not focused?)
@@ -302,7 +294,11 @@
                                   (max 800 w) (max 100 h))
              body])
           
-          file-picker-focused? body
+          file-picker-state
+          (ui/vertical-layout
+           body
+           (util.ui/file-picker {:editor editor
+                                 :update-editor-intent ::update-editor}))
           
           search-state
           (ui/vertical-layout
