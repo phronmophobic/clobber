@@ -416,108 +416,6 @@
                                      (when (string? doc)
                                        doc)]}}))}))))))))
 
-(defui file-picker [{:keys [base-style folder
-                            focused?
-                            width]
-                     :as this}]
-  (let [base-style (or base-style 
-                       #:text-style
-                       {:font-families ["Menlo"]
-                        :font-size 12
-                        :height 1.2
-                        :height-override true})
-
-        ^File current-folder (get extra :current-folder folder)
-        
-        offset (get extra :offset 0)
-        search-str (get extra :search-str "")
-        fs (into 
-            []
-            (comp (filter (fn [^File f]
-                            (str/includes? (.getName f)
-                                           search-str)))
-                  (drop offset))
-            (sort (.listFiles current-folder)))
-        ps (into 
-            [{:text (str (.getCanonicalPath current-folder) "/")
-              :style (assoc base-style :text-style/color [0 0 0.843])}
-             search-str
-             " | "]
-            (comp (map-indexed 
-                   (fn [i ^File f]
-                     (let [style (if (zero? i)
-                                   (assoc base-style 
-                                          :text-style/font-style
-                                          {:font-style/weight :bold})
-                                   base-style)]
-                       (if (.isFile f)
-                         {:style style
-                          :text (.getName f)}
-                         {:text (str (.getName f) "/")
-                          :style (assoc style :text-style/color [0.909 0.2784 0.3411  ])}))))
-                  (interpose " | "))
-            fs)
-
-        p (para/paragraph
-           ps
-           width
-           {:paragraph-style/text-style base-style})
-        
-        p (if focused?
-            (ui/on
-             :key-event
-             (fn [key scancode action mods]
-               (when (#{:press :repeat} action)
-                 (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-                   (cond 
-                     
-                     (and ctrl?
-                          (= (char key) \S))
-                     [[:update $offset 
-                       (fn [offset]
-                         (if (>= offset (count fs))
-                           0
-                           (inc offset)))]]))))
-             
-             :key-press
-             (fn [s]
-               (cond
-                 
-                 (= s :enter)
-                 (when-let [^File f (first fs)]
-                   (if (.isFile f)
-                     [[::select-file {:file f}]]
-                     [[:set $current-folder f]
-                      [:set $search-str ""]
-                      [:set $offset 0]]))
-                 
-                 (= s :backspace)
-                 (if (= search-str "")
-                   (when-let [parent (-> current-folder
-                                         .getCanonicalFile
-                                         .getParentFile)]
-                     [[:set $current-folder parent]
-                      [:set $offset 0]])
-                   [[:update $search-str
-                     (fn [s]
-                       (subs s 0 (max 0 (- (count s) 1))))]
-                    [:set $offset 0]])
-                 
-                 (string? s)
-                 [[:update $search-str str s]
-                  [:set $offset 0]]))
-             p)
-            ;; else
-            p)]
-    p))
-
-(defeffect ::file-picker [{:keys [editor $editor]}]
-  (dispatch! :update $editor
-             (fn [editor]
-               (-> editor
-                   (assoc-in [:status :file-picker] {}))))
-  nil)
-
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
     (when-let [file (:file editor)]
@@ -1059,32 +957,6 @@
           status-bar (when-let [status (:status editor)]
                        (when-let [height (-> editor :viewport :text-height)]
                          (let [view (or 
-                                     (when (and (:file-picker status)
-                                                (:file editor))
-                                       (ui/on
-                                        ::select-file
-                                        (fn [m]
-                                          [[::select-file m]
-                                           [:update $editor update :status dissoc :file-picker]])
-                                        
-                                        (ui/wrap-on
-                                         :key-event
-                                         (fn [handler key scancode action mods]
-                                           (when (#{:press :repeat} action)
-                                             (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-                                               (cond 
-                                                 
-                                                 (and ctrl?
-                                                      (= (char key) \G))
-                                                 [[:update $editor update :status dissoc :file-picker]
-                                                  [::request-focus]]
-                                                 
-                                                 :else (handler key scancode action mods)))))
-                                         
-                                         (file-picker {:folder (.getParentFile ^File (:file editor))
-                                                       :extra (:file-picker status)
-                                                       :base-style (:base-style editor)
-                                                       :focused? focused?}))))
                                      (:temp status)
                                      (:status status))
                                status-bar (if (string? view)
@@ -1228,7 +1100,7 @@
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
-         "C-x C-f" ::file-picker
+         "C-x C-f" ::util.ui/file-picker
          "C-c C-d" ::show-doc
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor
@@ -1322,11 +1194,9 @@
   (let [body (editor-view {:editor editor
                            :focused? focused?})
 
-        file-picker-focused? (and (:file-picker (:status editor))
-                                  (:file editor))
+        file-picker-state (::util.ui/file-picker-state editor)
         search-state (::text-mode/search editor)
-        editor-focused? (and focused?
-                             (not file-picker-focused?))
+
         body
         (cond
           (not focused?)
@@ -1336,7 +1206,12 @@
                                   (max 800 w) (max 100 h))
              body])
           
-          file-picker-focused? body
+          file-picker-state
+          (ui/vertical-layout
+           body
+           (util.ui/file-picker {:editor editor
+                                 :update-editor-intent ::update-editor}))
+
           
           search-state
           (ui/vertical-layout
