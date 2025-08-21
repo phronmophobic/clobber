@@ -13,6 +13,7 @@
             [com.phronemophobic.viscous :as viscous]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
+            [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
             [com.phronemophobic.clobber.util :as util])
   (:import (org.treesitter TSLanguage
                            TSQuery
@@ -392,45 +393,60 @@
                     :end-byte-offset end-byte-offset)]
     para))
 
+(defeffect ::update-search-editor [{:keys [$editor op $main-editor main-editor update-editor-intent]}]
+  (dispatch! :update $editor op)
+  (let [search-editor (dispatch! :get $editor)]
+    (dispatch! update-editor-intent 
+               {:editor main-editor
+                :$editor $main-editor
+                :op #(text-mode/editor-isearch-forward % (.toString (:rope search-editor)))})))
 
-(comment
+(defui search-bar [{:keys [editor update-editor-intent] :as m}]
+  (let [search-state (::text-mode/search editor)
+        search-editor (get search-state ::search-editor)
+        search-editor-body (para/paragraph 
+                            ["isearch forward: "
+                             (.toString (:rope search-editor))]
+                            nil
+                            {:paragraph-style/text-style
+                             (:base-style editor)})]
+    (ui/on
+     ::cancel-search
+     (fn [m]
+       [[update-editor-intent {:editor editor
+                               :$editor $editor
+                               :op #'text-mode/editor-cancel-search}]])
+     ::finish-search
+     (fn [m]
+       [[update-editor-intent {:editor editor
+                               :$editor $editor
+                               :op #'text-mode/editor-finish-search-forward}]])
+     ::repeat-search
+     (fn [m]
+       [[update-editor-intent {:editor editor
+                               :$editor $editor
+                               :op #'text-mode/editor-isearch-forward}]])
+     ::update-search-editor
+     (fn [m]
+       [[::update-search-editor (assoc m 
+                                       :$main-editor $editor
+                                       :main-editor editor
+                                       :update-editor-intent update-editor-intent)]])
+     (key-binding/wrap-editor-key-bindings
+      {:body search-editor-body
+       :$body nil
+       :editor search-editor
+       :update-editor-intent ::update-search-editor
+       :key-bindings {"C-g" ::cancel-search
+                      "RET" ::finish-search
+                      "C-s" ::repeat-search
+                      "DEL" #'text-mode/editor-delete-backward-char}}))))
 
-  (let [lang (TreeSitterJson.)
-        editor (-> (text-mode/make-editor)
-                   (assoc :parser (doto (TSParser.)
-                                    (.setLanguage lang))
-                          :buf (byte-array 4096)
-                          :language lang)
-                   (text-mode/editor-self-insert-command (slurp "https://raw.githubusercontent.com/t-mon/selffinding-chronicles/cb24e067579ba755c26ef642b24f9d2a8d3b45b9/gamedata/savegames/test-savegame.json")))
-        queries (slurp (io/as-url "https://raw.githubusercontent.com/tree-sitter/tree-sitter-json/refs/heads/master/queries/highlights.scm"))]
-    (dev/add-component-as-applet (constantly (editor->paragraph editor queries default-theme))
-                                 {}))
 
-
-  (let [lang (TreeSitterHtml.)
-        editor (-> (text-mode/make-editor)
-                   (assoc :parser (doto (TSParser.)
-                                    (.setLanguage lang))
-                          :buf (byte-array 4096)
-                          :language lang)
-                   (text-mode/editor-self-insert-command (slurp "https://blog.phronemophobic.com/treemap/treemap-demo.html")))
-        queries (slurp (io/as-url "https://raw.githubusercontent.com/tree-sitter/tree-sitter-html/refs/heads/master/queries/highlights.scm"))]
-    (dev/add-component-as-applet (constantly (editor->paragraph editor queries default-theme))
-                                 {}))
-
-
-  (let [lang (TreeSitterCpp.)
-        editor (-> (text-mode/make-editor)
-                   (assoc :parser (doto (TSParser.)
-                                    (.setLanguage lang))
-                          :buf (byte-array 4096)
-                          :language lang)
-                   (text-mode/editor-self-insert-command (slurp (io/as-url "https://raw.githubusercontent.com/ggml-org/llama.cpp/refs/heads/master/src/llama.cpp"))))
-        queries (slurp (io/file "/var/tmp/highlights.scm"))]
-    (dev/add-component-as-applet (constantly (editor->paragraph editor queries default-theme))
-                                 {}))
-
-
-  
-  
-  ,)
+(defn upkeep-search-ui [editor new-editor]
+  (if (and (::text-mode/search new-editor)
+           (not (::text-mode/search editor)))
+    (update new-editor ::text-mode/search
+            (fn [m]
+              (assoc m ::search-editor (text-mode/make-editor))))
+    new-editor))

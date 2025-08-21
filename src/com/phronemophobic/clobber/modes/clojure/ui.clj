@@ -104,7 +104,9 @@
                             (= new-history-index
                                (-> editor :history :index)))
                      (update new-editor :history dissoc :index)
-                     new-editor)]
+                     new-editor)
+
+        new-editor (util.ui/upkeep-search-ui editor new-editor)]
     new-editor))
 
 (defn editor-cancel [editor]
@@ -950,22 +952,6 @@
                    styles))]
     styles))
 
-(defn highlight-search [editor {:keys [char-offset start-byte-offset end-byte-offset]}]
-  (when-let [^java.util.regex.MatchResult
-             match (-> editor ::text-mode/search :match)]
-    (when (>= (.start match)
-              char-offset)
-      (let [^Rope
-            rope (:rope editor)
-            diff-string (.toString
-                         (.subSequence rope char-offset (.start match)))
-            diff-bytes (alength (.getBytes diff-string "utf-8"))
-
-            start-byte (+ start-byte-offset diff-bytes)
-            end-byte (+ start-byte (alength (.getBytes (.group match) "utf-8")))]
-        {[start-byte end-byte] {:text-style/background-color {:color [0 0 1 0.2]}}})))
-  )
-
 (defn editor->paragraph [editor]
   (let [tree (:tree editor)
         lang (:language editor)
@@ -1117,22 +1103,6 @@
          (when-let [->view (:->view completion)]
            (->view completion)))])))
 
-(defeffect ::cancel-search-forward [{:keys [$editor]}]
-  (dispatch! ::update-editor 
-             {:$editor $editor
-              :op (fn [editor]
-                    (let [initial-cursor (-> editor ::text-mode/search :initial-cursor)
-                          editor (if initial-cursor
-                                   (assoc editor :cursor initial-cursor)
-                                   editor)]
-                      (text-mode/editor-update-viewport
-                       (dissoc editor ::text-mode/search))))}))
-
-(defeffect ::finish-search-forward [{:keys [$editor]}]
-  (dispatch! ::update-editor
-             {:op text-mode/editor-finish-search-forward
-              :$editor $editor}))
-
 (defeffect ::show-completions [{:keys [$editor]}]
   (dispatch! ::update-editor
              {:op (fn [editor]
@@ -1270,58 +1240,6 @@
          "C-x C-e" ::editor-eval-last-sexp
          "M-." ::jump-to-definition))
 
-(defeffect ::append-search-forward [{:keys [$editor s]}]
-  (dispatch! ::update-editor
-             {:$editor $editor
-              :op (fn [editor]
-                    (let [query (str (-> editor
-                                         ::text-mode/search
-                                         :query)
-                                     s)]
-                      (-> editor
-                          (text-mode/editor-isearch-forward query)
-                          (assoc :search/last-search query))))}))
-
-(defeffect ::repeat-search-forward [{:keys [$editor s]}]
-  (dispatch! ::update-editor
-             {:$editor $editor
-              :op #'text-mode/editor-isearch-forward}))
-
-(defui wrap-search [{:keys [editor body]
-                     :as this}]
-
-  (let [search-state (::text-mode/search editor)
-        body (if search-state
-               (ui/on
-                :key-event
-                (fn [key scancode action mods]
-                  (when (#{:press :repeat} action)
-                    (let [ctrl? (not (zero? (bit-and ui/CONTROL-MASK mods)))]
-                      (cond 
-
-                        (and ctrl?
-                             (= (char key) \G))
-                        [[::cancel-search-forward this]]
-
-                        (and ctrl?
-                             (= (char key) \S))
-                        [[::repeat-search-forward this]]))))
-                :key-press
-                (fn [s]
-                  (cond
-
-                    (= s :enter)
-                    [[::finish-search-forward this]]
-
-                    (string? s)
-                    [[::append-search-forward (assoc this :s s)]]))
-                (ui/vertical-layout
-                 body
-                 (ui/label (:query search-state))))
-
-               body)]
-    body))
-
 (defeffect ::update-instarepl [{:keys [editor $editor]}]
   (future
     (try
@@ -1404,32 +1322,36 @@
   (let [body (editor-view {:editor editor
                            :focused? focused?})
 
+        file-picker-focused? (and (:file-picker (:status editor))
+                                  (:file editor))
+        search-state (::text-mode/search editor)
         editor-focused? (and focused?
-                             (not
-                              (and (:file-picker (:status editor))
-                                   (:file editor))))
-        body (if editor-focused?
-               (key-binding/wrap-editor-key-bindings {:key-bindings (:key-bindings editor)
-                                                      :editor editor
-                                                      :update-editor-intent ::update-editor
-                                                      :body body
-                                                      :$body nil})
-               (if focused?
-                 body
-                 ;; else not focused at all
-                 (let [[w h] (ui/bounds body)
-                       gray 0.98]
-                   [(ui/filled-rectangle [gray gray gray]
-                                         (max 800 w) (max 100 h))
-                    body])))
+                             (not file-picker-focused?))
+        body
+        (cond
+          (not focused?)
+          (let [[w h] (ui/bounds body)
+                gray 0.98]
+            [(ui/filled-rectangle [gray gray gray]
+                                  (max 800 w) (max 100 h))
+             body])
+          
+          file-picker-focused? body
+          
+          search-state
+          (ui/vertical-layout
+           body
+           (util.ui/search-bar {:editor editor
+                                :update-editor-intent ::update-editor}))
 
-        body (if focused?
-               (wrap-search
-                {:editor editor
-                 :$body nil
-                 :body body})
-               body)
-
+          :else
+          (key-binding/wrap-editor-key-bindings 
+           {:key-bindings (:key-bindings editor)
+            :editor editor
+            :update-editor-intent ::update-editor
+            :body body
+            :$body nil}))
+        
         body (if focused?
                (wrap-instarepl
                 {:editor editor

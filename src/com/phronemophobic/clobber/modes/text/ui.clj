@@ -116,12 +116,7 @@
                      (update new-editor :history dissoc :index)
                      new-editor)
         
-        new-editor (if (and (::text-mode/search new-editor)
-                            (not (::text-mode/search editor)))
-                     (update new-editor ::text-mode/search
-                             (fn [m]
-                               (assoc m ::search-editor (text-mode/make-editor))))
-                     new-editor)]
+        new-editor (util.ui/upkeep-search-ui editor new-editor)]
     new-editor))
 
 
@@ -288,55 +283,6 @@
      status-bar]))
 
 
-(defeffect ::update-search-editor [{:keys [$editor op $main-editor main-editor update-editor-intent]}]
-  (dispatch! :update $editor op)
-  (let [search-editor (dispatch! :get $editor)]
-    (dispatch! update-editor-intent 
-               {:editor main-editor
-                :$editor $main-editor
-                :op #(text-mode/editor-isearch-forward % (.toString (:rope search-editor)))})))
-
-(defui search-bar [{:keys [editor update-editor-intent] :as m}]
-  (let [search-state (::text-mode/search editor)
-        search-editor (get search-state ::search-editor)
-        search-editor-body (para/paragraph 
-                         ["isearch forward: "
-                          (.toString (:rope search-editor))]
-                         nil
-                         {:paragraph-style/text-style
-                          (:base-style editor)})]
-    (ui/on
-     ::cancel-search
-     (fn [m]
-       [[update-editor-intent {:editor editor
-                               :$editor $editor
-                               :op #'text-mode/editor-cancel-search}]])
-     ::finish-search
-     (fn [m]
-       [[update-editor-intent {:editor editor
-                               :$editor $editor
-                               :op #'text-mode/editor-finish-search-forward}]])
-     ::repeat-search
-     (fn [m]
-       [[update-editor-intent {:editor editor
-                               :$editor $editor
-                               :op #'text-mode/editor-isearch-forward}]])
-     ::update-search-editor
-     (fn [m]
-       [[::update-search-editor (assoc m 
-                                       :$main-editor $editor
-                                       :main-editor editor
-                                       :update-editor-intent update-editor-intent)]])
-     (key-binding/wrap-editor-key-bindings
-      {:body search-editor-body
-       :$body nil
-       :editor search-editor
-       :update-editor-intent ::update-search-editor
-       :key-bindings {"C-g" ::cancel-search
-                      "RET" ::finish-search
-                      "C-s" ::repeat-search
-                      "DEL" #'text-mode/editor-delete-backward-char}}))))
-
 (defui text-editor [{:keys [editor
                             focused?]
                      :as this}]
@@ -361,8 +307,8 @@
           search-state
           (ui/vertical-layout
            body
-           (search-bar {:editor editor
-                        :update-editor-intent ::update-editor}))
+           (util.ui/search-bar {:editor editor
+                                :update-editor-intent ::update-editor}))
 
           :else
           (key-binding/wrap-editor-key-bindings 
