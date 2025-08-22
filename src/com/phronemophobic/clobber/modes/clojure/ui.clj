@@ -1254,7 +1254,10 @@
                                      :s s}]])
                  body))
                ;; else
-               body)]
+               body)
+        body (ui/vertical-layout
+              body
+              (util.ui/status-bar {:editor editor}))]
     body))
 
 (defeffect ::tap [& args]

@@ -564,3 +564,19 @@
                                             (assoc :base-style (:base-style editor)))})
                  ;; else
                  editor))))
+
+(defui status-bar [{:keys [editor]}]
+  (let [^File file (:file editor)
+        cursor (:cursor editor)
+        ps [(when file
+              (.getName file))
+            " ("
+            (-> cursor :row str)
+            ","
+            (-> cursor :column-byte str)
+            ") "
+            (str (:eval-ns editor))]]
+    (para/paragraph ps
+                    nil
+                    {:paragraph-style/text-style (:base-style editor)})))
+
