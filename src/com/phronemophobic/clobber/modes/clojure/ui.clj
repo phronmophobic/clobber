@@ -978,14 +978,17 @@
 (defeffect ::show-completions [{:keys [$editor]}]
   (dispatch! ::update-editor
              {:op (fn [editor]
-                    (if (::completion editor)
-                      (update editor ::completion
+                    (if-let [{:keys [completions prefix]} (::completion editor)]
+                      (if (= 1 (count completions))
+                        (-> (text-mode/editor-self-insert-command editor (subs (-> completions first :candidate) (count prefix)))
+                            (dissoc ::completion))
+                        (update editor ::completion
                               (fn [{:keys [offset completions] :as m}]
                                 (let [offset (or offset 0)
                                       next-offset (+ offset 10)]
                                   (if (>= next-offset (count completions))
                                     (assoc m :offset 0)
-                                    (assoc m :offset next-offset)))))
+                                    (assoc m :offset next-offset))))))
                       (assoc editor ::completion {})))
               :$editor $editor}))
 
