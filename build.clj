@@ -42,14 +42,15 @@
 
 
 (def tree-sitter-libs
-  {"tree-sitter-cpp" {:git/sha "5cb9b693cfd7bfacab1d9ff4acac1a4150700609"}
+  {"tree-sitter-cpp" {:git/sha "f41e1a044c8a84ea9fa8577fdd2eab92ec96de02"}
    "tree-sitter-json" {:git/sha "46aa487b3ade14b7b05ef92507fdaa3915a662a3"}
    "tree-sitter-javascript" {:git/sha "6fbef40512dcd9f0a61ce03a4c9ae7597b36ab5c"}
    "tree-sitter-bash" {:git/sha "56b54c61fb48bce0c63e3dfa2240b5d274384763"}
    "tree-sitter-html" {:git/sha "cbb91a0ff3621245e890d1c50cc811bffb77a26b"}
    "tree-sitter-java" {:git/sha "a7db5227ec40fcfe94489559d8c9bc7c8181e25a"}
    "tree-sitter-python" {:git/sha "710796b8b877a970297106e5bbc8e2afa47f86ec"}
-   "tree-sitter-css" {:git/sha "6e327db434fec0ee90f006697782e43ec855adf5"}})
+   "tree-sitter-css" {:git/sha "6e327db434fec0ee90f006697782e43ec855adf5"}
+   "tree-sitter-c" {:git/sha "7fa1be1b694b6e763686793d97da01f36a0e5c12"}})
 
 
 
@@ -77,7 +78,7 @@
     (b/write-pom {:class-dir (.getCanonicalPath queries-class-dir)
                   :pom-data pom-data
                   :lib queries-coord
-                  :version "1.1"
+                  :version "1.3"
                   :basis basis})
     (doseq [[repo-name {:keys [git/sha]}] tree-sitter-libs]
       (let [queries-url (io/as-url (str "https://raw.githubusercontent.com/tree-sitter/"repo-name "/" sha "/queries/highlights.scm"))

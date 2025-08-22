@@ -72,7 +72,8 @@
    ".css" :css
    ".java" :java
    ".js" :javascript
-   ".py" :python})
+   ".py" :python
+   ".c" :c})
 
 (defn editor-upkeep [editor op]
   ;; if cursor or rope changed, editor-update-viewport
