@@ -566,7 +566,7 @@
                  ;; else
                  editor))))
 
-(defui status-bar [{:keys [editor]}]
+(defui status-bar [{:keys [editor width]}]
   (let [^File file (:file editor)
         cursor (:cursor editor)
         ps [(when file
@@ -576,8 +576,17 @@
             ","
             (-> cursor :column-byte str)
             ") "
-            (str (:eval-ns editor))]]
-    (para/paragraph ps
-                    nil
-                    {:paragraph-style/text-style (:base-style editor)})))
+            (str (:eval-ns editor))]
+        
+        body (para/paragraph ps
+                             width
+                             {:paragraph-style/text-style (:base-style editor)})
+        body (if width
+               (let [gray 0.85]
+                  (ui/fill-bordered [gray gray gray]
+                                 1
+                                 body))
+               body)]
+    body))
 
+(double (/ 188 255))

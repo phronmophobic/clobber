@@ -1257,7 +1257,8 @@
                body)
         body (ui/vertical-layout
               body
-              (util.ui/status-bar {:editor editor}))]
+              (util.ui/status-bar {:editor editor
+                                   :width (ui/width body)}))]
     body))
 
 (defeffect ::tap [& args]
