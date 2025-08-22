@@ -459,12 +459,13 @@
         base-style (:base-style search-editor)
         offset (get extra :offset 0)
         search-str (-> search-editor :rope .toString)
+        search-str-lower (str/lower-case search-str)
 
         fs (into 
             []
             (comp (filter (fn [^File f]
-                            (str/includes? (.getName f)
-                                           search-str)))
+                            (str/includes? (str/lower-case (.getName f))
+                                           search-str-lower)))
                   (drop offset))
             (sort (.listFiles current-folder)))
         ps (into 
