@@ -909,7 +909,9 @@
                            offset 4]
                        (if (-> val viscous/-unwrap meta :view)
                          (ui/translate (+ x 10) y
-                                       (viscous/-unwrap val))
+                                       (ui/try-draw
+                                        (viscous/-unwrap val)
+                                        (fn [draw e] nil)))
                          (if viscous?
                            (ui/translate (- (+ x 10) offset) (- y offset)
                                          (let [inspector-extra (get extra [::inspector [line val]])]
