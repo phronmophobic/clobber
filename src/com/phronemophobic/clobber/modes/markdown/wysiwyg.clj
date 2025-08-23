@@ -749,6 +749,10 @@
 (defmethod node->styled-text* "heading_content" [ctx ^TSNode node]
   (style-children ctx node))
 
+(defmethod node->styled-text* "thematic_break" [ctx ^TSNode node]
+  {:text (str "\n\n" (util/node->str (:rope ctx) node) "\n\n")
+   :style (:style ctx)})
+
 (defn node->styled-text [ctx ^TSNode node]
   (node->styled-text* (assoc ctx
                              :base-style (:style ctx))
@@ -853,10 +857,8 @@
                       :start-byte 0
                       :end-byte (.numBytes rope)}
                      node)]
-    (->> (tree-seq vector?
-                   seq
-                   styled-text)
-         (keep meta))
+    (with-meta (para/paragraph styled-text)
+               {:view true})
     #_(tap> (styled-text->handlers styled-text)))
   ,)
 
