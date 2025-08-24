@@ -489,3 +489,9 @@
              (recur (conj ret match-info)))
            ;; else
            ret)))))
+
+(defn file-ext [^java.io.File f]
+  (let [fname (.getName f)
+        idx (.lastIndexOf fname ".")]
+    (when (not= -1 idx)
+      (subs fname idx))))

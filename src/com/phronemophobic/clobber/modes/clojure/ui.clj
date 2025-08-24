@@ -128,7 +128,6 @@
         (assoc-in [:viewport :text-height] (* row-height num-lines))
         (assoc-in [:viewport :height] height))))
 
-
 (defeffect ::update-editor [{:keys [$editor op] :as m}]
   (dispatch! :update $editor editor-upkeep op)
   ;; check and do background updates
@@ -149,12 +148,6 @@
                  (if (= msg (-> editor :status :temp))
                    (update editor :status dissoc :temp)
                    editor)))))
-
-(defn ^:private file-ext [^File f]
-  (let [fname (.getName f)
-        idx (.lastIndexOf fname ".")]
-    (when (not= -1 idx)
-      (subs fname idx))))
 
 (defeffect ::editor-paste [{:keys [$editor s]}]
   (dispatch! :update $editor
@@ -201,7 +194,7 @@
                ;; filename
                source-name]
               (when-let [^File f (:file editor)]
-                [(ns-sym->resource-path eval-ns-name (file-ext f))
+                [(ns-sym->resource-path eval-ns-name (util/file-ext f))
                  (.getName f)])
               
               ;; tree-sitter line numbers are 0 indexed
@@ -271,7 +264,7 @@
                    ;; filename
                    source-name]
                   (when-let [^File f (:file editor)]
-                    [(ns-sym->resource-path eval-ns-name (file-ext f))
+                    [(ns-sym->resource-path eval-ns-name (util/file-ext f))
                      (.getName f)])
                   
                   ;; tree-sitter line numbers are 0 indexed
@@ -319,7 +312,7 @@
            source-path
            ;; filename
            source-name] (when-let [^File f (:file editor)]
-                          [(ns-sym->resource-path eval-ns-name (file-ext f))
+                          [(ns-sym->resource-path eval-ns-name (util/file-ext f))
                            (.getName f)])
           
           

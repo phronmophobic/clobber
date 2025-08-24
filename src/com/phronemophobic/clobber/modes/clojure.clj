@@ -13,6 +13,8 @@
                            TSPoint
                            TSNode)
            com.ibm.icu.text.BreakIterator
+           clojure.lang.LineNumberingPushbackReader
+           java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
 
@@ -1633,6 +1635,45 @@
       (editor-comment-region editor)
       (editor-toggle-comment-line editor))))
 
+(defn reflection-warnings [editor]
+  (let [[;; path relative to class-path  
+         source-path
+         ;; filename
+         source-name] ["" ""]        
+        
+        rdr (LineNumberingPushbackReader.
+             (StringReader. (str (:rope editor))))]
+    
+    (binding [*warn-on-reflection* true
+              *err* (java.io.StringWriter.)]
+      (clojure.lang.Compiler/load rdr source-path source-name)
+      (str *err*))))
+
+(defn parse-warnings
+  "Given the output log of reflection warnings,
+  Return the [row col] for each warning."
+  [warnings]
+  (let [lines (str/split-lines warnings)]
+    (into []
+          (keep (fn [line]
+                 (when-let [[_ row col] (re-find #":([0-9]+):([0-9]+) " line)]
+                   [(dec (parse-long row)) (parse-long col)])))
+          lines)))
+
+(defn editor-next-reflection-warning [editor]
+  (let [warnings (-> editor
+                     reflection-warnings
+                     parse-warnings)
+        
+        editor-row (-> editor :cursor :row)
+        next-warning (util/first-by 
+                      (filter (fn [[row col]]
+                                (> row editor-row)))
+                      warnings)]
+    (if-let [[row col] next-warning]
+      (text-mode/editor-goto-row-col editor row col)
+      editor)))
+
 (def key-bindings
   { ;; "C-M-x" editor-eval-top-form
    "C-M-f" #'editor-paredit-forward
@@ -1652,6 +1693,8 @@
    "C-o" #'text-mode/editor-open-line
    "C-p" #'text-mode/editor-previous-line
    "C-v" #'text-mode/editor-scroll-down
+   
+   "C-c r" #'editor-next-reflection-warning
 
    "M-d" #'paredit-forward-kill-word
    "M-b" #'editor-backward-word
