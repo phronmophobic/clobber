@@ -585,32 +585,43 @@
               ;; but that's ok
               (dispatch! :update $editor
                          (fn [editor]
-                           (assoc editor
-                                  ::completion
-                                  {:completions completions
-                                   :prefix sym-str
-                                   :->view (fn [{:keys [completions offset]}]
-                                             (ui/translate
-                                              x (+ y height)
-                                              (ui/fill-bordered
-                                               [0.9 0.9 0.9]
-                                               4
-                                               (ui/vertical-layout
-                                                (para/paragraph (str/join
-                                                                "\n"
-                                                                (eduction
-                                                                 (map :candidate)
-                                                                 (drop (or offset 0))
-                                                                 (take 20)
-                                                                 completions))
-                                                               nil
-                                                               {:paragraph-style/text-style (:base-style editor)})
-                                                (when (> (count completions)
-                                                         (+ (or offset 0) 20))
-                                                  (para/paragraph "..."
+                           (if (and (= 1 (count completions))
+                                    (= rope (:rope editor))
+                                    ;; don't autocomplete while typing. just for a fresh completion call
+                                    ;; (= {} (::completion editor))
+                                    )
+                             ;; if there's just one completion
+                             ;; and the completion is still valid
+                             ;; then autocomplete
+                             (-> (text-mode/editor-self-insert-command editor (subs (-> completions first :candidate) (count sym-str)))
+                                 (dissoc ::completion))
+                             ;; else
+                             (assoc editor
+                                    ::completion
+                                    {:completions completions
+                                     :prefix sym-str
+                                     :->view (fn [{:keys [completions offset]}]
+                                               (ui/translate
+                                                x (+ y height)
+                                                (ui/fill-bordered
+                                                 [0.9 0.9 0.9]
+                                                 4
+                                                 (ui/vertical-layout
+                                                  (para/paragraph (str/join
+                                                                   "\n"
+                                                                   (eduction
+                                                                    (map :candidate)
+                                                                    (drop (or offset 0))
+                                                                    (take 20)
+                                                                    completions))
                                                                   nil
-                                                                  {:paragraph-style/text-style (:base-style editor)}))))))
-                                   :offset 0}))))
+                                                                  {:paragraph-style/text-style (:base-style editor)})
+                                                  (when (> (count completions)
+                                                           (+ (or offset 0) 20))
+                                                    (para/paragraph "..."
+                                                                    nil
+                                                                    {:paragraph-style/text-style (:base-style editor)}))))))
+                                     :offset 0})))))
             (dispatch! :update $editor dissoc ::completion)))
         ;; else
         (when (::completion editor)
