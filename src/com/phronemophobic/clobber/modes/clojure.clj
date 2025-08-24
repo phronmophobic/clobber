@@ -1639,7 +1639,11 @@
   (let [[;; path relative to class-path  
          source-path
          ;; filename
-         source-name] ["" ""]        
+         source-name] [""
+                       ;; .cljc extension required for reader conditionals
+                       (if-let [f (:file editor)]
+                         (util/file-ext f)
+                         "foo.cljc")]
         
         rdr (LineNumberingPushbackReader.
              (StringReader. (str (:rope editor))))]
