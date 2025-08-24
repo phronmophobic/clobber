@@ -10,6 +10,7 @@
    [clojure.datafy :as d]
    [membrane.ui :as ui]
    [com.phronemophobic.clobber.modes.clojure.ui :as cui]
+   [com.phronemophobic.clobber.util.ui :as util.ui]
    [com.phronemophobic.clobber.util :as util]
    [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
    [com.phronemophobic.clobber.modes.text :as text-mode]
@@ -162,7 +163,7 @@
                                    (apply-ops op-list))
                         para (cui/editor->paragraph editor)]
                     (try
-                      (->> (cui/cursor-view (:rope editor)
+                      (->> (util.ui/cursor-view (:rope editor)
                                             para
                                             (:cursor editor))
                            (tree-seq ui/children ui/children)
@@ -179,6 +180,7 @@
                        ;; These can produce invalid parse trees
                        ;; investigate those edge cases later
                        #'com.phronemophobic.clobber.modes.text/editor-delete-char
+                       #'com.phronemophobic.clobber.modes.clojure/editor-next-reflection-warning
                        #'com.phronemophobic.clobber.modes.text/editor-delete-backward-char)
          :dynamic
          (s/tuple 
