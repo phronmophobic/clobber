@@ -1,13 +1,16 @@
 # clobber
 
-A text editor
+A text editor. Built for [easel](https://github.com/phronmophobic/easel/), but designed to be embeddable in a variety of environments.
 
 Status: alpha
+
+See https://youtu.be/kRd4JYIiWb0?si=SBLUkxu_ptnFB2h9 for a design overview.
 
 ## Design goals
 - Full featured code and text editor
 - First class `clojure-mode`
 - Idiomatic clojure API
+- Persistent, Immutable data representation
 - Full unicode support 😄🤩😜🚀🍩
 - Headless-mode (ie. UI entirely decoupled and optional)
 - Support additional modes in the future for all your text editing needs
@@ -19,7 +22,11 @@ The connection between a lisp developer's program and dev tools is critical. How
 ## "Roadmap"
 
 - [X] clojure-mode
+- [ ] Make instarepl evaluate namespace incrementally
 - [ ] formatted-text mode
+- [ ] Status bar with line/column, file, ns info
+- [ ] Improve file open UI
+- [ ] Implement search backward and improve search UI
 - [-] text mode
 - [-] markdown mode
 - [ ] org mode
