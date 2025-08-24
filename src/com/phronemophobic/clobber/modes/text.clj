@@ -345,7 +345,7 @@
   ([editor]
    (editor-forward-char editor 1))
   ([editor n]
-   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+   (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
          
          {cursor-byte :byte
           cursor-char :char
@@ -535,7 +535,7 @@
 
 
 (defn editor-backward-char [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -577,7 +577,7 @@
                         :column-byte new-cursor-column-byte})))))
 
 (defn editor-forward-word [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -605,7 +605,7 @@
                         :row new-cursor-row
                         :column-byte new-cursor-column-byte})))))
 (defn editor-backward-word [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -741,7 +741,7 @@
                     :column-byte new-cursor-column-byte})))
 
 (defn editor-move-beginning-of-line [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -771,7 +771,7 @@
                         :column-byte new-cursor-column-byte}))))
   )
 (defn editor-move-end-of-line [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -836,7 +836,7 @@
   ([editor]
    (editor-previous-line editor 1))
   ([editor n]
-   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+   (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
          
          {cursor-byte :byte
           cursor-char :char
@@ -898,7 +898,7 @@
 
 
 (defn editor-self-insert-command [editor ^String s]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         {cursor-byte :byte
          cursor-char :char
          cursor-point :point
@@ -1031,7 +1031,7 @@
       (assoc editor :select-cursor (:cursor editor)))))
 
 (defn editor-kill-line [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
         {cursor-byte :byte
          cursor-char :char
@@ -1115,7 +1115,7 @@
   ([editor]
    (editor-next-line editor 1))
   ([editor n]
-   (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+   (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
          {cursor-byte :byte
           cursor-char :char
           cursor-point :point
@@ -1204,7 +1204,7 @@
       (editor-next-line n)))
 
 (defn editor-end-of-buffer [editor]
-  (let [{:keys [tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+  (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         ;; could probably be more efficient
         {:keys [row column-byte]} (util/count-row-column-bytes (.toString rope))]
     
