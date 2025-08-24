@@ -316,8 +316,10 @@
                            (.getName f)])
           
           
+          ^Rope
+          rope (:rope editor)
           rdr (LineNumberingPushbackReader.
-               (StringReader. (-> editor :rope .toString)))]
+               (StringReader. (.toString rope)))]
       (try
         (clojure.lang.Compiler/load rdr source-path source-name)
         (dispatch! ::temp-status {:$editor $editor
@@ -504,13 +506,14 @@
 (defn update-completions [{:keys [$editor editor dispatch!] :as m}]
   (when (::completion editor)
     (let [^TSTree tree (:tree editor)
+          ^Rope
           rope (:rope editor)
           tc (TSTreeCursor. (.getRootNode tree))
           cursor (:cursor editor)
           cursor-byte (:byte cursor)
           
-          ^TSNode
-          [sym-node slash?]
+          
+          [^TSNode sym-node slash?]
           (transduce
            (comp (take-while (fn [^TSNode node]
                                (<= (-> node .getStartByte)
@@ -525,7 +528,7 @@
                                 (-> node .getEndByte))
                                cursor-byte))))
            (completing
-            (fn [[sym-node slash? last-node :as result] node]
+            (fn [[sym-node slash? ^TSNode last-node :as result] ^TSNode node]
               (let [type (.getType node)]
                 (if (= "sym_lit" type)
                   (if (>= (-> node .getEndByte)
@@ -1069,7 +1072,7 @@
                 (let [jar-url-str (.getPath resource)
                       jar-url (io/as-url jar-url-str)
                       [jar-path file-entry-path] (str/split (.getPath jar-url) #"!/" 2)]
-                  (if-let [jar (JarFile. jar-path)]
+                  (if-let [jar (JarFile. ^String jar-path)]
                     (if-let [entry (.getJarEntry jar file-entry-path)]
                       (let [contents (with-open [is (.getInputStream jar entry)]
                                        (slurp is))]

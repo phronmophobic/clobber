@@ -193,7 +193,7 @@
   (future
     (when-let [file (:file editor)]
       (let [source (slurp file)
-            previous-source (.toString (:rope editor))]
+            previous-source (.toString ^Rope (:rope editor))]
         (dispatch! :set $editor
           (editor-upkeep editor
           #(text-mode/editor-set-string % source))))))
