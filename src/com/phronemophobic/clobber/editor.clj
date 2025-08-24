@@ -24,7 +24,7 @@
   If `:source` is provided, us that. Otherwise, load from `:file`."
   [{:keys [file source mode] :as opts}]
   (let [clojure-mode? (or (when file
-                            (#{".edn" ".clj"} (file-ext file)))
+                            (#{".edn" ".clj" ".cljc"} (file-ext file)))
                           (:ns opts))]
     (if clojure-mode?
       {:editor (cui/make-editor opts)
