@@ -1577,6 +1577,10 @@
    "M-<" editor-beginning-of-buffer
    "M->" editor-end-of-buffer
    "M-l" editor-downcase-word
+   "M-{" editor-backward-paragraph
+   "M-}" editor-forward-paragraph
+   "M-b" editor-backward-word
+   "M-f" editor-forward-word
    "DEL" editor-delete-backward-char
    "<right>" editor-forward-char
    "<up>" editor-previous-line
