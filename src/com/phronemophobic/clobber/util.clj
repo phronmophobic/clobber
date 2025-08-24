@@ -168,29 +168,9 @@
 (defrecord RopeReader [^Rope r]
   TSReader
   (read [this buf offset position]
-    (let [dest (ByteBuffer/wrap buf)
-          bytes-read
-          (loop [iter (.bytes r)
-                 offset offset
-                 bytes-read 0]
-            (let [dest-remaining (.remaining dest)]
-              (if (pos? dest-remaining)
-                (if (.hasNext iter)
-                  (let [src ^ByteBuffer (.next iter)
-                        src-remaining (.remaining src)]
-                    (if (< offset src-remaining)
-                      (let [copy-size (min dest-remaining (- src-remaining offset))
-                            copy-bb (.slice src offset copy-size)]
-                        (.put dest copy-bb)
-                        (recur iter 0 copy-size))
-                      ;; else
-                      (recur iter (- offset src-remaining) bytes-read)))
-                  ;; no more buffers from iter
-                  bytes-read)
-                ;; no space left in buf
-                bytes-read)))]
-
-      bytes-read)))
+    (.copyBytes r offset buf 0 (min (alength buf)
+                                    (- (.numBytes r)
+                                       offset)))))
 
 (defn parse
   "Debug function. don't use."
@@ -210,22 +190,10 @@
 
   Assumes `r` contains `byte-start` and `byte-end`."
   [^Rope r ^long byte-start ^long byte-end]
-  (let [to-read (- byte-end byte-start)
-        dest (ByteBuffer/allocate to-read)]
-    (loop [iter (.bytes r)
-           offset byte-start
-           to-read to-read]
-      (when (pos? to-read)
-        (let [src ^ByteBuffer (.next iter)
-              src-remaining (.remaining src)]
-          (if (< offset src-remaining)
-            (let [copy-size (min to-read (- src-remaining offset))
-                  copy-bb  (.slice src  offset copy-size)]
-              (.put dest copy-bb)
-              (recur iter 0 (- to-read copy-size)))
-            ;; else
-            (recur iter (- offset src-remaining) to-read)))))
-    (String. (.array dest) "utf-8")))
+  (let [len (- byte-end byte-start)
+        buf (byte-array len)]
+    (.copyBytes r byte-start buf 0 len)
+    (String. buf "utf-8")))
 
 (defn node->str
   "Extracts the TSNode `node` as a string from the corresponding Rope."

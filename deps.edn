@@ -21,7 +21,7 @@
         org.clojars.quoll/tiara {:mvn/version "0.3.7"}
         clope/clope {:mvn/version "1"}
         io.lacuna/bifurcan {:git/url "https://github.com/phronmophobic/bifurcan"
-                            :git/sha "0cb3c057cc87d3ac9fa7f1231a721caf74be6a57"}
+                            :git/sha "f573ef2893d3a631d555436d8d1046e2708be3e7"}
 
         dev.weavejester/cljfmt {:mvn/version "0.13.1"}
         compliment/compliment {:mvn/version "0.7.0"}
