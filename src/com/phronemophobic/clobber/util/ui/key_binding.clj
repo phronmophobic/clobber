@@ -74,6 +74,15 @@
             (recur (next cs)
                    chord
                    (assoc press :key c)))
+          
+          \S
+          (if (= \- (second cs))
+            (recur (nnext cs)
+                   chord
+                   (assoc press :super? true))
+            (recur (next cs)
+                   chord
+                   (assoc press :key c)))
 
           \space
           (recur (next cs)
@@ -380,7 +389,8 @@
    #'debug-key-bindings
      {:key-tree
       (key-bindings->key-tree 
-       {"C-X C-s" {:my-map ::foo}})})
+       {"C-X C-s" {:my-map ::foo}
+        "S-RET" :command+enter})})
 
   ,)
 
