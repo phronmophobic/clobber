@@ -399,14 +399,14 @@
     (dispatch! update-editor-intent 
                {:editor main-editor
                 :$editor $main-editor
-                :op #(text-mode/editor-isearch-forward % (.toString (:rope search-editor)))})))
+                :op #(text-mode/editor-isearch-forward % (.toString ^Rope (:rope search-editor)))})))
 
 (defui search-bar [{:keys [editor update-editor-intent] :as m}]
   (let [search-state (::text-mode/search editor)
         search-editor (get search-state ::search-editor)
         search-editor-body (para/paragraph 
                             ["isearch forward: "
-                             (.toString (:rope search-editor))]
+                             (.toString ^Rope (:rope search-editor))]
                             nil
                             {:paragraph-style/text-style
                              (:base-style editor)})]
@@ -458,7 +458,7 @@
         search-editor (get file-picker-state :search-editor)
         base-style (:base-style search-editor)
         offset (get extra :offset 0)
-        search-str (-> search-editor :rope .toString)
+        search-str (.toString ^Rope (:rope search-editor))
         search-str-lower (str/lower-case search-str)
 
         fs (into 
