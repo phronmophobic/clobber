@@ -673,8 +673,7 @@
 (declare clojure-key-bindings)
 (defn make-editor
   ([{:keys [file ns source] :as m}]
-   (let [editor (-> (make-editor)
-                    (assoc :background-chan (editor-background-runner)))
+   (let [editor (make-editor)
 
          ;; contents
          editor
@@ -742,6 +741,9 @@
                                 :font-size 12
                                 :height 1.2
                                 :height-override true}
+      ;; this starts a thread.
+      ;; should probably move somewhere else.
+      :background-chan (editor-background-runner)
       :rope rope
       :language lang
       :viscous? true
@@ -1127,7 +1129,7 @@
          "C-x C-s" ::save-editor
          "C-x C-f" ::util.ui/file-picker
          "C-c C-d" ::show-doc
-         "C-c i" editor-toggle-instarepl
+         "C-c i" ::open-instarepl
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor
          "C-c C-k" ::load-buffer
@@ -1220,9 +1222,7 @@
                               line-vals (assoc line-vals line (viscous/wrap result))]
                           
                           (if (not success)
-                            (do
-                              (dev/dtap ret)
-                              [cache line-vals])
+                            [cache line-vals]
                             (if (.gotoNextSibling cursor)
                               (recur bindings line-vals forms cache)
                               [cache line-vals]))))))))]
@@ -1300,6 +1300,17 @@
               (util.ui/status-bar {:editor editor
                                    :width (ui/width body)}))]
     body))
+
+(defeffect ::open-instarepl [{:keys [editor]}]
+  (let [editor (-> (make-editor)
+                   (assoc :eval-ns (:eval-ns editor)
+                          :instarepl? true))]
+    (dispatch! :com.phronemophobic.easel/add-applet
+               {:make-applet
+                (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                  #(f % {:editor editor
+                         :label (str (:label editor) " ⚡⚡")
+                         :ui code-editor}))})))
 
 (defeffect ::tap [& args]
   (case (count args)
