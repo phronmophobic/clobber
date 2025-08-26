@@ -627,35 +627,42 @@
         (when (::completion editor)
           (dispatch! :update $editor dissoc ::completion))))))
 
+(declare update-instarepl)
 (defn editor-background-runner []
   (let [ch (async/chan (async/sliding-buffer 1))]
     (async/thread
-     (try
-       (loop [last-editor nil]
-         (let [msg (async/<!! ch)
-               editor (:editor msg)
+      (try
+        (loop [last-editor nil]
+          (let [msg (async/<!! ch)
+                editor (:editor msg)
 
-               rope-or-cursor-changed?
-               (not= (select-keys editor [:rope :cursor]) 
-                     (select-keys last-editor [:rope :cursor]))]
-           (when rope-or-cursor-changed?
-             (try
-               (update-arglist msg)
-               (catch Exception e
-                 (tap> e))))
+                rope-or-cursor-changed?
+                (not= (select-keys editor [:rope :cursor]) 
+                      (select-keys last-editor [:rope :cursor]))]
+            (when rope-or-cursor-changed?
+              (try
+                (update-arglist msg)
+                (catch Exception e
+                  (tap> e))))
            
-           (when (or rope-or-cursor-changed?
-                     ;; there's probably a better way to do this
-                     (and (= {} (::completion editor))
-                          (not (::completion last-editor))))
-             (try
-               (update-completions msg)
-               (catch Exception e
-                 (tap> e))))
+            (when (and 
+                   (:instarepl? editor)
+                   (not= (:rope editor)
+                         (:rope last-editor)))
+              (update-instarepl msg))
            
-           (recur editor)))
-       (catch Throwable e
-         (prn e))))
+            (when (or rope-or-cursor-changed?
+                      ;; there's probably a better way to do this
+                      (and (= {} (::completion editor))
+                           (not (::completion last-editor))))
+              (try
+                (update-completions msg)
+                (catch Exception e
+                  (tap> e))))
+           
+            (recur editor)))
+        (catch Throwable e
+          (prn e))))
     ch))
 
 (defn ^:private guess-ns [source]
@@ -1109,11 +1116,18 @@
                 
                 ;; else
                 nil))))))))
+
+(defn editor-toggle-instarepl [editor]
+  (update editor :instarepl? 
+          (fn [b]
+            (if b false true))))
+
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
          "C-x C-f" ::util.ui/file-picker
          "C-c C-d" ::show-doc
+         "C-c i" editor-toggle-instarepl
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor
          "C-c C-k" ::load-buffer
@@ -1124,81 +1138,102 @@
          "C-x C-e" ::editor-eval-last-sexp
          "M-." ::jump-to-definition))
 
-(defeffect ::update-instarepl [{:keys [editor $editor]}]
-  (future
-    (try
-      (let [ ;; insta-state (::insta editor)
-            line-val (:line-val editor)
-            rope (:rope editor)]
-        
-        (when (not= rope
-                    (-> line-val first first))
-          (let [^TSTree
-                tree (:tree editor)
-                root-node (.getRootNode tree)
-                cursor (TSTreeCursor. root-node)
-                
-                line-vals (when (.gotoFirstChild cursor)
-                            (binding [*ns* (:eval-ns editor)]
-                              (loop [bindings {}
-                                     line-vals {}]
-                                (let [node (.currentNode cursor)
-                                      s (util/node->str rope node)
-                                      form (read-string s)
+
+
+(defn update-instarepl [{:keys [editor $editor dispatch!] :as msg}]
+  (try
+    (let [ ;; insta-state (::insta editor)
+          line-val (:line-val editor)
+          rope (:rope editor)]
+      
+      (when (not= rope
+                  (-> line-val first first))
+        (let [^TSTree
+              tree (:tree editor)
+              root-node (.getRootNode tree)
+              cursor (TSTreeCursor. root-node)
+              
+              [cache line-vals]
+              (when (.gotoFirstChild cursor)
+                (binding [*ns* (:eval-ns editor)]
+                  (loop [bindings {}
+                         line-vals {}
+                         forms []
+                         cache (if-let [cache (-> editor ::insta-results ::cache)]
+                                 @cache
+                                 {})]
+                    
+                    (let [node (.currentNode cursor)]
+                      
+                      (if (= "comment" (.getType node))
+                        (if (.gotoNextSibling cursor)
+                          (recur bindings line-vals forms cache)
+                          [cache line-vals])
+                        (let [s (util/node->str rope node)
+                              forms (conj forms s)
+                              
+                              [success binding-sym result :as ret]
+                              (if-let [ret (get cache forms)]
+                                ret
+                                (let [form (read-string s)
                                       [binding-sym form] (if (list? form)
                                                            (case (first form)
-
+                                                             
                                                              def [(second form) (nth form 2)]
-                                                             defn [(second form) `(fn ~(second form) ~@(nthrest form 2))]
+                                                             defn [(second form) 
+                                                                   `(fn ~(second form)
+                                                                      ~@(if (string? (nth form 2))
+                                                                          (nthrest form 3)
+                                                                          (nthrest form 2)))]
                                                              ;; else
                                                              [nil form])
                                                            [nil form])
-                                      form `(fn [~@(keys bindings)]
-                                              ~form)
-                                      [success result]
-                                      (try
-                                        (let [f (eval form)
-                                              result (apply f (vals bindings))]
-                                          [true result])
-                                        (catch Exception e
-                                          [false e]))
-
-                                      bindings (if binding-sym
-                                                 (assoc bindings binding-sym result)
-                                                 bindings)
-
-                                      line (-> node
-                                               .getEndPoint
-                                               .getRow)
-                                      line-vals (assoc line-vals line (viscous/wrap result))]
-                                  (if (not success)
-                                    line-vals
-                                    (if (.gotoNextSibling cursor)
-                                      (recur bindings line-vals)
-                                      line-vals))))))]
-            (dispatch! :update $editor
-                       (fn [editor]
-                         (assoc editor :line-val {rope line-vals}))))))
-      (catch Exception e
-        #_(prn e)))))
-
-(defui wrap-instarepl [{:keys [editor body]
-                        :as this}]
-  (if (:instarepl? editor)
-    (let [body (ui/wrap-on
-                :key-event
-                (fn [handler key scancode action mods]
-                  (cons
-                   [::update-instarepl this]
-                   (handler key scancode action mods)))
-                :key-press
-                (fn [handler s]
-                  (cons
-                   [::update-instarepl this]
-                   (handler s)))
-                body)]
-      body)
-    body))
+                                      binding-sym## (gensym "bindings_")
+                                      let-bindings 
+                                      (into []
+                                            (comp
+                                             (map-indexed 
+                                              (fn [i sym]
+                                                `[~sym (nth ~binding-sym## ~i)]))
+                                             cat)
+                                            (keys bindings))
+                                      
+                                      form `(fn [~binding-sym##]
+                                              (let ~let-bindings
+                                                ~form))]
+                                  
+                                  (try
+                                    (let [f (eval form)
+                                          result (f (vec (vals bindings)))]
+                                      [true binding-sym result])
+                                    (catch Exception e
+                                      [false binding-sym e]))))
+                              cache (assoc cache forms ret)
+                              
+                              bindings (if binding-sym
+                                         (assoc bindings binding-sym result)
+                                         bindings)
+                              
+                              line (-> node
+                                       .getEndPoint
+                                       .getRow)
+                              line-vals (assoc line-vals line (viscous/wrap result))]
+                          
+                          (if (not success)
+                            (do
+                              (dev/dtap ret)
+                              [cache line-vals])
+                            (if (.gotoNextSibling cursor)
+                              (recur bindings line-vals forms cache)
+                              [cache line-vals]))))))))]
+          
+          (dispatch! :update $editor
+                     (fn [editor]
+                       (assoc editor
+                              :line-val {rope line-vals}
+                              ::insta-results {::cache (viscous/wrap cache)}))))))
+    (catch Throwable e
+      #_(prn e))))
 
 (defui code-editor [{:keys [editor
                             focused?]
@@ -1238,13 +1273,6 @@
             :update-editor-intent ::update-editor
             :body body
             :$body nil}))
-        
-        body (if focused?
-               (wrap-instarepl
-                {:editor editor
-                 :$body nil
-                 :body body})
-               body)
         
         body (ui/wrap-on
               :mouse-down
