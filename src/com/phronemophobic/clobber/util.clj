@@ -168,9 +168,11 @@
 (defrecord RopeReader [^Rope r]
   TSReader
   (read [this buf offset position]
-    (.copyBytes r offset buf 0 (min (alength buf)
-                                    (- (.numBytes r)
-                                       offset)))))
+    (let [len (min (alength buf)
+                   (- (.numBytes r)
+                      offset))]
+      (.copyBytes r offset buf 0 len)
+      len)))
 
 (defn parse
   "Debug function. don't use."
