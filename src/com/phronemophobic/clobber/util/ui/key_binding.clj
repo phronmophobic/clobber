@@ -56,41 +56,31 @@
          press nil]
     (if cs
       (let [c (first cs)]
-        (case c
-          \C
-          (if (= \- (second cs))
-            (recur (nnext cs)
+        (cond
+          (and (= \C c)
+               (= \- (second cs)))
+          (recur (nnext cs)
                    chord
                    (assoc press :ctrl? true))
-            (recur (next cs)
-                   chord
-                   (assoc press :key c)))
 
-          \M
-          (if (= \- (second cs))
-            (recur (nnext cs)
+          (and (= \M c)
+               (= \- (second cs)))
+          (recur (nnext cs)
                    chord
                    (assoc press :meta? true))
-            (recur (next cs)
-                   chord
-                   (assoc press :key c)))
-          
-          \S
-          (if (= \- (second cs))
-            (recur (nnext cs)
+
+          (and (= \S c)
+               (= \- (second cs)))
+          (recur (nnext cs)
                    chord
                    (assoc press :super? true))
-            (recur (next cs)
-                   chord
-                   (assoc press :key c)))
 
-          \space
+          (= \space c)
           (recur (next cs)
                  (conj chord press)
                  nil)
 
-
-          ;; else
+          :else
           (if-let [[s key] (some (fn [[s key]]
                                    (when (= (seq s)
                                             (take (count s) cs))
