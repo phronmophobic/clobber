@@ -1299,7 +1299,7 @@
         body (ui/vertical-layout
               body
               (util.ui/status-bar {:editor editor
-                                   :width (ui/width body)}))]
+                                   :width (:width editor)}))]
     body))
 
 (defn ^:private truncate-front [s n]
