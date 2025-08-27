@@ -1302,15 +1302,23 @@
                                    :width (ui/width body)}))]
     body))
 
+(defn ^:private truncate-front [s n]
+  (let [len (count s)]
+    (if (> len n)
+      (subs s (- len n))
+      s)))
 (defeffect ::open-instarepl [{:keys [editor]}]
-  (let [editor (-> (make-editor)
+  (let [editor-label (:label editor)
+        editor (-> (make-editor)
                    (assoc :eval-ns (:eval-ns editor)
                           :instarepl? true))]
     (dispatch! :com.phronemophobic.easel/add-applet
                {:make-applet
                 (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
                   #(f % {:editor editor
-                         :label (str (:label editor) " ⚡⚡")
+                         :label (str 
+                                 "⚡"
+                                 (truncate-front editor-label 12))
                          :ui code-editor}))})))
 
 (defeffect ::tap [& args]
