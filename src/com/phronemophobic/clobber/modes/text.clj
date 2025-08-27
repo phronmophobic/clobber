@@ -1337,8 +1337,9 @@
                            (.toMatchResult matcher))))
                
                search-state (-> search-state
-                                (assoc :query query)
-                                (assoc :match match))
+                                (assoc :query query
+                                       :match match
+                                       :direction :forward))
                
                editor (assoc editor ::search search-state)]
            (if match
@@ -1363,11 +1364,13 @@
      ;; this may seem like it's not doing anything,
      ;; but this can signal to the UI that a search is happening
      (assoc editor ::search {:initial-cursor (:cursor editor)
-                             :initial-rope (:rope editor)})))
+                             :initial-rope (:rope editor)
+                             :direction :forward})))
   ([editor query]
    (let [search-state (or (::search editor)
                           {:initial-cursor (:cursor editor)
-                           :initial-rope (:rope editor)})
+                           :initial-rope (:rope editor)
+                           :direction :forward})
          
          search-cursor (or (:cursor search-state)
                            (:initial-cursor search-state))
@@ -1386,8 +1389,9 @@
                    (.toMatchResult matcher)))
          
          search-state (-> search-state
-                          (assoc :query query)
-                          (assoc :match match))
+                          (assoc :query query
+                                 :match match
+                                 :direction :forward))
          
          editor (assoc editor ::search search-state)]
      (if match
@@ -1479,53 +1483,140 @@
     (toString [this]
       (.toString (StringBuilder. this)))))
 
-(defn editor-isearch-backward [editor query]
-  (let [search-state (or (::search editor)
-                         {:initial-cursor (:cursor editor)
-                          :initial-rope (:rope editor)})
-        
-        search-cursor (or (:cursor search-state)
-                          (:initial-cursor search-state))
-        search-index (:char search-cursor)
-        
-        ;; There is no built in way to search backwards with regex (afaik)
-        ;; Instead, search the reversed string and convert the indices.
-        regexp (Pattern/compile (str/reverse query)
-                                (bit-or
-                                 Pattern/CASE_INSENSITIVE
-                                 Pattern/LITERAL))
-        ^Rope
-        rope (:rope editor)
-        reversed-cs  (reverse-char-sequence rope)
-        matcher (.matcher regexp reversed-cs)
+(defn ^:private ->match-result [start end group]
+  (reify
+    java.util.regex.MatchResult
+    (start [_] start)
+    (end [_] end)
+    (group [_] group)))
 
-        match (if (.find matcher search-index)
-                (.toMatchResult matcher)
-                (when (.find matcher 0)
-                  (.toMatchResult matcher)))
-        
-        search-state (-> search-state
-                         (assoc :query query)
-                         (assoc :match match))
-        
-        editor (assoc editor ::search search-state)]
-    (if match
-      (let [;; calculate new cursor
-            ;; we're calculating to `.end` instead of `.start`
-            ;; because we searched in reverse.
-            s (-> (.subSequence rope 0 (- (.length rope) (.end match)))
-                  .toString)
+(defn editor-isearch-backward
+  ([editor]
+   (if (::search editor)
+     (let [search-state (::search editor)
+           query (:query search-state)]
+       (if query
+         (let [search-cursor (:cursor editor)
+                                 
+               ^Rope
+               rope (:rope editor)
+               search-index (- (.length rope) (:char search-cursor))
+               
+               ;; There is no built in way to search backwards with regex (afaik)
+               ;; Instead, search the reversed string and convert the indices.
+               regexp (Pattern/compile (str/reverse query)
+                                       (bit-or
+                                        Pattern/CASE_INSENSITIVE
+                                        Pattern/LITERAL))
 
-            {:keys [row column-byte]} (util/count-row-column-bytes s)
+               reversed-cs  (reverse-char-sequence rope)
+               matcher (.matcher regexp reversed-cs)
+               
+               match (if (.find matcher search-index)
+                       (.toMatchResult matcher)
+                       (when (.find matcher 0)
+                         (.toMatchResult matcher)))
+               ;; now do it again
+               match (when match
+                       (if (.find matcher)
+                         (.toMatchResult matcher)
+                         (when (.find matcher 0)
+                           (.toMatchResult matcher))))
+               
+               unreversed-match (when match
+                                  (->match-result 
+                                   (- (.length rope) (.end match))
+                                   (- (.length rope) (.start match))
+                                   (str (.subSequence reversed-cs (.start match) (.end match)))))
 
-            cursor {:byte (alength (.getBytes s "utf-8"))
-                    :char (.length s)
-                    :point (util/num-points s)
-                    :row row
-                    :column-byte column-byte}]
-        (assoc editor :cursor cursor))
-      ;; else, no match
-      editor)))
+               search-state (-> search-state
+                                (assoc :query query
+                                       :match unreversed-match
+                                       :direction :backward))
+               
+               editor (assoc editor ::search search-state)]
+           (if match
+             (let [;; calculate new cursor
+                   ;; we're calculating to `.end` instead of `.start`
+                   ;; because we searched in reverse.
+                   s (-> (.subSequence rope 0 (- (.length rope) (.end match)))
+                         .toString)
+                   
+                   {:keys [row column-byte]} (util/count-row-column-bytes s)
+                   
+                   cursor {:byte (alength (.getBytes s "utf-8"))
+                           :char (.length s)
+                           :point (util/num-points s)
+                           :row row
+                           :column-byte column-byte}]
+               (assoc editor :cursor cursor))
+             ;; else, no match
+             editor))
+         (if-let [query (:search/last-search editor)]
+           (editor-isearch-backward editor query)
+           editor)))
+     ;; No current query, try to repeat last search.
+     ;; this may seem like it's not doing anything,
+     ;; but this can signal to the UI that a search is happening
+     (assoc editor ::search {:initial-cursor (:cursor editor)
+                             :initial-rope (:rope editor)
+                             :direction :backward})))
+  ([editor query]
+   (let [search-state (or (::search editor)
+                          {:initial-cursor (:cursor editor)
+                           :initial-rope (:rope editor)
+                           :direction :backward})
+         
+         search-cursor (or (:cursor search-state)
+                           (:initial-cursor search-state))
+         ^Rope
+         rope (:rope editor)
+         search-index (- (.length rope) (:char search-cursor))
+         
+         ;; There is no built in way to search backwards with regex (afaik)
+         ;; Instead, search the reversed string and convert the indices.
+         regexp (Pattern/compile (str/reverse query)
+                                 (bit-or
+                                  Pattern/CASE_INSENSITIVE
+                                  Pattern/LITERAL))
+
+         reversed-cs  (reverse-char-sequence rope)
+         matcher (.matcher regexp reversed-cs)
+         
+         match (if (.find matcher search-index)
+                 (.toMatchResult matcher)
+                 (when (.find matcher 0)
+                   (.toMatchResult matcher)))
+
+         unreversed-match (when match
+                            (->match-result 
+                             (- (.length rope) (.end match))
+                             (- (.length rope) (.start match))
+                             (str (.subSequence reversed-cs (.start match) (.end match)))))
+         
+         search-state (-> search-state
+                          (assoc :query query
+                                 :match unreversed-match
+                                 :direction :backward))
+         
+         editor (assoc editor ::search search-state)]
+     (if match
+       (let [;; calculate new cursor
+             ;; we're calculating to `.end` instead of `.start`
+             ;; because we searched in reverse.
+             s (-> (.subSequence rope 0 (- (.length rope) (.end match)))
+                   .toString)
+             
+             {:keys [row column-byte]} (util/count-row-column-bytes s)
+             
+             cursor {:byte (alength (.getBytes s "utf-8"))
+                     :char (.length s)
+                     :point (util/num-points s)
+                     :row row
+                     :column-byte column-byte}]
+         (assoc editor :cursor cursor))
+       ;; else, no match
+       editor))))
 
 (defn editor-cancel-search [editor]
   (let [initial-cursor (-> editor ::search :initial-cursor)
@@ -1677,6 +1768,7 @@
    "M-\\" editor-delete-horizontal-space
    "C-_" editor-undo
    "C-s" editor-isearch-forward
+   "C-r" editor-isearch-backward
    "TAB" editor-indent
    ,})
 

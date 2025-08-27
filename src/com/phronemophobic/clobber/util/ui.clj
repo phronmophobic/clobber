@@ -399,13 +399,22 @@
     (dispatch! update-editor-intent 
                {:editor main-editor
                 :$editor $main-editor
-                :op #(text-mode/editor-isearch-forward % (.toString ^Rope (:rope search-editor)))})))
+                :op (fn [editor]
+                      (if (= (-> editor ::text-mode/search :direction)
+                             :backward)
+                        (text-mode/editor-isearch-backward editor (.toString ^Rope (:rope search-editor)))
+                        (text-mode/editor-isearch-forward editor (.toString ^Rope (:rope search-editor)))))})))
 
 (defui search-bar [{:keys [editor update-editor-intent] :as m}]
   (let [search-state (::text-mode/search editor)
         search-editor (get search-state ::search-editor)
+        direction (if (= :backward (:direction search-state))
+                    :backward
+                    :forward)
         search-editor-body (para/paragraph 
-                            ["isearch forward: "
+                            [(if (= direction :backward)
+                               "isearch backward: "
+                               "isearch forward: ")
                              (.toString ^Rope (:rope search-editor))]
                             nil
                             {:paragraph-style/text-style
@@ -421,11 +430,16 @@
        [[update-editor-intent {:editor editor
                                :$editor $editor
                                :op #'text-mode/editor-finish-search-forward}]])
-     ::repeat-search
+     ::repeat-search-forward
      (fn [m]
        [[update-editor-intent {:editor editor
                                :$editor $editor
                                :op #'text-mode/editor-isearch-forward}]])
+     ::repeat-search-backward
+     (fn [m]
+       [[update-editor-intent {:editor editor
+                               :$editor $editor
+                               :op #'text-mode/editor-isearch-backward}]])
      ::update-search-editor
      (fn [m]
        [[::update-search-editor (assoc m 
@@ -439,7 +453,8 @@
        :update-editor-intent ::update-search-editor
        :key-bindings {"C-g" ::cancel-search
                       "RET" ::finish-search
-                      "C-s" ::repeat-search
+                      "C-s" ::repeat-search-forward
+                      "C-r" ::repeat-search-backward
                       "DEL" #'text-mode/editor-delete-backward-char}}))))
 
 

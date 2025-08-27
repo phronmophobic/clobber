@@ -1731,6 +1731,7 @@
    "C-M-q" #'editor-indent-region
 
    "C-s" #'text-mode/editor-isearch-forward
+   "C-r" #'text-mode/editor-isearch-backward
    "C-y" #'text-mode/editor-yank
    "C-SPC" #'text-mode/editor-set-mark
    "C-u C-SPC" #'text-mode/editor-pop-mark
