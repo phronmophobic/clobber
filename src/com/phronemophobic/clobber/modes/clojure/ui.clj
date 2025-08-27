@@ -9,6 +9,7 @@
             [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
+            [membrane.alpha.component.drag-and-drop :as dnd]
             [com.phronemophobic.membrandt :as ant]
             [com.phronemophobic.viscous :as viscous]
             compliment.core
@@ -957,6 +958,24 @@
               (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
                 #(f % {:file file}))}))
 
+
+(defeffect ::drop-val [{:keys [pos obj $editor editor para]}]
+  (when-let [eval-ns (:eval-ns editor)]
+    (when-let [val (-> obj :x)]
+      (let [char-offset (:char-offset para)
+            [x y] pos
+            char-index (+ (:char-offset para)
+                          (para/glyph-index para x y))
+            sym (gensym "x-")
+            event-editor editor]
+        (intern eval-ns sym @val)
+        (dispatch! ::update-editor
+                   {:$editor $editor
+                    :op (fn [editor]
+                          (-> editor 
+                              (text-mode/editor-goto-char char-index)
+                              (text-mode/editor-self-insert-command (name sym))))})))))
+
 (defui editor-view [{:keys [editor
                             focused?]}]
   (when-let [tree (:tree editor)]
@@ -985,7 +1004,14 @@
                                          status-bar))))]
       [(util.ui/cursor-view rope para (:cursor editor))
        paren-highlight-view
-       para
+       (dnd/on-drop 
+        (fn [pos obj]
+          [[::drop-val {:pos pos
+                        :obj obj
+                        :editor editor
+                        :$editor $editor
+                        :para para}]])
+        para)
        line-vals
        status-bar
        (when-let [completion (-> editor
