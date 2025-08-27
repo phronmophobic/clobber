@@ -1086,6 +1086,21 @@
     ;; else
     editor))
 
+(defn editor-kill-word [editor]
+  (let [start-byte (-> editor :cursor :byte)
+        end-byte (-> editor
+                     (editor-forward-word)
+                     :cursor
+                     :byte)]
+    (editor-snip editor start-byte end-byte)))
+
+(defn editor-backward-kill-word [editor]
+  (let [end-byte (-> editor :cursor :byte)
+        editor (editor-backward-word editor)]
+    (editor-snip editor
+                 (-> editor :cursor :byte)
+                 end-byte)))
+
 (defn editor-save-region [editor]
   (if-let [select-cursor (:select-cursor editor)]
     (let [cursor (:cursor editor)
@@ -1581,6 +1596,8 @@
    "M-}" editor-forward-paragraph
    "M-b" editor-backward-word
    "M-f" editor-forward-word
+   "M-d" editor-kill-word
+   "M-DEL" editor-backward-kill-word
    "DEL" editor-delete-backward-char
    "<right>" editor-forward-char
    "<up>" editor-previous-line
