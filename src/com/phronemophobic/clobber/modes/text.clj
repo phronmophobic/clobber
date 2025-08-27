@@ -74,6 +74,72 @@
     (assoc editor
            :cursor cursor)))
 
+(defn editor-goto-char
+  "Moves the :cursor of editor to `char-index`. Does not change anything else."
+  [editor char-index]
+  (let [cursor (:cursor editor)
+        ^Rope
+        rope (:rope editor)
+        {cursor-char :char} cursor
+
+        cursor
+        (cond
+          (= cursor-char char-index) cursor
+
+          (> char-index cursor-char)
+          (let [
+                diff-string (-> (.subSequence rope cursor-char char-index)
+                                .toString)
+                rc-offset (util/count-row-column-bytes diff-string)
+                new-byte (+ (:byte cursor) (-> (.getBytes diff-string) alength))
+                new-char char-index
+                new-point (+ (:point cursor)
+                             (util/num-points diff-string))
+                new-cursor-row (+ (:row cursor) (:row rc-offset))
+                new-cursor-column-byte (if (pos? (:row rc-offset))
+                                         (:column-byte rc-offset)
+                                         (+ (:column-byte rc-offset) (:column-byte cursor)))]
+            {:byte new-byte
+             :char new-char
+             :point new-point
+             :row new-cursor-row
+             :column-byte new-cursor-column-byte})
+
+          ;; char-index before cursor
+          :else
+          (let [diff-string (-> (.subSequence rope char-index cursor-char)
+                                .toString)
+                new-byte (- (:byte cursor)
+                            (-> diff-string .getBytes alength))
+                new-char char-index
+                new-point (- (:point cursor)
+                             (util/num-points diff-string))
+                
+                rc-offset (util/count-row-column-bytes diff-string)
+                new-cursor-row (- (:row cursor)
+                                  (:row rc-offset))
+
+                bi (doto (BreakIterator/getCharacterInstance)
+                     (.setText rope))
+                new-cursor-column-byte
+                (loop [char-index new-char]
+                  (let [prev-char-index (.preceding bi char-index)]
+                    (if (or (= -1 prev-char-index)
+                            (= \newline (.charAt rope prev-char-index)))
+                      (-> (.subSequence rope char-index new-char)
+                          .toString
+                          (.getBytes)
+                          alength)
+                      ;; else
+                      (recur prev-char-index))))]
+            {:byte new-byte
+             :char new-char
+             :point new-point
+             :row new-cursor-row
+             :column-byte new-cursor-column-byte}))]
+    (assoc editor
+           :cursor cursor)))
+
 (defn editor-insert
   "Inserts `s`.
 
