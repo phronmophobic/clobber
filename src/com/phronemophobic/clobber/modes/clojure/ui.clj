@@ -1130,6 +1130,7 @@
          "C-x C-f" ::util.ui/file-picker
          "C-c C-d" ::show-doc
          "C-c i" ::open-instarepl
+         "C-u C-c i" editor-toggle-instarepl
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor
          "C-c C-k" ::load-buffer
