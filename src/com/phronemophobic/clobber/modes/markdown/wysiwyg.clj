@@ -535,6 +535,10 @@
   {:style (:style ctx)
    :text "\n"})
 
+(defmethod node->styled-text* "hard_line_break" [ctx ^TSNode node]
+  {:style (:style ctx)
+   :text "\n"})
+
 (defmethod node->styled-text* "code_span" [ctx ^TSNode node]
   (let [style (merge-styles [(:style ctx)
                              #:text-style
