@@ -1477,7 +1477,9 @@
 
 
 
-(defn ^:private reverse-char-sequence [^CharSequence cs]
+(defn ^:private reverse-char-sequence 
+  ^CharSequence
+  [^CharSequence cs]
   (reify 
     CharSequence
     (length [_ ]
@@ -1493,7 +1495,9 @@
     (toString [this]
       (.toString (StringBuilder. this)))))
 
-(defn ^:private ->match-result [start end group]
+(defn ^:private ->match-result 
+  ^java.util.regex.MatchResult
+   [start end group]
   (reify
     java.util.regex.MatchResult
     (start [_] start)
