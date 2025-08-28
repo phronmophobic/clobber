@@ -1697,6 +1697,7 @@
    "C-o" #'text-mode/editor-open-line
    "C-p" #'text-mode/editor-previous-line
    "C-v" #'text-mode/editor-scroll-down
+   "C-x h" #'text-mode/editor-mark-whole-buffer
    
    "C-c r" #'editor-next-reflection-warning
 

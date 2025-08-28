@@ -1096,6 +1096,16 @@
       (dissoc editor :select-cursor)
       (assoc editor :select-cursor (:cursor editor)))))
 
+(defn editor-mark-whole-buffer [editor]
+  (let [end-editor (editor-goto-byte editor (.numBytes ^Rope (:rope editor)))]
+    (assoc editor
+           :select-cursor (:cursor end-editor)
+           :cursor {:byte 0
+                    :char 0
+                    :point 0
+                    :row 0
+                    :column-byte 0})))
+
 (defn editor-kill-line [editor]
   (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
@@ -1745,6 +1755,7 @@
    "C-o" editor-open-line
    "C-p" editor-previous-line
    "C-v" editor-scroll-down
+   "C-x h" editor-mark-whole-buffer
    "M-v" editor-scroll-up
    "M-<" editor-beginning-of-buffer
    "M->" editor-end-of-buffer
