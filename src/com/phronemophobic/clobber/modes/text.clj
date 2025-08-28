@@ -1530,12 +1530,6 @@
                        (.toMatchResult matcher)
                        (when (.find matcher 0)
                          (.toMatchResult matcher)))
-               ;; now do it again
-               match (when match
-                       (if (.find matcher)
-                         (.toMatchResult matcher)
-                         (when (.find matcher 0)
-                           (.toMatchResult matcher))))
                
                unreversed-match (when match
                                   (->match-result 
