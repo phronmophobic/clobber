@@ -1195,7 +1195,12 @@
     editor))
 
 (defn editor-exchange-point-and-mark [editor]
-  editor)
+  (if-let [select-cursor (:select-cursor editor)]
+    (assoc editor
+           :cursor select-cursor
+           :select-cursor (:cursor editor))
+    ;; else
+    editor))
 
 (defn editor-open-line [editor]
   (-> editor
@@ -1754,6 +1759,7 @@
    "C-p" editor-previous-line
    "C-v" editor-scroll-down
    "C-x h" editor-mark-whole-buffer
+   "C-x x" editor-exchange-point-and-mark
    "M-v" editor-scroll-up
    "M-<" editor-beginning-of-buffer
    "M->" editor-end-of-buffer
