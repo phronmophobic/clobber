@@ -433,29 +433,6 @@
       :gap 8})))
 
 
-
-
-
-(defn dev
-  ([f]
-   (let [editor (make-editor)
-         editor (if-let [lang-kw (suffix->language-kw (file-ext f))]
-                  (set-language editor lang-kw)
-                  editor)
-         editor (-> editor
-                    (text-mode/editor-self-insert-command
-                     (slurp f))
-                    (assoc :file f)
-                    (text-mode/editor-beginning-of-buffer)
-                    (text-mode/editor-update-viewport))]
-     (dev/add-component-as-applet #'debug
-                                  {:editor editor})))
-  ([]
-   (let [editor (-> (make-editor)
-                    (text-mode/editor-update-viewport))]
-     (dev/add-component-as-applet #'debug
-                                  {:editor editor}))))
-
 (defeffect ::tap [& args]
   (case (count args)
     0 nil
