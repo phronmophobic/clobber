@@ -173,8 +173,19 @@
                    (editor-upkeep editor
                                   #(dissoc % :select-cursor)))))))
 
+(defeffect ::update-bindings [{:keys [$editor]}]
+  (dispatch! :update
+             $editor
+             (fn [editor]
+               (update editor :key-bindings
+                       (fn [bindings]
+                         (merge bindings
+                                clojure-key-bindings))))))
 
-(defeffect ::editor-eval-last-sexp [{:keys [editor $editor]}]
+(defeffect ::editor-eval-and-tap-last-sexp [m]
+  (dispatch! ::editor-eval-last-sexp (assoc m :tap? true)))
+
+(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap?]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
           {cursor-byte :byte
@@ -223,13 +234,15 @@
               (dispatch! ::temp-status {:$editor $editor
                                         :msg "Exception!"})
               (prn err))
-            ;; else
+            ;; else no err
             (let [temp-view (ui/translate 0 -4
                                       (viscous/inspector
                                        {:obj (viscous/wrap val)
                                         :width 40
                                         :height 1
                                         :show-context? false}))]
+              (when tap?
+                (tap> val))
               (dispatch! :update $editor
                          update :line-val
                          (fn [m]
@@ -1165,6 +1178,9 @@
          ;; "C-c C-v" ::editor-paste
          "C-M-x" ::editor-eval-top-form
          "C-x C-e" ::editor-eval-last-sexp
+         "C-u C-x C-e" ::editor-eval-and-tap-last-sexp
+         "C-c b" ::update-bindings
+         "C-c C-o" :com.phronemophobic.easel.tap-watcher/clear-taps
          "M-." ::jump-to-definition))
 
 
