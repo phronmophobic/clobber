@@ -1138,7 +1138,8 @@
                         (dispatch! :com.phronemophobic.easel/add-applet
                                    {:make-applet
                                     (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
-                                      #(f % (merge {:string contents}
+                                      #(f % (merge {:source contents
+                                                    :mode :clojure}
                                                    (when-let [line (:line mta)]
                                                      {:line (max 0 (dec line))}))))})))))
 
@@ -1149,7 +1150,8 @@
                     (dispatch! :com.phronemophobic.easel/add-applet
                                                        {:make-applet
                               (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
-                                #(f % (merge {:file file}
+                                #(f % (merge {:file file
+                                              :mode :clojure}
                                              (when-let [line (:line mta)]
                                                {:line (max 0 (dec line))}))))})))
 
