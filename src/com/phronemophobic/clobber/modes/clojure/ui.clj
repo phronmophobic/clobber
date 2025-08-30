@@ -1015,22 +1015,22 @@
                            (ui/translate 0
                                          (- height 8 (ui/height status-bar))
                                          status-bar))))]
-      [(util.ui/cursor-view rope para (:cursor editor))
-       paren-highlight-view
-       (dnd/on-drop 
-        (fn [pos obj]
-          [[::drop-val {:pos pos
-                        :obj obj
-                        :editor editor
-                        :$editor $editor
-                        :para para}]])
-        para)
-       line-vals
-       status-bar
-       (when-let [completion (-> editor
-                                 ::completion)]
-         (when-let [->view (:->view completion)]
-           (->view completion)))])))
+      (dnd/on-drop
+       (fn [pos obj]
+         [[::drop-val {:pos pos
+                       :obj obj
+                       :editor editor
+                       :$editor $editor
+                       :para para}]])
+       [(util.ui/cursor-view rope para (:cursor editor))
+        paren-highlight-view
+        para
+        line-vals
+        status-bar
+        (when-let [completion (-> editor
+                                  ::completion)]
+          (when-let [->view (:->view completion)]
+            (->view completion)))]))))
 
 (defeffect ::show-completions [{:keys [$editor]}]
   (dispatch! ::update-editor
