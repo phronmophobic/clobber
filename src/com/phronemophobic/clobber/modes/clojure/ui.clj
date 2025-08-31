@@ -4,6 +4,7 @@
             [clojure.core.protocols :as p]
             [clojure.string :as str]
             [clojure.core.async :as async]
+            clojure.pprint
             [membrane.basic-components :as basic]
             [membrane.ui :as ui]
             [membrane.skia :as skia]
@@ -185,7 +186,10 @@
 (defeffect ::editor-eval-and-tap-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :tap? true)))
 
-(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap?]}]
+(defeffect ::editor-eval-and-print-last-sexp [m]
+  (dispatch! ::editor-eval-last-sexp (assoc m :print? true)))
+
+(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? print?]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
           {cursor-byte :byte
@@ -243,11 +247,18 @@
                                         :show-context? false}))]
               (when tap?
                 (tap> val))
+
               (dispatch! :update $editor
-                         update :line-val
-                         (fn [m]
-                           (let [line-val (get m rope)]
-                             {rope (assoc line-val line-number (viscous/wrap val))})))
+                         (fn [editor]
+                           (let [editor (update editor
+                                                :line-val
+                                                (fn [m]
+                                                  (let [line-val (get m rope)]
+                                                    {rope (assoc line-val line-number (viscous/wrap val))})))
+                                 editor (if print?
+                                          (text-mode/editor-insert editor (with-out-str (clojure.pprint/pprint val)))
+                                          editor)]
+                             editor)))
               (dispatch! ::temp-status {:$editor $editor
                                     :msg temp-view}))))))))
 
@@ -1181,6 +1192,7 @@
          "C-M-x" ::editor-eval-top-form
          "C-x C-e" ::editor-eval-last-sexp
          "C-u C-x C-e" ::editor-eval-and-tap-last-sexp
+         "C-c C-p" ::editor-eval-and-print-last-sexp
          "C-c b" ::update-bindings
          "C-c C-o" :com.phronemophobic.easel.tap-watcher/clear-taps
          "M-." ::jump-to-definition))
