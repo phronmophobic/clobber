@@ -48,6 +48,8 @@
            java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
+(declare clojure-key-bindings)
+
 (defn ^:private ns-sym->resource-path
   ([ns-sym]
    (ns-sym->resource-path ns-sym ".clj"))
@@ -695,7 +697,6 @@
     (when ns-str
       (symbol ns-str))))
 
-(declare clojure-key-bindings)
 (defn make-editor
   ([{:keys [file ns source] :as m}]
    (let [editor (make-editor)
