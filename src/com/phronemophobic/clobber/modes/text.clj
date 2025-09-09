@@ -305,16 +305,16 @@
                                 .getBytes
                                 alength))]
               (recur next-char
-                     (inc n)))))]
-    (let [diff-string (-> (.subSequence rope 0 char-index)
-                          .toString)
-          num-bytes (alength (.getBytes diff-string "utf-8"))]
-      (assoc editor
-             :cursor {:byte num-bytes
-                      :char char-index
-                      :point (util/num-points diff-string)
-                      :row row
-                      :column-byte column-byte}))))
+                     (inc n)))))
+        diff-string (-> (.subSequence rope 0 char-index)
+                        .toString)
+        num-bytes (alength (.getBytes diff-string "utf-8"))]
+    (assoc editor
+           :cursor {:byte num-bytes
+                    :char char-index
+                    :point (util/num-points diff-string)
+                    :row row
+                    :column-byte column-byte})))
 
 (defn editor-set-string
   "Updates the editor's contents, but nothing else.

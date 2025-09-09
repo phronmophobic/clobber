@@ -1,45 +1,29 @@
 (ns com.phronemophobic.clobber.modes.clojure.ui
   (:require [clojure.java.io :as io]
-            [clojure.datafy :as d]
-            [clojure.core.protocols :as p]
             [clojure.string :as str]
             [clojure.core.async :as async]
             clojure.pprint
-            [membrane.basic-components :as basic]
             [membrane.ui :as ui]
-            [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [membrane.alpha.component.drag-and-drop :as dnd]
-            [com.phronemophobic.membrandt :as ant]
             [com.phronemophobic.viscous :as viscous]
             compliment.core
-            [clojure.tools.analyzer.jvm :as ana.jvm]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util :as util]
             [com.phronemophobic.clobber.util.ui :as util.ui]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding])
-  (:import (org.treesitter TSLanguage
-                           TSQuery
+  (:import (org.treesitter TSQuery
                            TSParser
                            TSTree
                            TSTreeCursor
                            TSNode
-                           TSPoint
-                           TSReader
                            TSQueryCapture
                            TSQueryCursor
-                           TSQueryMatch
                            TreeSitterClojure
-                           TreeSitterJson
-                           TSInputEdit
                            TSInputEncoding)
            (java.util.jar JarFile)
-           java.nio.charset.Charset
-           java.util.Arrays
-           java.nio.ByteBuffer
-           java.util.regex.Pattern
            com.ibm.icu.text.BreakIterator
            clojure.lang.LineNumberingPushbackReader
            java.time.Duration
@@ -272,63 +256,63 @@
            cursor-char :char
            cursor-point :point
            cursor-row :row
-           cursor-column-byte :column-byte} cursor]
-      (let [root-node (.getRootNode tree)
-            cursor (TSTreeCursor. root-node)
-            idx (.gotoFirstChildForByte cursor cursor-byte)]
-        (if (= -1 idx)
-          editor
-          (try
-            (let [eval-ns (:eval-ns editor)
-                  eval-ns-name (ns-name eval-ns)
-                  node (.currentNode cursor)
-                  line-number (-> node
-                                  .getEndPoint
-                                  .getRow)
-                  
-                  [;; path relative to class-path  
-                   source-path
-                   ;; filename
-                   source-name]
-                  (when-let [^File f (:file editor)]
-                    [(ns-sym->resource-path eval-ns-name (util/file-ext f))
-                     (.getName f)])
-                  
-                  ;; tree-sitter line numbers are 0 indexed
-                  ;; these source line numbers are 1 indexed
-                  ;; we are adding a line for the ns form
-                  rdr (doto (LineNumberingPushbackReader.
-                             (StringReader. 
-                              (if (pos? line-number)
-                                (str (pr-str
-                                      `(ns ~eval-ns-name))
-                                     "\n"
-                                     (util/node->str rope node))
-                                ;; else
-                                (util/node->str rope node))))
-                        (.setLineNumber line-number))
+           cursor-column-byte :column-byte} cursor
+          root-node (.getRootNode tree)
+          cursor (TSTreeCursor. root-node)
+          idx (.gotoFirstChildForByte cursor cursor-byte)]
+      (if (= -1 idx)
+        editor
+        (try
+          (let [eval-ns (:eval-ns editor)
+                eval-ns-name (ns-name eval-ns)
+                node (.currentNode cursor)
+                line-number (-> node
+                                .getEndPoint
+                                .getRow)
+                
+                [;; path relative to class-path  
+                 source-path
+                 ;; filename
+                 source-name]
+                (when-let [^File f (:file editor)]
+                  [(ns-sym->resource-path eval-ns-name (util/file-ext f))
+                   (.getName f)])
+                
+                ;; tree-sitter line numbers are 0 indexed
+                ;; these source line numbers are 1 indexed
+                ;; we are adding a line for the ns form
+                rdr (doto (LineNumberingPushbackReader.
+                           (StringReader. 
+                            (if (pos? line-number)
+                              (str (pr-str
+                                    `(ns ~eval-ns-name))
+                                   "\n"
+                                   (util/node->str rope node))
+                              ;; else
+                              (util/node->str rope node))))
+                      (.setLineNumber line-number))
 
-                  val (clojure.lang.Compiler/load rdr source-path source-name)
-                  
-                  temp-view (ui/translate 0 -4
-                                          (viscous/inspector
-                                           {:obj (viscous/wrap val)
-                                            :width 40
-                                            :height 1
-                                            :show-context? false}))]
-              (dispatch! :update $editor
-                         update :line-val
-                         (fn [m]
-                           (let [line-val (get m rope)]
-                             {rope (assoc line-val line-number (viscous/wrap val))})))
-              (dispatch! ::temp-status {:$editor $editor
-                                        :msg temp-view})
-              )
-            (catch Exception e
-              (dispatch! ::temp-status {:$editor $editor
-                                        :msg (str (-> e class .getName) ": " (.getMessage e) "\n"
-                                                  (-> e .getCause .getMessage))})
-              (prn e))))))))
+                val (clojure.lang.Compiler/load rdr source-path source-name)
+                
+                temp-view (ui/translate 0 -4
+                                        (viscous/inspector
+                                         {:obj (viscous/wrap val)
+                                          :width 40
+                                          :height 1
+                                          :show-context? false}))]
+            (dispatch! :update $editor
+                       update :line-val
+                       (fn [m]
+                         (let [line-val (get m rope)]
+                           {rope (assoc line-val line-number (viscous/wrap val))})))
+            (dispatch! ::temp-status {:$editor $editor
+                                      :msg temp-view})
+            )
+          (catch Exception e
+            (dispatch! ::temp-status {:$editor $editor
+                                      :msg (str (-> e class .getName) ": " (.getMessage e) "\n"
+                                                (-> e .getCause .getMessage))})
+            (prn e)))))))
 
 (defeffect ::load-buffer [{:keys [editor $editor]}]
   (future
@@ -480,7 +464,7 @@
         (let [named-child-count (.getNamedChildCount parent-coll)]
           (when (pos? named-child-count)
             (let [first-child (.getNamedChild parent-coll 0)]
-              (when (and (= "sym_lit" (.getType first-child)))
+              (when (= "sym_lit" (.getType first-child))
                 (let [sym (read-string 
                            (util/node->str rope first-child))
                       v (ns-resolve (:eval-ns editor) sym)
@@ -1143,8 +1127,8 @@
                 (let [jar-url-str (.getPath resource)
                       jar-url (io/as-url jar-url-str)
                       [jar-path file-entry-path] (str/split (.getPath jar-url) #"!/" 2)]
-                  (if-let [jar (JarFile. ^String jar-path)]
-                    (if-let [entry (.getJarEntry jar file-entry-path)]
+                  (when-let [jar (JarFile. ^String jar-path)]
+                    (when-let [entry (.getJarEntry jar file-entry-path)]
                       (let [contents (with-open [is (.getInputStream jar entry)]
                                        (slurp is))]
                         (dispatch! :com.phronemophobic.easel/add-applet

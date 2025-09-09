@@ -941,50 +941,50 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column-byte :column-byte} cursor]
-    (let [root-node (.getRootNode tree)
-          cursor (TSTreeCursor. root-node)
-          ;; find a collection node that starts before the current line
-          ;; and ends on or after the current line
-          ^TSNode
-          parent-coll-node
-          (when (.gotoFirstChild cursor)
-            ;; skip all top level nodes that end
-            ;; before current line
-            (when (loop []
-                    (if (< (-> (.currentNode cursor)
-                               .getEndPoint
-                               .getRow)
-                           cursor-row)
-                      (when (.gotoNextSibling cursor)
-                        (recur))
-                      true))
-              (loop [match nil]
-                (let [node (.currentNode cursor)]
-                  (if (>= (-> node .getStartPoint .getRow)
-                          cursor-row)
-                    match
-                    ;; else, started before this line
-                    (let [match (if (and (contains? coll-node-types (.getType node))
-                                         (>= (-> node .getEndPoint .getRow)
-                                             cursor-row))
-                                  node
-                                  match)]
-                      (when (util/goto-next-dfs-node cursor)
-                        (recur match))))))))]
-      (if (not parent-coll-node)
-        (editor-indent* editor root-node 0)
-        ;; do indent
-        (if (= "list_lit" (.getType parent-coll-node))
-          (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
-            (editor-indent* editor parent-coll-node block-indent)
-            (if (or (matches-inner? parent-coll-node (:rope editor))
-                    (matches-def? parent-coll-node (:rope editor)))
-              (editor-indent* editor parent-coll-node 2)
-              ;; else
-              (editor-indent-default* editor parent-coll-node)))
-          ;; use normal coll indent
-          (editor-indent-coll* editor parent-coll-node))))))
+         cursor-column-byte :column-byte} cursor
+        root-node (.getRootNode tree)
+        cursor (TSTreeCursor. root-node)
+        ;; find a collection node that starts before the current line
+        ;; and ends on or after the current line
+        ^TSNode
+        parent-coll-node
+        (when (.gotoFirstChild cursor)
+          ;; skip all top level nodes that end
+          ;; before current line
+          (when (loop []
+                  (if (< (-> (.currentNode cursor)
+                             .getEndPoint
+                             .getRow)
+                         cursor-row)
+                    (when (.gotoNextSibling cursor)
+                      (recur))
+                    true))
+            (loop [match nil]
+              (let [node (.currentNode cursor)]
+                (if (>= (-> node .getStartPoint .getRow)
+                        cursor-row)
+                  match
+                  ;; else, started before this line
+                  (let [match (if (and (contains? coll-node-types (.getType node))
+                                       (>= (-> node .getEndPoint .getRow)
+                                           cursor-row))
+                                node
+                                match)]
+                    (when (util/goto-next-dfs-node cursor)
+                      (recur match))))))))]
+    (if (not parent-coll-node)
+      (editor-indent* editor root-node 0)
+      ;; do indent
+      (if (= "list_lit" (.getType parent-coll-node))
+        (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
+          (editor-indent* editor parent-coll-node block-indent)
+          (if (or (matches-inner? parent-coll-node (:rope editor))
+                  (matches-def? parent-coll-node (:rope editor)))
+            (editor-indent* editor parent-coll-node 2)
+            ;; else
+            (editor-indent-default* editor parent-coll-node)))
+        ;; use normal coll indent
+        (editor-indent-coll* editor parent-coll-node)))))
 
 (defn paredit-newline [editor]
   (-> editor

@@ -1,48 +1,19 @@
 (ns com.phronemophobic.clobber.util.ui
-  (:require [clojure.java.io :as io]
-            [clojure.datafy :as d]
-            [clojure.core.protocols :as p]
-            [clojure.string :as str]
-            [clojure.core.async :as async]
-            [membrane.basic-components :as basic]
+  (:require [clojure.string :as str]
             [membrane.ui :as ui]
-            [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
-            [com.phronemophobic.membrandt :as ant]
-            [com.phronemophobic.viscous :as viscous]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
             [com.phronemophobic.clobber.util :as util])
-  (:import (org.treesitter TSLanguage
-                           TSQuery
-                           TSParser
+  (:import (org.treesitter TSQuery
                            TSTree
-                           TSTreeCursor
                            TSNode
-                           TSPoint
-                           TSReader
                            TSQueryCapture
-                           TSQueryCursor
-                           TSQueryMatch
-                           ;; TreeSitterClojure
-                           TreeSitterJson
-                           TreeSitterHtml
-                           TreeSitterMarkdown
-                           TreeSitterCpp
-                           TSInputEdit
-                           TSInputEncoding)
-           java.nio.charset.Charset
-           java.util.Arrays
-           java.nio.ByteBuffer
-           java.util.regex.Pattern
+                           TSQueryCursor)
            com.ibm.icu.text.BreakIterator
-           clojure.lang.LineNumberingPushbackReader
-           java.time.Duration
-           java.time.Instant
            java.io.File
-           java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
 (def default-theme

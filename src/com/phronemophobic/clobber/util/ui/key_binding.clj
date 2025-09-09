@@ -1,45 +1,12 @@
 (ns com.phronemophobic.clobber.util.ui.key-binding
-  (:require [clojure.java.io :as io]
-            [clojure.datafy :as d]
-            [clojure.core.protocols :as p]
-            [clojure.string :as str]
-            [clojure.core.async :as async]
-            [membrane.basic-components :as basic]
+  (:require [clojure.string :as str]
             [membrane.ui :as ui]
             [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
-            [com.phronemophobic.viscous :as viscous]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
-            [com.phronemophobic.clobber.modes.text :as text-mode]
-            [com.phronemophobic.clobber.util :as util])
-  (:import (org.treesitter TSLanguage
-                           TSQuery
-                           TSParser
-                           TSTree
-                           TSTreeCursor
-                           TSNode
-                           TSPoint
-                           TSReader
-                           TSQueryCapture
-                           TSQueryCursor
-                           TSQueryMatch
-                           ;; TreeSitterClojure
-                           ;; TreeSitterJson
-                           TSInputEdit
-                           TSInputEncoding)
-           java.nio.charset.Charset
-           java.util.Arrays
-           java.nio.ByteBuffer
-           java.util.regex.Pattern
-           com.ibm.icu.text.BreakIterator
-           clojure.lang.LineNumberingPushbackReader
-           java.time.Duration
-           java.time.Instant
-           java.io.File
-           java.io.StringReader
-           io.lacuna.bifurcan.Rope))
+            [com.phronemophobic.clobber.modes.text :as text-mode]))
 
 (def special-keys {"DEL" :backspace
                    "RET" :enter
@@ -188,25 +155,25 @@
                  chord (cond-> {:key normalized-key}
                          alt? (assoc :meta? true)
                          super? (assoc :super? true)
-                         ctrl? (assoc :ctrl? true))]
-             (let [intents [[:update $modifiers (fn [xs] (cond-> (or xs #{})
-                                                           alt? (conj :alt?)
-                                                           super? (conj :super?)
-                                                           ctrl? (conj :ctrl?)))]]
-                   mod-keys #{:left_shift
-                              :left_control
-                              :left_alt
-                              :left_super
-                              :right_shift
-                              :right_control
-                              :right_alt
-                              :right_super
-                              :caps_lock}
-                   intents (if (not (contains? mod-keys (get skia/keymap key)))
-                             (conj intents
-                                   [::chord-press {:chord chord}])
-                             intents)]
-               intents))
+                         ctrl? (assoc :ctrl? true))
+                 intents [[:update $modifiers (fn [xs] (cond-> (or xs #{})
+                                                         alt? (conj :alt?)
+                                                         super? (conj :super?)
+                                                         ctrl? (conj :ctrl?)))]]
+                 mod-keys #{:left_shift
+                            :left_control
+                            :left_alt
+                            :left_super
+                            :right_shift
+                            :right_control
+                            :right_alt
+                            :right_super
+                            :caps_lock}
+                 intents (if (not (contains? mod-keys (get skia/keymap key)))
+                           (conj intents
+                                 [::chord-press {:chord chord}])
+                           intents)]
+             intents)
            ;; release action
            [[:update $modifiers (fn [xs] (cond-> (or xs #{})
                                            (not alt?) (disj :alt?)

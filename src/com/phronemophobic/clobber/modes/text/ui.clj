@@ -1,43 +1,16 @@
 (ns com.phronemophobic.clobber.modes.text.ui
   (:require [clojure.java.io :as io]
-            [clojure.datafy :as d]
-            [clojure.core.protocols :as p]
             [clojure.string :as str]
-            [clojure.core.async :as async]
-            [membrane.basic-components :as basic]
             [membrane.ui :as ui]
-            [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
-            [com.phronemophobic.viscous :as viscous]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
-            [com.phronemophobic.clobber.util :as util]
             [com.phronemophobic.clobber.util.ui :as util.ui])
-  (:import (org.treesitter TSLanguage
-                           TSQuery
-                           TSParser
-                           TSTree
-                           TSTreeCursor
-                           TSNode
-                           TSPoint
-                           TSReader
-                           TSQueryCapture
-                           TSQueryCursor
-                           TSQueryMatch
-                           TreeSitterClojure
-                           TreeSitterJson
-                           TSInputEdit
-                           TSInputEncoding)
-           java.nio.charset.Charset
-           java.util.Arrays
-           java.nio.ByteBuffer
-           java.util.regex.Pattern
-           com.ibm.icu.text.BreakIterator
-           clojure.lang.LineNumberingPushbackReader
+  (:import (org.treesitter TSQuery
+                           TSParser)
            java.io.File
-           java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
 (defn ^:private file-ext [^File f]

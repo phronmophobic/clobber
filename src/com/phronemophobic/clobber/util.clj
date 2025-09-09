@@ -1,16 +1,7 @@
 (ns com.phronemophobic.clobber.util
-  (:require [clojure.java.io :as io]
+  (:require 
             [clojure.datafy :as d]
-            [clojure.core.protocols :as p]
-            [clojure.string :as str]
-            [membrane.basic-components :as basic]
-            [membrane.ui :as ui]
-            [membrane.skia :as skia]
-            [membrane.skia.paragraph :as para]
-            [membrane.component :refer [defeffect defui]]
-            [com.phronemophobic.membrandt :as ant]
-            [com.phronemophobic.viscous :as viscous]
-            [clojure.tools.analyzer.jvm :as ana.jvm])
+            [clojure.core.protocols :as p])
   (:import (org.treesitter TSLanguage
                            TSQuery
                            TSParser
@@ -27,13 +18,8 @@
                            TSInputEdit
                            TSInputEncoding)
            com.ibm.icu.text.BreakIterator
-           java.nio.charset.Charset
-           java.util.Arrays
-           ;; java.text.BreakIterator
            java.nio.ByteBuffer
-           java.util.regex.Pattern
-           io.lacuna.bifurcan.Rope
-           ))
+           io.lacuna.bifurcan.Rope))
 
 (comment
   (require 'virgil)
