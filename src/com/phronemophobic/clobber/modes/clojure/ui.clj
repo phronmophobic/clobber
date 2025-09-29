@@ -223,6 +223,7 @@
             (do 
               (dispatch! ::temp-status {:$editor $editor
                                         :msg "Exception!"})
+              (tap> err)
               (prn err))
             ;; else no err
             (let [temp-view (ui/translate 0 -4
@@ -312,6 +313,7 @@
             (dispatch! ::temp-status {:$editor $editor
                                       :msg (str (-> e class .getName) ": " (.getMessage e) "\n"
                                                 (-> e .getCause .getMessage))})
+            (tap> e)
             (prn e)))))))
 
 (defeffect ::load-buffer [{:keys [editor $editor]}]
