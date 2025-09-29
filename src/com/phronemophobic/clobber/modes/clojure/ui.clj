@@ -1079,7 +1079,8 @@
                             (dissoc ::completion))
                         ;; else
                         (let [longest-shared-prefix (transduce
-                                                     (map :candidate)
+                                                     (comp (map :candidate)
+                                                           (filter #(str/starts-with? % prefix)))
                                                      (completing shared-prefix)
                                                      (-> completions first :candidate)
                                                      (rest completions))]
