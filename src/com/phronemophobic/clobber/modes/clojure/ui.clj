@@ -434,84 +434,85 @@
 
 (defn update-arglist [{:keys [$editor editor dispatch!] :as m}]
   ;; TODO: should try to cache results
-  (when-let [^TSTree tree (:tree editor)]
-    (let [rope (:rope editor)
-          tc (TSTreeCursor. (.getRootNode tree))
-          cursor (:cursor editor)
-          cursor-byte (:byte cursor)
-          
-          ;; find parent coll
-          ^TSNode
-          parent-coll
-          (transduce
-           (comp (take-while (fn [^TSNode node]
-                               (< (-> node .getStartByte)
-                                  cursor-byte)))
-                 (filter (fn [^TSNode node]
-                           (contains? clojure-mode/coll-node-types (.getType node))
-                           ))
-                 (filter (fn [^TSNode node]
-                           (> (-> node .getEndByte)
-                              cursor-byte))))
-           (completing
-            (fn [result node]
-              node))
-           nil
-           (when (util/skip-to-byte-offset tc cursor-byte)
-             (util/tree-cursor-reducible tc)))]
-      (if (and parent-coll (= "list_lit" (.getType parent-coll)))
-        ;; try to find arglist
-        (let [named-child-count (.getNamedChildCount parent-coll)]
-          (when (pos? named-child-count)
-            (let [first-child (.getNamedChild parent-coll 0)]
-              (when (= "sym_lit" (.getType first-child))
-                (let [sym (read-string 
-                           (util/node->str rope first-child))
-                      v (ns-resolve (:eval-ns editor) sym)
-                      
-                      arglists (-> v meta :arglists)]
-                  (when arglists
-                    (let [cursor-index
-                          (loop [index 1]
-                            (if (>= index named-child-count)
-                              (dec index)
-                              (let [argnode (.getNamedChild parent-coll index)]
-                                (if (<= cursor-byte (.getEndByte argnode))
-                                  (dec index)
-                                  (recur (inc index))))))
-                          
-                          base-style (:base-style editor)
-                          ps (into [(str 
-                                     (pr-str v)
-                                     " ")]
-                                   (comp
-                                    (map (fn [arglist]
-                                           ["["
-                                            (into []
-                                                  (comp
-                                                   (map-indexed (fn [i node]
-                                                                  (let [s (pr-str node)]
-                                                                    (if (= i cursor-index)
-                                                                      {:text s
-                                                                       :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
-                                                                      s))))
-                                                   (interpose " "))
-                                                  arglist)
-                                            "]"]))
-                                    (interpose " "))
-                                   arglists)
-                          p (para/paragraph
-                             ps
-                             nil
-                             {:paragraph-style/text-style (:base-style editor)})]
-                      (dispatch! :update $editor
-                                 (fn [editor]
-                                   (assoc-in editor [:status :status] p))))))))))
-        ;; else, remove arglist
-        (when (-> editor :status :status)
-          (dispatch! :update $editor
-                     (fn [editor]
-                       (assoc-in editor [:status :status] nil))))))))
+  (when-let [eval-ns (:eval-ns editor)]
+    (when-let [^TSTree tree (:tree editor)]
+      (let [rope (:rope editor)
+            tc (TSTreeCursor. (.getRootNode tree))
+            cursor (:cursor editor)
+            cursor-byte (:byte cursor)
+            
+            ;; find parent coll
+            ^TSNode
+            parent-coll
+            (transduce
+             (comp (take-while (fn [^TSNode node]
+                                 (< (-> node .getStartByte)
+                                    cursor-byte)))
+                   (filter (fn [^TSNode node]
+                             (contains? clojure-mode/coll-node-types (.getType node))
+                             ))
+                   (filter (fn [^TSNode node]
+                             (> (-> node .getEndByte)
+                                cursor-byte))))
+             (completing
+              (fn [result node]
+                node))
+             nil
+             (when (util/skip-to-byte-offset tc cursor-byte)
+               (util/tree-cursor-reducible tc)))]
+        (if (and parent-coll (= "list_lit" (.getType parent-coll)))
+          ;; try to find arglist
+          (let [named-child-count (.getNamedChildCount parent-coll)]
+            (when (pos? named-child-count)
+              (let [first-child (.getNamedChild parent-coll 0)]
+                (when (= "sym_lit" (.getType first-child))
+                  (let [sym (read-string 
+                             (util/node->str rope first-child))
+                        v (ns-resolve eval-ns sym)
+                        
+                        arglists (-> v meta :arglists)]
+                    (when arglists
+                      (let [cursor-index
+                            (loop [index 1]
+                              (if (>= index named-child-count)
+                                (dec index)
+                                (let [argnode (.getNamedChild parent-coll index)]
+                                  (if (<= cursor-byte (.getEndByte argnode))
+                                    (dec index)
+                                    (recur (inc index))))))
+                            
+                            base-style (:base-style editor)
+                            ps (into [(str 
+                                       (pr-str v)
+                                       " ")]
+                                     (comp
+                                      (map (fn [arglist]
+                                             ["["
+                                              (into []
+                                                    (comp
+                                                     (map-indexed (fn [i node]
+                                                                    (let [s (pr-str node)]
+                                                                      (if (= i cursor-index)
+                                                                        {:text s
+                                                                         :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
+                                                                        s))))
+                                                     (interpose " "))
+                                                    arglist)
+                                              "]"]))
+                                      (interpose " "))
+                                     arglists)
+                            p (para/paragraph
+                               ps
+                               nil
+                               {:paragraph-style/text-style (:base-style editor)})]
+                        (dispatch! :update $editor
+                                   (fn [editor]
+                                     (assoc-in editor [:status :status] p))))))))))
+          ;; else, remove arglist
+          (when (-> editor :status :status)
+            (dispatch! :update $editor
+                       (fn [editor]
+                         (assoc-in editor [:status :status] nil)))))))))
 
 (declare editor->paragraph)
 (defn update-completions [{:keys [$editor editor dispatch!] :as m}]
