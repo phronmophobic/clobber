@@ -466,13 +466,21 @@
                   ;; just find the end of line
                   (let [bi (doto (BreakIterator/getCharacterInstance)
                              (.setText rope))
-
-                        char-index (loop [char-index cursor-char]
+                        
+                        char-index (loop [char-index cursor-char
+                                          all-whitespace? true]
                                      (let [next-char (.following bi char-index)]
-                                       (cond
-                                         (= -1 next-char) char-index
-                                         (= \newline (.charAt rope char-index)) char-index
-                                         :else (recur next-char))))]
+                                       (if (= -1 next-char)
+                                         char-index
+                                         (let [c (.charAt rope char-index)]
+                                           (case c
+                                             \newline (if all-whitespace?
+                                                        next-char
+                                                        char-index)
+                                             \space (recur next-char
+                                                           all-whitespace?)
+                                             ;; else
+                                             (recur next-char false))))))]
                     (if (= char-index cursor-char)
                       cursor-byte
                       (let [diff-string (-> (.subSequence rope cursor-char char-index )
