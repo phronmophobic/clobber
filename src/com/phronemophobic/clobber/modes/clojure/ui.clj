@@ -1182,6 +1182,31 @@
           (fn [b]
             (if b false true))))
 
+(defn editor-press-start [editor]
+  (let [style (if (= ["Press Start 2P"]
+                     (-> editor
+                         :base-style
+                         :text-style/font-families))
+                default-text-style
+                #:text-style
+                {:font-families ["Press Start 2P"]
+                :font-size 22
+                :height 1.2
+                :height-override true})]
+    (-> editor
+        (assoc :base-style style)
+        (editor-set-height (:height editor)))))
+
+(defn editor-decrease-font-size [editor]
+  (-> editor
+      (update-in [:base-style :text-style/font-size] dec)
+      (editor-set-height (:height editor))))
+
+(defn editor-increase-font-size [editor]
+  (-> editor
+      (update-in [:base-style :text-style/font-size] inc)
+      (editor-set-height (:height editor))))
+
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
@@ -1201,8 +1226,12 @@
          "C-c C-p" ::editor-eval-and-print-last-sexp
          "C-c b" ::update-bindings
          "C-c C-o" :com.phronemophobic.easel.tap-watcher/clear-taps
+         "C-c p" #'editor-press-start
+         "C-c +" #'editor-increase-font-size
+         "S-=" #'editor-increase-font-size
+         "C-c -" #'editor-decrease-font-size
+         "S--" #'editor-decrease-font-size
          "M-." ::jump-to-definition))
-
 
 
 (defn update-instarepl [{:keys [editor $editor dispatch!] :as msg}]
