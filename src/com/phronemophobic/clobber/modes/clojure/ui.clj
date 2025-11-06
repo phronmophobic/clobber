@@ -222,7 +222,9 @@
           (if err
             (do 
               (dispatch! ::temp-status {:$editor $editor
-                                        :msg "Exception!"})
+                                        :msg
+                                        (str (-> err class .getName) ": " (.getMessage err) "\n"
+                                             (-> err .getCause .getMessage))})
               (tap> err)
               (prn err))
             ;; else no err
@@ -338,8 +340,11 @@
         (dispatch! ::temp-status {:$editor $editor
                                   :msg "buffer loaded."})
         (catch Exception e
+          (tap> e)
           (dispatch! ::temp-status {:$editor $editor
-                                    :msg "Exception!"})
+                                    :msg
+                                    (str (-> e class .getName) ": " (.getMessage e) "\n"
+                                         (-> e .getCause .getMessage))})
           (prn e))))))
 
 (defeffect ::save-editor [{:keys [editor $editor]}]
