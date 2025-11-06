@@ -34,6 +34,21 @@
 
 (declare clojure-key-bindings)
 
+(def ^:private
+  default-font-families
+  ["Menlo"
+   (membrane.skia/logical-font->font-family :monospace)])
+
+(def ^:private
+  default-text-style
+  #:text-style {:font-families default-font-families
+                :font-size 12
+                :height 1.2
+                :height-override true})
+
+(def ^:private default-paragraph-style
+  {:paragraph-style/text-style default-text-style})
+
 (defn ^:private ns-sym->resource-path
   ([ns-sym]
    (ns-sym->resource-path ns-sym ".clj"))
@@ -370,7 +385,7 @@
   (let [width (-> context
                   :membrane.stretch/container-size
                   first)]
-    (para/paragraph docstring width)))
+    (para/paragraph docstring width default-paragraph-style)))
 
 (defeffect ::show-doc [{:keys [editor $editor]}]
   (when-let [^TSTree tree (:tree editor)]
@@ -755,10 +770,7 @@
       :viewport {:start-line 0
                  :num-lines 40}
       :paragraph nil
-      :base-style #:text-style {:font-families ["Menlo"]
-                                :font-size 12
-                                :height 1.2
-                                :height-override true}
+      :base-style default-text-style
       ;; this starts a thread.
       ;; should probably move somewhere else.
       :background-chan (editor-background-runner)
