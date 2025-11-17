@@ -1243,6 +1243,7 @@
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
                             focus
+                            width
                             edit?]
                      :as this}]
   (let [body (editor-view {:editor editor
@@ -1305,7 +1306,7 @@
                            :start-byte 0
                            :end-byte (.numBytes (:rope editor))}
                           (-> tree .getRootNode))
-                         1000)
+                         width)
          (catch Exception e
            (prn e)
            ;;           (tap> e)
@@ -1432,7 +1433,7 @@
          ;;          (assoc editor :file file)
          ;;          editor)
          ]
-     (dev/add-component-as-applet #'debug
+     ((requiring-resolve 'dev/add-component-as-applet) #'debug
                                   {:editor editor}))))
 
 (defeffect ::tap [& args]
