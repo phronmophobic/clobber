@@ -747,11 +747,13 @@
 
          ;; eval-ns
          editor (if-not (:eval-ns editor)
-                  (let [eval-ns (when-let [ns-sym (guess-ns (:rope editor))]
-                                  (create-ns ns-sym))]
-                    (if eval-ns
-                      (assoc editor :eval-ns eval-ns)
-                      editor))
+                  (if-let [eval-ns (:eval-ns m)]
+                    (assoc editor :eval-ns eval-ns)
+                    (let [eval-ns (when-let [ns-sym (guess-ns (:rope editor))]
+                                    (create-ns ns-sym))]
+                      (if eval-ns
+                        (assoc editor :eval-ns eval-ns)
+                        editor)))
                   editor)]
      editor))
   ([]
