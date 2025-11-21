@@ -622,8 +622,7 @@
                            (if (and (= 1 (count completions))
                                     (= rope (:rope editor))
                                     ;; don't autocomplete while typing. just for a fresh completion call
-                                    ;; (= {} (::completion editor))
-                                    )
+                                    (= {} (::completion editor)))
                              ;; if there's just one completion
                              ;; and the completion is still valid
                              ;; then autocomplete
