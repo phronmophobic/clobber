@@ -1,0 +1,307 @@
+(ns com.phronemophobic.clobber.modes.org.ui
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [membrane.ui :as ui]
+            [membrane.skia.paragraph :as para]
+            [membrane.component :refer [defeffect defui]]
+            [com.phronemophobic.membrandt :as ant]
+            [com.phronemophobic.clobber.modes.text :as text-mode]
+            [com.phronemophobic.clobber.modes.org :as org-mode]
+            [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
+            [com.phronemophobic.clobber.util.ui :as util.ui])
+  (:import (org.treesitter TSQuery
+                           TSParser)
+           java.io.File
+           io.lacuna.bifurcan.Rope))
+
+(defn editor-upkeep [editor op]
+  ;; if cursor or rope changed, editor-update-viewport
+  ;; potentially update undo history
+  ;; if rope changed, unset selection cursor
+  (let [new-editor (op editor)
+
+        rope-changed? (not (identical? (:rope editor)
+                                       (:rope new-editor)))
+        cursor-changed? (not (identical? (:cursor editor)
+                                         (:cursor new-editor)))
+
+        new-editor (if rope-changed?
+                     (-> new-editor
+                         (dissoc :select-cursor))
+                     new-editor)
+        new-editor (if (or rope-changed?
+                           cursor-changed?)
+                     (text-mode/editor-update-viewport new-editor)
+                     new-editor)
+        new-editor (if rope-changed?
+                     (text-mode/editor-append-history new-editor editor)
+                     new-editor)
+
+        ;; this could be improved
+        ;; probably want some specific
+        ;; support for keeping and clearing state
+        ;; for repeated commands.
+        popmode? (-> new-editor :mark :popmode?)
+        new-editor (if (and popmode?
+                            (= popmode?
+                               (-> editor :mark :popmode?)))
+                     (update new-editor :mark dissoc :popmode?)
+                     new-editor)
+
+        ;; support consecutive undos
+        new-history-index (-> new-editor :history :index)
+        new-editor (if (and new-history-index
+                            (= new-history-index
+                               (-> editor :history :index)))
+                     (update new-editor :history dissoc :index)
+                     new-editor)
+        
+        new-editor (util.ui/upkeep-search-ui editor new-editor)]
+    new-editor))
+
+
+
+(defn editor-set-height [editor height]
+  (let [base-style (:base-style editor)
+        row-height (* (:text-style/height base-style)
+                      (:text-style/font-size base-style))
+        num-lines (max 0
+                       (- (quot height row-height)
+                          ;; reserve two lines for status bar
+                          ;; and one line for cursor info
+                          4))]
+    (-> editor
+        (assoc-in [:viewport :num-lines] (long num-lines))
+        (assoc-in [:viewport :height] height))))
+
+
+(defeffect ::update-editor [{:keys [$editor op] :as m}]
+  (dispatch! :update $editor editor-upkeep op))
+
+(defeffect ::temp-status [{:keys [$editor msg]}]
+  (future
+    (dispatch! :update $editor
+               (fn [editor]
+                 (assoc-in editor [:status :temp] msg)))
+    (Thread/sleep 4000)
+    (dispatch! :update $editor
+               (fn [editor]
+                 (if (= msg (-> editor :status :temp))
+                   (update editor :status dissoc :temp)
+                   editor)))))
+
+(defeffect ::editor-paste [{:keys [$editor s]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (editor-upkeep editor
+                              #(text-mode/editor-self-insert-command % s )))))
+
+(defeffect ::editor-copy [{:keys [$editor editor]}]
+  (when-let [select-cursor (:select-cursor editor)]
+    (let [cursor (:cursor editor)
+          start-byte (min (:byte select-cursor)
+                          (:byte cursor))
+          end-byte (max (:byte select-cursor)
+                        (:byte cursor))
+          
+          ^Rope rope (:rope editor) 
+          selected-text (-> (.sliceBytes rope start-byte end-byte)
+                            .toString)]
+      (dispatch! :clipboard-copy selected-text)
+      (dispatch! :update $editor
+                 (fn [editor]
+                   (editor-upkeep editor
+                                  #(dissoc % :select-cursor)))))))
+
+(defeffect ::save-editor [{:keys [editor $editor]}]
+  (future
+    (when-let [file (:file editor)]
+      (let [^Rope rope (:rope editor)
+            source (.toString rope)]
+        (spit file source)
+        (dispatch! ::temp-status {:$editor $editor
+                                  :msg "saved."}))))
+  nil)
+
+(defeffect ::tap-editor [{:keys [editor $editor]}]
+  (tap> editor)
+  nil)
+
+
+(defeffect ::reload-editor [{:keys [editor $editor]}]
+  (future
+    (when-let [file (:file editor)]
+      (let [source (slurp file)
+            previous-source (.toString ^Rope (:rope editor))]
+        (dispatch! :set $editor
+          (editor-upkeep editor
+          #(text-mode/editor-set-string % source))))))
+  nil)
+
+
+
+(defn editor-cancel [editor]
+  (dissoc editor :select-cursor))
+
+(def key-bindings
+  (assoc text-mode/key-bindings
+         "C-x C-s" ::save-editor
+         "C-x C-f" ::util.ui/file-picker
+         ;; "C-c C-d" ::show-doc
+         "C-c b" ::update-bindings
+         "C-g" #'editor-cancel
+         "C-c C-p" (fn [editor]
+                     (-> editor
+                         (text-mode/editor-self-insert-command "aslkdjf")))
+         "C-c t" ::tap-editor))
+
+
+
+(defeffect ::update-bindings [{:keys [$editor]}]
+  
+  (dispatch! :update
+             $editor
+             (fn [editor]
+               (update editor :key-bindings
+                       (fn [bindings]
+                         (merge bindings
+                                key-bindings)))))
+  (dispatch! ::temp-status {:$editor $editor 
+                            :msg "Bindings updated!"}))
+
+(defn make-editor
+  ([{:keys [file source] :as m}]
+   (let [editor (make-editor)
+         
+         ;; contents
+         editor
+         (cond
+           source (text-mode/editor-insert editor source 0 0 0)
+           
+           file (let [source (slurp file)
+                      last-file-load (java.time.Instant/now)
+                      editor (if-let [lang-kw (suffix->language-kw (file-ext file))]
+                               (set-language editor lang-kw)
+                               editor)]
+                  (-> editor
+                      (text-mode/editor-insert source 0 0 0)
+                      (assoc :last-file-load last-file-load)))
+           
+           :else editor)
+         
+         ;; set separately from contents:
+         ;; - may override file from eval-ns
+         ;; - may be explicitly provided with :source
+         editor (if file
+                  (assoc editor :file file)
+                  editor)]
+     editor))
+  ([]
+   (-> (org-mode/make-editor)
+       (assoc :viewport {:num-lines 52
+                         :start-line 0}
+              :key-bindings key-bindings
+              :theme util.ui/default-theme
+              :base-style
+              #:text-style
+              {:font-families ["Menlo"]
+              :font-size 12
+              :height 1.2
+              :height-override true}))))
+
+(defn make-editor-from-file [f]
+  (let [source (slurp f)]
+    (-> (make-editor)
+        (assoc :file f))))
+
+
+
+(defui editor-view [{:keys [editor]}]
+  
+  (let [lang (:language editor)
+        rope (:rope editor)
+        para (util.ui/editor->paragraph editor)
+        
+        status-bar (when-let [status (:status editor)]
+                     (when-let [height (-> editor :viewport :height)]
+                       (let [view (or (:temp status)
+                                      (:status status))
+                             status-bar (if (string? view)
+                                          (para/paragraph view nil {:paragraph-style/text-style (:base-style editor)})
+                                          view)]
+                         (ui/translate 0
+                                       (- height 8 (ui/height status-bar))
+                                       status-bar))))]
+    [(util.ui/cursor-view rope para (:cursor editor))
+     para
+     status-bar]))
+
+
+(defui org-editor [{:keys [editor
+                           focused?]
+                    :as this}]
+  (let [body (editor-view {:editor editor})
+        
+        file-picker-state (::util.ui/file-picker-state editor)
+        search-state (::text-mode/search editor)
+        
+        body 
+        (cond
+          (not focused?)
+          (let [[w h] (ui/bounds body)
+                gray 0.98]
+            [(ui/filled-rectangle [gray gray gray]
+                                  (max 800 w) (max 100 h))
+             body])
+          
+          file-picker-state
+          (ui/vertical-layout
+           body
+           (util.ui/file-picker {:editor editor
+                                 :update-editor-intent ::update-editor}))
+          
+          search-state
+          (ui/vertical-layout
+           body
+           (util.ui/search-bar {:editor editor
+                                :update-editor-intent ::update-editor}))
+          
+          :else
+          (key-binding/wrap-editor-key-bindings 
+           {:key-bindings (:key-bindings editor)
+            :editor editor
+            :update-editor-intent ::update-editor
+            :body body
+            :$body nil}))
+        
+        body (ui/wrap-on
+              :mouse-down
+              (fn [handler mpos]
+                (let [intents (handler mpos)]
+                  (cons [:com.phronemophobic.clobber.modes.clojure.ui/request-focus]
+                        intents)))
+              body)
+        
+        body (if focused?
+               (ui/on-clipboard-copy
+                (fn []
+                  [[::editor-copy {:editor editor
+                                   :$editor $editor}]])
+                (ui/on-clipboard-paste
+                 (fn [s]
+                   [[::editor-paste {:editor editor
+                                     :$editor $editor
+                                     :s s}]])
+                 
+                 body))
+               ;; else
+               body)
+        body (ui/vertical-layout
+              body
+              (util.ui/status-bar {:editor editor
+                                   :width (:width editor)}))]
+    body))
+
+
+
+
