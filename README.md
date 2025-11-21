@@ -22,18 +22,18 @@ The connection between a lisp developer's program and dev tools is critical. How
 ## "Roadmap"
 
 - [X] clojure-mode
-- [ ] Make instarepl evaluate namespace incrementally
+- [X] Make instarepl evaluate namespace incrementally
 - [ ] formatted-text mode
-- [ ] Status bar with line/column, file, ns info
+- [X] Status bar with line/column, file, ns info
 - [ ] Improve file open UI
-- [ ] Implement search backward and improve search UI
-- [-] text mode
+- [X] Implement search backward and improve search UI
+- [X] text mode
 - [-] markdown mode
 - [ ] org mode
 - [ ] Files with long lines
 - [-] Add generative tests
 - [ ] rename editor functions using consistent naming scheme
-- [ ] refactor and simplify ui code
+- [X] refactor and simplify ui code
 - [X] long files
 
 ## License
