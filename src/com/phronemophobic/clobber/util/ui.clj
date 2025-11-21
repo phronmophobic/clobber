@@ -543,13 +543,13 @@
 (defeffect ::file-picker [{:keys [editor $editor]}]
   (dispatch! :update $editor
              (fn [editor]
-               (if-let [file (:file editor)]
+               (let [parent-file (if-let [file (:file editor)]
+                                   (.getParentFile ^File file)
+                                   (clojure.java.io/file "."))]
                  (assoc editor ::file-picker-state
-                        {:current-folder (.getParentFile ^File (:file editor))
+                        {:current-folder parent-file
                          :search-editor (-> (text-mode/make-editor)
-                                            (assoc :base-style (:base-style editor)))})
-                 ;; else
-                 editor))))
+                                            (assoc :base-style (:base-style editor)))})))))
 
 (defui status-bar [{:keys [editor width]}]
   (let [^File file (:file editor)
