@@ -179,10 +179,7 @@
            source (text-mode/editor-insert editor source 0 0 0)
            
            file (let [source (slurp file)
-                      last-file-load (java.time.Instant/now)
-                      editor (if-let [lang-kw (suffix->language-kw (file-ext file))]
-                               (set-language editor lang-kw)
-                               editor)]
+                      last-file-load (java.time.Instant/now)]
                   (-> editor
                       (text-mode/editor-insert source 0 0 0)
                       (assoc :last-file-load last-file-load)))
