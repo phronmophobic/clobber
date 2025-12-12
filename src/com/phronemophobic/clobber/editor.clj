@@ -38,7 +38,6 @@
           :org
 
           :else :text)]
-    (dev/dtap mode)
     (case mode
       :clojure
       {:editor (cui/make-editor opts)
