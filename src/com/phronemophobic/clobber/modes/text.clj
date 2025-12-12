@@ -1009,7 +1009,7 @@
                   log (conj log past)]
               (assoc history :log log)))))
 
-(defn editor-undo [editor]
+(defn editor-undo*old [editor]
   ;; not sure if history should
   ;; jump back to old editor with new history
   ;; or update current editor with a subselect
@@ -1029,6 +1029,48 @@
                              :index index)]
       (assoc old-editor
              :history new-history))
+    ;; else
+    editor))
+
+(defn editor-undo [editor]
+  ;; not sure if history should
+  ;; jump back to old editor with new history
+  ;; or update current editor with a subselect
+  ;; of keys from the old editor like
+  ;; :tree, :rope, :viewport, :cursor, etc.
+  ;; Update on above:
+  ;; Most keys in the editor map should not be updated on
+  ;;  undo. The viewport might have changed size since the last edit.
+  ;; For now, try to only update content when undoing.
+  (if (seq (-> editor :history :log))
+    (let [history (:history editor)
+          log (:log history)
+          index (max
+                 0
+                 (dec
+                  (or (:index history)
+                      (count log))))
+
+          old-editor (nth log index)
+          new-history (assoc history
+                             :index index)
+          new-editor (assoc editor
+                            :history new-history
+                            :rope (:rope old-editor)
+                            :cursor (:cursor old-editor))
+
+          new-editor (if (= (-> old-editor :viewport :num-lines)
+                            (-> new-editor :viewport :num-lines))
+                       (assoc-in new-editor [:viewport :start-line]
+                                 (-> old-editor :viewport :start-line))
+                       (editor-update-viewport new-editor))
+
+          new-editor (if (:tree new-editor)
+                       (assoc new-editor :tree (:tree old-editor))
+                       new-editor)]
+      new-editor
+      #_(assoc old-editor
+               :history new-history))
     ;; else
     editor))
 
