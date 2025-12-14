@@ -489,10 +489,10 @@
      (fn [m]
        (when-let [^File f (first fs)]
          (if (.isFile f)
-           [[::select-file {:file f}]
-            [update-editor-intent {:editor editor
-                               :$editor $editor
-                               :op #(dissoc % ::file-picker-state)}]]
+           [[update-editor-intent {:editor editor
+                                   :$editor $editor
+                                   :op #(dissoc % ::file-picker-state)}]
+            [::select-file {:file f}]]
            [[:set $current-folder f]
             [:update $search-editor (fn [editor]
                                       (-> editor
