@@ -16,7 +16,8 @@
                            TreeSitterClojure
                            TreeSitterJson
                            TSInputEdit
-                           TSInputEncoding)
+                           TSInputEncoding
+                           TSRange)
            com.ibm.icu.text.BreakIterator
            java.nio.ByteBuffer
            io.lacuna.bifurcan.Rope))
@@ -56,6 +57,12 @@
   (datafy [^TSPoint point]
     {:row (.getRow point)
      :column (.getColumn point)})
+  TSRange
+  (datafy [^TSRange range]
+    {:start-point (d/datafy (.getStartPoint range))
+     :end-point (d/datafy (.getEndPoint range))
+     :start-byte (.getStartByte range)
+     :end-byte (.getEndByte range)})
   TSQueryMatch
   (datafy [^TSQueryMatch match]
     {:id (.getId match)
