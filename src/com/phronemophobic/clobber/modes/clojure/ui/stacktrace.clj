@@ -48,25 +48,25 @@
         editor-height (- ch list-height)
 
         trace
-        (into []
-              (map (fn [element]
-                     (let [{:keys [var meta]} (element->info element)
-                           line (.getLineNumber element)]
-                       (if (and var line)
-                         (let [fn-name (-> var .sym name)
-                               ns (-> var .ns ns-name name)]
-                           (ui/on
-                            :mouse-move (fn [_]
-                                          [[:set $paragraph
-                                            (->paragraph-memo {:ns (.ns var)
-                                                               :line (dec line)
-                                                               :height editor-height})]])
-                            
-                            (para/paragraph 
-                             [fn-name " " ns])))
-                         ;; else
-                         (para/paragraph (.getClassName element))))))
-              (.getStackTrace exception))
+        (when exception
+          (into []
+                (map (fn [element]
+                       (let [{:keys [var meta]} (element->info element)
+                             line (.getLineNumber element)]
+                         (if (and var line)
+                           (let [fn-name (-> var .sym name)
+                                 ns (-> var .ns ns-name name)]
+                             (ui/on
+                              :mouse-move (fn [_]
+                                            [[:set $paragraph
+                                              (->paragraph-memo {:ns (.ns var)
+                                                                 :line (dec line)
+                                                                 :height editor-height})]])
+                              (para/paragraph 
+                               [fn-name " " ns])))
+                           ;; else
+                           (para/paragraph (.getClassName element))))))
+                (.getStackTrace exception)))
         
 ]
     [(dnd/on-drop
