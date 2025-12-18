@@ -1714,6 +1714,8 @@
    "M-b" #'editor-backward-word
    "M-f" #'editor-forward-word
    "M-l" #'text-mode/editor-downcase-word
+   "M-u" #'text-mode/editor-upcase-word
+   "M-c" #'text-mode/editor-capitalize-word
    "M-v" #'text-mode/editor-scroll-up
    
    "M-<" #'text-mode/editor-beginning-of-buffer

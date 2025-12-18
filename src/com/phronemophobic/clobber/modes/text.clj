@@ -1001,6 +1001,40 @@
                    (editor-self-insert-command (str/lower-case word)))]
     editor))
 
+(defn editor-upcase-word [editor]
+  (let [start-editor editor
+        start-cursor (:cursor editor)
+        editor (editor-forward-word editor)
+        end-cursor (:cursor editor)
+        
+        start-byte (:byte start-cursor)
+        end-byte (:byte end-cursor)
+        _ (assert (>= end-byte start-byte))
+        word (-> (.sliceBytes ^Rope (:rope start-editor) start-byte end-byte)
+                 .toString)
+        
+        editor (-> start-editor
+                   (editor-snip start-byte end-byte)
+                   (editor-self-insert-command (str/upper-case word)))]
+    editor))
+
+(defn editor-capitalize-word [editor]
+  (let [start-editor editor
+        start-cursor (:cursor editor)
+        editor (editor-forward-word editor)
+        end-cursor (:cursor editor)
+        
+        start-byte (:byte start-cursor)
+        end-byte (:byte end-cursor)
+        _ (assert (>= end-byte start-byte))
+        word (-> (.sliceBytes ^Rope (:rope start-editor) start-byte end-byte)
+                 .toString)
+        
+        editor (-> start-editor
+                   (editor-snip start-byte end-byte)
+                   (editor-self-insert-command (str/capitalize word)))]
+    editor))
+
 (defn editor-append-history [editor past]
   (update editor :history
           (fn [history]
@@ -1750,6 +1784,8 @@
    "M-<" editor-beginning-of-buffer
    "M->" editor-end-of-buffer
    "M-l" editor-downcase-word
+   "M-u" editor-upcase-word   
+   "M-c" editor-capitalize-word
    "M-{" editor-backward-paragraph
    "M-}" editor-forward-paragraph
    "M-b" editor-backward-word
