@@ -131,8 +131,24 @@
         (assoc-in [:viewport :text-height] (* row-height num-lines))
         (assoc-in [:viewport :height] height))))
 
+(defn ^:private wrap-memo1 [f]
+  (let [last-call (volatile! nil)]
+    (fn [o]
+      (if-let [[last-arg last-ret] @last-call]
+        (if (identical? last-arg o)
+          last-ret
+          (let [ret (f o)]
+            (vreset! last-call [o ret])
+            ret))
+        (let [ret (f o)]
+          (vreset! last-call [o ret])
+          ret)))))
+
 (defeffect ::update-editor [{:keys [$editor op] :as m}]
-  (dispatch! :update $editor editor-upkeep op)
+  ;; some editing commands (like indent) can be slow
+  ;; memoizing the most recent value helps in the case
+  ;; where there is contention in the root atom.
+  (dispatch! :update $editor editor-upkeep (wrap-memo1 op))
   ;; check and do background updates
   (let [editor (dispatch! :get $editor)]
     (when-let [ch (:background-chan editor)]
