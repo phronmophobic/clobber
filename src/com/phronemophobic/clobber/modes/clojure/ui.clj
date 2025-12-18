@@ -1224,13 +1224,24 @@
       (update-in [:base-style :text-style/font-size] inc)
       (editor-set-height (:height editor))))
 
+(defeffect ::toggle-instarepl [{:keys [$editor]}]
+  (dispatch! ::update-editor
+             {:$editor $editor
+              :op editor-toggle-instarepl})
+  (let [editor (dispatch! :get $editor)
+        msg (if (:instarepl? editor)
+              "Instarepl on."
+              "Instarepl off.")]
+    (dispatch! ::temp-status {:$editor $editor
+                              :msg msg})))
+
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
          "C-x C-f" ::util.ui/file-picker
          "C-c C-d" ::show-doc
          "C-c i" ::open-instarepl
-         "C-u C-c i" editor-toggle-instarepl
+         "C-u C-c i" ::toggle-instarepl
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor
          "C-c C-k" ::load-buffer

@@ -561,6 +561,8 @@
             ","
             (-> cursor :column-byte str)
             ") "
+            (when (:instarepl? editor)
+              "⚡")
             (str (:eval-ns editor))]
         
         body (para/paragraph ps
