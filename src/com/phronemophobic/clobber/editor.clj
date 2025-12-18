@@ -22,6 +22,8 @@
   [{:keys [file source] :as opts}]
   (let [mode
         (cond
+          (:mode opts) (:mode opts)
+
           (or (when file
                 (#{".edn" ".clj" ".cljc"} (file-ext file)))
               (:ns opts))
