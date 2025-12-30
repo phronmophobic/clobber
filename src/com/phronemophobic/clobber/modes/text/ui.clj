@@ -265,10 +265,10 @@
                          (ui/translate 0
                                        (- height 8 (ui/height status-bar))
                                        status-bar))))]
-    [(util.ui/cursor-view rope para (:cursor editor))
+    [(when focused?
+       (util.ui/cursor-view rope para (:cursor editor)))
      para
      status-bar]))
-
 
 (defui text-editor [{:keys [editor
                             focused?]
