@@ -186,8 +186,18 @@
          "C-x C-s" ::save-editor
          "C-x C-f" ::file-picker
          ;; "C-c C-d" ::show-doc
+         "C-c b" ::update-bindings
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor))
+
+(defeffect ::update-bindings [{:keys [$editor]}]
+  (dispatch! :update
+             $editor
+             (fn [editor]
+               (update editor :key-bindings
+                       (fn [bindings]
+                         (merge bindings
+                                key-bindings))))))
 
 (defn make-editor
   ([{:keys [file source] :as m}]
