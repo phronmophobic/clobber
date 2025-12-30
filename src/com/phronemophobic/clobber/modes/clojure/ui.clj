@@ -109,12 +109,14 @@
                      (update new-editor :history dissoc :index)
                      new-editor)
 
-        new-editor (util.ui/upkeep-search-ui editor new-editor)]
+        new-editor (util.ui/upkeep-search-ui editor new-editor)
+        new-editor (util.ui/ui-upkeep editor new-editor)]
     new-editor))
 
 (defn editor-cancel [editor]
   (-> editor
       (dissoc :select-cursor)
+      (dissoc ::util.ui)
       (dissoc ::completion)))
 
 (defn editor-set-height [editor height]
@@ -1235,10 +1237,14 @@
     (dispatch! ::temp-status {:$editor $editor
                               :msg msg})))
 
+(defeffect ::file-picker [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/file-picker (assoc m
+                                          :update-editor-intent ::update-editor)))
+
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
-         "C-x C-f" ::util.ui/file-picker
+         "C-x C-f" ::file-picker
          "C-c C-d" ::show-doc
          "C-c i" ::open-instarepl
          "C-u C-c i" ::toggle-instarepl
@@ -1361,8 +1367,7 @@
   (let [body (editor-view {:editor editor
                            :focused? focused?})
 
-        file-picker-state (::util.ui/file-picker-state editor)
-        search-state (::text-mode/search editor)
+        ui (::util.ui/ui editor)
 
         body
         (cond
@@ -1373,18 +1378,16 @@
                                   (max 800 w) (max 100 h))
              body])
           
-          file-picker-state
-          (ui/vertical-layout
-           body
-           (util.ui/file-picker {:editor editor
-                                 :update-editor-intent ::update-editor}))
-
-          
-          search-state
-          (ui/vertical-layout
-           body
-           (util.ui/search-bar {:editor editor
-                                :update-editor-intent ::update-editor}))
+          ui
+          (assoc ui
+                 :body body
+                 :editor editor
+                 :$editor $editor
+                 :extra (:extra ui)
+                 :$extra [$editor (com.rpl.specter/must ::util.ui/ui) '(keypath :extra)] 
+                 :update-editor-intent ::update-editor
+                 :context context
+                 :$context $context)
 
           :else
           (key-binding/wrap-editor-key-bindings 

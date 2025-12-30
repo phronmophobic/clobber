@@ -91,7 +91,8 @@
                      (update new-editor :history dissoc :index)
                      new-editor)
         
-        new-editor (util.ui/upkeep-search-ui editor new-editor)]
+        new-editor (util.ui/upkeep-search-ui editor new-editor)
+        new-editor (util.ui/ui-upkeep editor new-editor)]
     new-editor))
 
 
@@ -173,13 +174,17 @@
           #(text-mode/editor-set-string % source))))))
   nil)
 
+(defeffect ::file-picker [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/file-picker (assoc m
+                                          :update-editor-intent ::update-editor)))
+
 (defn editor-cancel [editor]
-  (dissoc editor :select-cursor))
+  (dissoc editor :select-cursor ::util.ui))
 
 (def key-bindings
   (assoc text-mode/key-bindings
          "C-x C-s" ::save-editor
-         "C-x C-f" ::util.ui/file-picker
+         "C-x C-f" ::file-picker
          ;; "C-c C-d" ::show-doc
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor))
@@ -255,10 +260,9 @@
 (defui text-editor [{:keys [editor
                             focused?]
                      :as this}]
-  (let [body (editor-view {:editor editor})
-        
-        file-picker-state (::util.ui/file-picker-state editor)
-        search-state (::text-mode/search editor)
+  (let [body (editor-view {:editor editor
+                           :focused? focused?})
+        ui (::util.ui/ui editor)
 
         body 
         (cond
@@ -269,18 +273,17 @@
                                   (max 800 w) (max 100 h))
              body])
           
-          file-picker-state
-          (ui/vertical-layout
-           body
-           (util.ui/file-picker {:editor editor
-                                 :update-editor-intent ::update-editor}))
+          ui
+          (assoc ui
+                 :body body
+                 :editor editor
+                 :$editor $editor
+                 :extra (:extra ui)
+                 :$extra [$editor (com.rpl.specter/must ::util.ui/ui) '(keypath :extra)] 
+                 :update-editor-intent ::update-editor
+                 :context context
+                 :$context $context)
           
-          search-state
-          (ui/vertical-layout
-           body
-           (util.ui/search-bar {:editor editor
-                                :update-editor-intent ::update-editor}))
-
           :else
           (key-binding/wrap-editor-key-bindings 
            {:key-bindings (:key-bindings editor)

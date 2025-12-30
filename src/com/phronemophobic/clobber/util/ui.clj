@@ -96,6 +96,33 @@
     :font-style #:font-style{:weight :bold}}})
 
 
+(defn editor-set-height [editor height]
+  (let [base-style (:base-style editor)
+        row-height (* (:text-style/height base-style)
+                      (:text-style/font-size base-style))
+        adjusted-height (if-let [adjust-height (-> editor ::ui :adjust-height)]
+                          (adjust-height height)
+                          height)
+        num-lines (max 0
+                       (- (quot adjusted-height row-height)
+                          ;; reserve two lines for status bar
+                          ;; and one line for cursor info
+                          2))]
+    (-> editor
+        (assoc-in [:viewport :num-lines] (long num-lines))
+        (assoc-in [:viewport :text-height] (* row-height num-lines))
+        (assoc-in [:viewport :height] height)
+        (assoc-in [:viewport :adjusted-height] adjusted-height))))
+
+(defn ui-upkeep [old-editor new-editor]
+  (let [old-ui (::ui old-editor)
+        new-ui (::ui new-editor)]
+    (if (and (or (nil? new-ui) (nil? old-ui))
+             (or new-ui old-ui))
+      (if-let [height (-> new-editor :viewport :height)]
+        (editor-set-height new-editor height)
+        new-editor)
+      new-editor)))
 
 (defn cursor-view [^Rope rope para cursor]
   (let [cursor-char (- (:char cursor)
@@ -375,7 +402,7 @@
                         (text-mode/editor-isearch-backward editor (.toString ^Rope (:rope search-editor)))
                         (text-mode/editor-isearch-forward editor (.toString ^Rope (:rope search-editor)))))})))
 
-(defui search-bar [{:keys [editor update-editor-intent] :as m}]
+(defui search-bar [{:keys [editor update-editor-intent body] :as m}]
   (let [search-state (::text-mode/search editor)
         search-editor (get search-state ::search-editor)
         direction (if (= :backward (:direction search-state))
@@ -416,27 +443,40 @@
                                        :$main-editor $editor
                                        :main-editor editor
                                        :update-editor-intent update-editor-intent)]])
-     (key-binding/wrap-editor-key-bindings
-      {:body search-editor-body
-       :$body nil
-       :editor search-editor
-       :update-editor-intent ::update-search-editor
-       :key-bindings {"C-g" ::cancel-search
-                      "RET" ::finish-search
-                      "C-s" ::repeat-search-forward
-                      "C-r" ::repeat-search-backward
-                      "DEL" #'text-mode/editor-delete-backward-char}}))))
+     (ui/vertical-layout
+      body
+      (key-binding/wrap-editor-key-bindings
+       {:body search-editor-body
+        :$body nil
+        :editor search-editor
+        :update-editor-intent ::update-search-editor
+        :key-bindings {"C-g" ::cancel-search
+                       "RET" ::finish-search
+                       "C-s" ::repeat-search-forward
+                       "C-r" ::repeat-search-backward
+                       "DEL" #'text-mode/editor-delete-backward-char}})))))
 
 
 (defn upkeep-search-ui [editor new-editor]
-  (if (and (::text-mode/search new-editor)
-           (not (::text-mode/search editor)))
-    (update new-editor ::text-mode/search
-            (fn [m]
-              (assoc m ::search-editor (text-mode/make-editor))))
-    new-editor))
+  (cond
+    (and (::text-mode/search new-editor)
+         (not (::text-mode/search editor)))
+    (-> new-editor
+        (update ::text-mode/search
+                (fn [m]
+                  (assoc m ::search-editor (text-mode/make-editor))))
+        (assoc ::ui (search-bar {:adjust-height
+                                 (fn [height]
+                                   (max 0 (- height 100)))
+                                 :extra {}})))
+    
+    (and (not (::text-mode/search new-editor))
+         (::text-mode/search editor))
+    (dissoc new-editor ::ui)
 
-(defui file-picker [{:keys [editor update-editor-intent] :as m}]
+    :else new-editor))
+
+(defui file-picker [{:keys [editor update-editor-intent body] :as m}]
   (let [file-picker-state (::file-picker-state editor)
         ^File current-folder (get file-picker-state :current-folder)
         
@@ -478,20 +518,19 @@
          ps
          nil
          {:paragraph-style/text-style base-style})]
-
     (ui/on
      ::cancel-search
      (fn [m]
        [[update-editor-intent {:editor editor
                                :$editor $editor
-                               :op #(dissoc % ::file-picker-state)}]])
+                               :op #(dissoc % ::file-picker-state ::ui)}]])
      ::select-file
      (fn [m]
        (when-let [^File f (first fs)]
          (if (.isFile f)
            [[update-editor-intent {:editor editor
                                    :$editor $editor
-                                   :op #(dissoc % ::file-picker-state)}]
+                                   :op #(dissoc % ::file-picker-state ::ui)}]
             [::select-file {:file f}]]
            [[:set $current-folder f]
             [:update $search-editor (fn [editor]
@@ -523,15 +562,17 @@
                   op] :as m}]
        
        [[:update $search-editor op]])
-     (key-binding/wrap-editor-key-bindings
-      {:body search-editor-body
-       :$body nil
-       :editor search-editor
-       :update-editor-intent ::update-search-editor
-       :key-bindings {"C-g" ::cancel-search
-                      "RET" ::select-file
-                      "C-s" ::next-offset
-                      "DEL" ::backspace }}))))
+     (ui/vertical-layout
+      body
+      (key-binding/wrap-editor-key-bindings
+       {:body search-editor-body
+        :$body nil
+        :editor search-editor
+        :update-editor-intent ::update-search-editor
+        :key-bindings {"C-g" ::cancel-search
+                       "RET" ::select-file
+                       "C-s" ::next-offset
+                       "DEL" ::backspace }})))))
 
 
 (defeffect ::select-file [{:keys [file]}]
@@ -540,16 +581,30 @@
               (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
                 #(f % {:file file}))}))
 
-(defeffect ::file-picker [{:keys [editor $editor]}]
-  (dispatch! :update $editor
-             (fn [editor]
-               (let [parent-file (if-let [file (:file editor)]
-                                   (.getParentFile ^File file)
-                                   (clojure.java.io/file "."))]
-                 (assoc editor ::file-picker-state
-                        {:current-folder parent-file
-                         :search-editor (-> (text-mode/make-editor)
-                                            (assoc :base-style (:base-style editor)))})))))
+(defeffect ::file-picker [{:keys [editor $editor update-editor-intent]}]
+  (dispatch! (if update-editor-intent
+               update-editor-intent
+               (if (instance? org.treesitter.TreeSitterClojure (:language editor))
+                 :com.phronemophobic.clobber.modes.clojure.ui/update-editor
+                 :com.phronemophobic.clobber.modes.text.ui/update-editor))
+             {:editor editor
+              :$editor $editor
+              :op (fn [editor]
+                    (let [parent-file (if-let [file (:file editor)]
+                                        (.getParentFile ^File file)
+                                        (clojure.java.io/file "."))
+                          editor (assoc editor
+                                        ::file-picker-state
+                                        {:current-folder parent-file
+                                         :search-editor (-> (text-mode/make-editor)
+                                                            (assoc :base-style (:base-style editor)))}
+                                        ::ui (file-picker {:adjust-height (fn [height]
+                                                                            (max 0
+                                                                                 (- height 100)))
+                                                           :$editor $editor
+                                                           :extra {}
+                                                           :$extra [$editor (com.rpl.specter/must ::ui) '(keypath :extra)]}))]
+                      editor))}))
 
 (defui status-bar [{:keys [editor width]}]
   (let [^File file (:file editor)
