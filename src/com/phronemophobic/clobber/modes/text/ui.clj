@@ -246,11 +246,14 @@
 
 
 
-(defui editor-view [{:keys [editor]}]
-  
+(defui editor-view [{:keys [editor focused?]}]
   (let [lang (:language editor)
         rope (:rope editor)
         para (util.ui/editor->paragraph editor)
+        para (assoc para :width (:width editor))
+        para (assoc-in para
+                       [:paragraph-style
+                        :paragraph-style/max-lines] (-> editor :viewport :num-lines))
         
         status-bar (when-let [status (:status editor)]
                      (when-let [height (-> editor :viewport :height)]
