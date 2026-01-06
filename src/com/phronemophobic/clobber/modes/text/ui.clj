@@ -183,7 +183,10 @@
              (assoc m
                     :update-editor-intent ::update-editor)))
 
-
+(defeffect ::show-goto-line [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/show-goto-line
+             (assoc m
+                    :update-editor-intent ::update-editor)))
 
 (defn editor-cancel [editor]
   (dissoc editor :select-cursor ::util.ui/ui))
@@ -193,6 +196,7 @@
          "C-x C-s" ::save-editor
          "C-x C-f" ::file-picker
          "M-%" ::show-find-replace
+         "M-g M-g" ::show-goto-line
          "C-c b" ::update-bindings
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor))

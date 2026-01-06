@@ -798,3 +798,74 @@
     :focus-id nil})
   
   ,)
+
+
+
+(defeffect ::goto-line [{:keys [$editor update-editor-intent line-str]}]
+  (let [line (parse-long line-str)]
+    (dispatch! update-editor-intent
+               {:$editor $editor
+                :op (fn [editor]
+                      (let [editor (dissoc editor ::ui)]
+                        (if line
+                          (text-mode/editor-goto-row-col editor line 0)
+                          ;; parse failed
+                          editor)))})))
+
+(defui goto-line-view [{:keys [body editor update-editor-intent]}]
+  (let [line-number-editor (:line-number-editor extra)
+        
+        line-str (str (:rope line-number-editor))
+        input-view (ui/no-events
+                    (ant/text-input*
+                     {:flex-layout.stretch/width 75
+                      :focused? true
+                      :cursor (-> line-number-editor
+                                  :cursor
+                                  :char)
+                      :text line-str}))
+        input-view [(ui/filled-rectangle [1 1 1]
+                                         (ui/width input-view)
+                                         (ui/height input-view))
+                    input-view]
+        input-view (ui/center input-view (ui/bounds body))
+
+        input-view 
+        (ui/on
+         ::update-replace-editor
+         (fn [m]
+           [[:update $line-number-editor (:op m)]])
+         ::cancel-goto-line
+         (fn [m]
+           [[update-editor-intent {:editor editor
+                                   :$editor $editor
+                                   :op #(dissoc % ::ui)}]])
+         ::goto-line
+         (fn [m]
+           [[::goto-line {:$editor $editor
+                          :update-editor-intent update-editor-intent
+                          :line-str line-str}]])
+         (key-binding/wrap-editor-key-bindings
+                    {:body input-view
+                     :$body nil
+                     :editor line-number-editor
+                     :update-editor-intent ::update-replace-editor
+                     :key-bindings {"C-g" ::cancel-goto-line
+                                    "RET" ::goto-line
+                                    "DEL" #'text-mode/editor-delete-backward-char}}))]
+    [body
+     input-view]))
+
+(defeffect ::show-goto-line [{:keys [$editor update-editor-intent] :as m}]
+  (dispatch! update-editor-intent
+             {:$editor $editor
+              :op (fn [editor]
+                    (let []
+                      (assoc editor ::ui
+                             (goto-line-view {:extra {:line-number-editor (text-mode/make-editor)}}))))}))
+
+(comment
+  
+  (dev/add-component-as-applet #'goto-line-view {:extra {:line-number-editor (text-mode/make-editor)}
+                                                 :body (ui/spacer 400 400)})
+  ,)
