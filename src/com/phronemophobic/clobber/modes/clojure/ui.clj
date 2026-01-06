@@ -1014,15 +1014,21 @@
             [x y] pos
             char-index (+ (:char-offset para)
                           (para/glyph-index para x y))
-            sym (gensym "x-")
+
+            value-source (let [x @val]
+                           (if (keyword? x)
+                             (pr-str x)
+                             (let [sym (gensym "x-")]
+                               (intern eval-ns sym x)
+                               (name sym))))
+
             event-editor editor]
-        (intern eval-ns sym @val)
         (dispatch! ::update-editor
                    {:$editor $editor
                     :op (fn [editor]
                           (-> editor 
                               (text-mode/editor-goto-char char-index)
-                              (text-mode/editor-self-insert-command (name sym))))})))))
+                              (text-mode/editor-self-insert-command value-source)))})))))
 
 (defui editor-view [{:keys [editor
                             focused?]}]
