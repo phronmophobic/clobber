@@ -1458,13 +1458,13 @@
                              :initial-rope (:rope editor)
                              :direction :forward})))
   ([editor query]
-   (let [search-state (or (::search editor)
+   (let [last-search-state (::search editor)
+         search-state (or last-search-state
                           {:initial-cursor (:cursor editor)
                            :initial-rope (:rope editor)
                            :direction :forward})
          
-         search-cursor (or (:cursor search-state)
-                           (:initial-cursor search-state))
+         search-cursor (:cursor editor)
          search-index (:char search-cursor)
          regexp (Pattern/compile query
                                  (bit-or
@@ -1478,6 +1478,17 @@
                  (.toMatchResult matcher)
                  (when (.find matcher 0)
                    (.toMatchResult matcher)))
+         
+         ;; If we're repeating the same search
+         ;; move to next match
+         match (if (and match
+                        (= :forward (:direction last-search-state))
+                        (= query (:query last-search-state)))
+                 (if (.find matcher)
+                   (.toMatchResult matcher)
+                   (when (.find matcher 0)
+                     (.toMatchResult matcher)))
+                 match)
          
          search-state (-> search-state
                           (assoc :query query
