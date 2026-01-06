@@ -1247,6 +1247,16 @@
   (dispatch! ::util.ui/file-picker (assoc m
                                           :update-editor-intent ::update-editor)))
 
+(defeffect ::show-find-replace [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/show-find-replace
+             (assoc m
+                    :update-editor-intent ::update-editor)))
+
+(defeffect ::show-goto-line [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/show-goto-line
+             (assoc m
+                    :update-editor-intent ::update-editor)))
+
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
@@ -1259,6 +1269,8 @@
          "C-c C-k" ::load-buffer
          "M-TAB" ::show-completions
          "TAB" ::indent-or-complete
+         "M-%" ::show-find-replace
+         "M-g M-g" ::show-goto-line
          ;; "C-c C-v" ::editor-paste
          "C-M-x" ::editor-eval-top-form
          "C-x C-e" ::editor-eval-last-sexp
@@ -1387,6 +1399,7 @@
           ui
           (assoc ui
                  :body body
+                 :focused? focused?
                  :editor editor
                  :$editor $editor
                  :extra (:extra ui)
