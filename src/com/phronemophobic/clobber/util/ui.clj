@@ -479,7 +479,7 @@
                   (assoc m ::search-editor (text-mode/make-editor))))
         (assoc ::ui (search-bar {:adjust-height
                                  (fn [height]
-                                   (max 0 (- height 100)))
+                                   (max 0 (- height 20)))
                                  :extra {}})))
     
     (and (not (::text-mode/search new-editor))
@@ -612,7 +612,7 @@
                                                             (assoc :base-style (:base-style editor)))}
                                         ::ui (file-picker {:adjust-height (fn [height]
                                                                             (max 0
-                                                                                 (- height 100)))
+                                                                                 (- height 20)))
                                                            :$editor $editor
                                                            :extra {}
                                                            :$extra [$editor (com.rpl.specter/must ::ui) '(keypath :extra)]}))]
