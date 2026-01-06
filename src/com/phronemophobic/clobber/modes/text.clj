@@ -1513,6 +1513,28 @@
        ;; else, no match
        editor))))
 
+(defn editor-replace [editor replacement]
+  (if-let [search-state (::search editor)]
+    (if-let [^java.util.regex.MatchResult match (:match search-state)]
+      (let [start-index (.start match) 
+            end-index (.end match)
+            editor (editor-goto-char editor start-index)
+            
+            start-byte (-> editor :cursor :byte)
+
+            match-string (str (Rope/.subSequence (:rope editor) start-index end-index))
+            end-byte (+ start-byte (alength (.getBytes match-string "utf-8")))
+            
+            editor (-> editor
+                       (editor-snip start-byte end-byte)
+                       (editor-self-insert-command replacement)
+                       (dissoc ::search)
+                       (editor-isearch-forward (:query search-state)))]
+        
+        editor)
+      editor)
+    editor))
+
 (defn ^:private reverse-char-sequence 
   ^CharSequence
   [^CharSequence cs]
@@ -1670,13 +1692,15 @@
     (dissoc editor ::search)))
 
 (defn editor-finish-search-forward [editor]
-  (let [last-search (-> editor ::search :query)
-        editor (-> editor
-                   (editor-push-mark (-> editor ::search :initial-cursor))
-                   (dissoc ::search))
-        editor (if (seq last-search)
-                 (assoc editor :search/last-search last-search)
-                 editor)]
+  (if-let [last-search-state (::search editor)]
+    (let [last-search (:query last-search-state)
+          editor (-> editor
+                     (editor-push-mark (-> editor ::search :initial-cursor))
+                     (dissoc ::search))
+          editor (if (seq last-search)
+                   (assoc editor :search/last-search last-search)
+                   editor)]
+      editor)
     editor))
 
 (defn editor-single-space [editor]

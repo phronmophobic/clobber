@@ -117,13 +117,20 @@
 
 (defn ui-upkeep [old-editor new-editor]
   (let [old-ui (::ui old-editor)
-        new-ui (::ui new-editor)]
-    (if (and (or (nil? new-ui) (nil? old-ui))
-             (or new-ui old-ui))
-      (if-let [height (-> new-editor :viewport :height)]
-        (editor-set-height new-editor height)
-        new-editor)
-      new-editor)))
+        new-ui (::ui new-editor)
+        
+        new-editor (if (and (or (nil? new-ui) (nil? old-ui))
+                            (or new-ui old-ui))
+                     (if-let [height (-> new-editor :viewport :height)]
+                       (editor-set-height new-editor height)
+                       new-editor)
+                     new-editor)
+        new-editor (if (and old-ui (not= old-ui new-ui))
+                     (if-let [close-fn (::close-fn old-ui)]
+                       (close-fn new-editor)
+                       new-editor)
+                     new-editor)]
+    new-editor))
 
 (defn cursor-view [^Rope rope para cursor]
   (let [cursor-char (- (:char cursor)
@@ -464,7 +471,8 @@
 (defn upkeep-search-ui [editor new-editor]
   (cond
     (and (::text-mode/search new-editor)
-         (not (::text-mode/search editor)))
+         (not (::text-mode/search editor))
+         (not (::ui new-editor)))
     (-> new-editor
         (update ::text-mode/search
                 (fn [m]
@@ -635,3 +643,158 @@
                body)]
     body))
 
+(defeffect ::cancel-replace [{:keys [$editor update-editor-intent]}]
+  (dispatch! update-editor-intent {:$editor $editor
+                                   :op (fn [editor]
+                                         (dissoc editor ::ui))}))
+
+
+
+(defui find-replace-view [{:keys [focused? body update-editor-intent editor]}]
+  (let [{:keys [from-editor to-editor subfocus]} extra]
+    (ui/on
+     ::update-replace-editor
+     (fn [m]
+       [[:update (:$editor m) (:op m)]])
+     (let [base-style (:base-style from-editor)
+           from-editor-para (para/paragraph
+                             (str (:rope from-editor))
+                             nil
+                             {:paragraph-style/text-style base-style})
+           
+           focus (when focused?
+                   (or subfocus :from))
+           
+           from-editor-cursor (when (= focus :from)
+                                (cursor-view (:rope from-editor)
+                                             from-editor-para
+                                             (:cursor from-editor)))
+           
+           to-editor-para (para/paragraph
+                           (str (:rope to-editor))
+                           nil
+                           {:paragraph-style/text-style base-style})
+           to-editor-cursor (when (= focus :to)
+                              (cursor-view (:rope to-editor)
+                                           to-editor-para
+                                           (:cursor to-editor)))
+           
+           find-replace-ui (ui/table-layout
+                            [[(ant/button {:text "Find"
+                                           :size :small
+                                           :on-click
+                                           (fn []
+                                             [[::find-replace-find {}]])})
+                              (ui/on
+                               :mouse-down
+                               (fn [_]
+                                 [[:set $subfocus :from]])
+                               (ui/bordered
+                                4
+                                [(ui/spacer 100 0)
+                                 [from-editor-para
+                                  from-editor-cursor]]))]
+                             [(ant/button {:text "Replace"
+                                           :on-click
+                                           (fn []
+                                             [[::find-replace-replace {}]])
+                                           :size :small})
+                              (ui/on
+                               :mouse-down
+                               (fn [_]
+                                 [[:set $subfocus :to]])
+                               (ui/bordered
+                                4
+                                [(ui/spacer 100 0)
+                                 [to-editor-para
+                                  to-editor-cursor]]))]]
+                            4 3)
+           find-replace-ui (if focused?
+                             (ui/on
+                              ::cancel-replace
+                              (fn [_]
+                                [[::cancel-replace {:$editor $editor
+                                                    :update-editor-intent update-editor-intent}]])
+                              ::find-replace-focus-other
+                              (fn [_]
+                                [[:update $subfocus (fn [subfocus]
+                                                      (if (= subfocus :to)
+                                                        :from
+                                                        :to))]])
+
+                              (key-binding/wrap-editor-key-bindings
+                               {:body find-replace-ui
+                                :$body nil
+                                :editor (if (= focus :from)
+                                          from-editor
+                                          to-editor)
+                                :$editor (if (= focus :from)
+                                           $from-editor
+                                           $to-editor)
+                                :update-editor-intent ::update-replace-editor
+                                :key-bindings {"C-g" ::cancel-replace
+                                               "RET" ::find-replace-find
+                                               "TAB" ::find-replace-focus-other
+                                               "DEL" #'text-mode/editor-delete-backward-char}}))
+                             find-replace-ui)
+           find-replace-ui
+           (ui/on
+            ::find-replace-replace
+            (fn [_]
+              [[update-editor-intent {:$editor $editor
+                                      :op (fn [editor]
+                                            (text-mode/editor-replace editor 
+                                                                      (str (:rope to-editor))))}]])
+            ::find-replace-find
+            (fn [_]
+              [[update-editor-intent {:$editor $editor
+                                      :op (fn [editor]
+                                            (text-mode/editor-isearch-forward editor 
+                                                                              (str (:rope from-editor))))}]])
+            find-replace-ui)]
+       (ui/vertical-layout
+        body
+        find-replace-ui)))))
+
+(defeffect ::show-find-replace [{:keys [$editor update-editor-intent] :as m}]
+  (dispatch! update-editor-intent
+             {:$editor $editor
+              :op (fn [editor]
+                    (let [ui (find-replace-view 
+                              {:extra {:from-editor (text-mode/make-editor)
+                                       :to-editor (text-mode/make-editor)}
+                               ::close-fn
+                               (fn [editor]
+                                 (text-mode/editor-finish-search-forward editor))})
+                          ui (assoc ui :adjust-height
+                                    (fn [height]
+                                      (max 0 (- height (ui/height ui)))))]
+                      (assoc editor ::ui ui)))}))
+
+(defui find-replace-view+focus [{:keys [focus-id] :as m}]
+  (let [focus (:focus context)
+        [cw ch] (:membrane.stretch/container-size context)]
+    (ui/wrap-on
+     :mouse-down
+     (fn [handler mpos]
+       (let [focus-intents (if focus-id
+                             [[:com.phronemophobic.easel/request-focus focus-id]]
+                             (let [fid (Object.)]
+                               [[:set $focus-id fid]
+                                [:com.phronemophobic.easel/request-focus fid]]))]
+         (into focus-intents (handler mpos))))
+     (ui/fixed-bounds
+      [cw ch]
+      (find-replace-view {:extra extra
+                          :focused? (and focus-id (identical? focus focus-id))})))))
+
+
+(comment
+  
+  (dev/add-component-as-applet
+   #'find-replace-view+focus
+   {:extra {:from-editor (text-mode/make-editor)
+            :to-editor (text-mode/make-editor)}
+    :focus-id nil})
+  
+  ,)

@@ -178,6 +178,13 @@
   (dispatch! ::util.ui/file-picker (assoc m
                                           :update-editor-intent ::update-editor)))
 
+(defeffect ::show-find-replace [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/show-find-replace
+             (assoc m
+                    :update-editor-intent ::update-editor)))
+
+
+
 (defn editor-cancel [editor]
   (dissoc editor :select-cursor ::util.ui))
 
@@ -185,7 +192,7 @@
   (assoc text-mode/key-bindings
          "C-x C-s" ::save-editor
          "C-x C-f" ::file-picker
-         ;; "C-c C-d" ::show-doc
+         "M-%" ::show-find-replace
          "C-c b" ::update-bindings
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor))
@@ -289,6 +296,7 @@
           ui
           (assoc ui
                  :body body
+                 :focused? focused?
                  :editor editor
                  :$editor $editor
                  :extra (:extra ui)
