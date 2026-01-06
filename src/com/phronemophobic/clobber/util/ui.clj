@@ -6,6 +6,7 @@
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
+            [com.phronemophobic.membrandt :as ant]
             [com.phronemophobic.clobber.util :as util])
   (:import (org.treesitter TSQuery
                            TSTree
