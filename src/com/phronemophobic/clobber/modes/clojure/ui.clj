@@ -200,7 +200,9 @@
                (update editor :key-bindings
                        (fn [bindings]
                          (merge bindings
-                                clojure-key-bindings))))))
+                                clojure-key-bindings)))))
+  (dispatch! ::temp-status {:$editor $editor
+                            :msg "Bindings updated!"}))
 
 (defeffect ::editor-eval-and-tap-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :tap? true)))
