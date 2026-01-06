@@ -116,7 +116,7 @@
 (defn editor-cancel [editor]
   (-> editor
       (dissoc :select-cursor)
-      (dissoc ::util.ui)
+      (dissoc ::util.ui/ui)
       (dissoc ::completion)))
 
 (defn editor-set-height [editor height]

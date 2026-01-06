@@ -186,7 +186,7 @@
 
 
 (defn editor-cancel [editor]
-  (dissoc editor :select-cursor ::util.ui))
+  (dissoc editor :select-cursor ::util.ui/ui))
 
 (def key-bindings
   (assoc text-mode/key-bindings
