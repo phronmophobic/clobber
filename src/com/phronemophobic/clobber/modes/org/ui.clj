@@ -36,6 +36,10 @@
         new-editor (if rope-changed?
                      (text-mode/editor-append-history new-editor editor)
                      new-editor)
+        new-editor (if rope-changed?
+                     (-> new-editor
+                         (assoc :last-change (java.time.Instant/now)))
+                     new-editor)
 
         ;; this could be improved
         ;; probably want some specific
@@ -117,8 +121,13 @@
   (future
     (when-let [file (:file editor)]
       (let [^Rope rope (:rope editor)
-            source (.toString rope)]
+            source (.toString rope)
+            now (java.time.Instant/now)]
         (spit file source)
+        (dispatch! :update $editor 
+                   assoc
+                   :last-file-load now
+                   :last-save now)
         (dispatch! ::temp-status {:$editor $editor
                                   :msg "saved."}))))
   nil)
