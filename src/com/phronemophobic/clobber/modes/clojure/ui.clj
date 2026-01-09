@@ -249,7 +249,9 @@
                     (.setLineNumber line-number))
               
               [err val] (try
-                          [nil (clojure.lang.Compiler/load rdr source-path source-name)]
+                          [nil
+                           (binding [*repl* true]
+                             (clojure.lang.Compiler/load rdr source-path source-name))]
                           (catch Exception e
                             [e nil]))
               
@@ -330,7 +332,8 @@
                               (util/node->str rope node))))
                       (.setLineNumber line-number))
 
-                val (clojure.lang.Compiler/load rdr source-path source-name)
+                val (binding [*repl* true]
+                      (clojure.lang.Compiler/load rdr source-path source-name))
                 
                 temp-view (ui/translate 0 -4
                                         (viscous/inspector
@@ -371,7 +374,8 @@
           rdr (LineNumberingPushbackReader.
                (StringReader. (.toString rope)))]
       (try
-        (clojure.lang.Compiler/load rdr source-path source-name)
+        (binding [*repl* true]
+          (clojure.lang.Compiler/load rdr source-path source-name))
         (dispatch! ::temp-status {:$editor $editor
                                   :msg "buffer loaded."})
         (catch Exception e
@@ -1303,7 +1307,8 @@
               
               [cache line-vals]
               (when (.gotoFirstChild cursor)
-                (binding [*ns* (:eval-ns editor)]
+                (binding [*ns* (:eval-ns editor)
+                          *repl* true]
                   (loop [bindings {}
                          line-vals {}
                          forms []
