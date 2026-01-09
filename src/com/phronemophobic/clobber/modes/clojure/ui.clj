@@ -1504,6 +1504,7 @@
                                  
                                  editor (-> editor
                                             (assoc :rope Rope/EMPTY)
+                                            (dissoc :tree)
                                             (assoc :cursor {:byte 0
                                                             :char 0
                                                             :point 0
