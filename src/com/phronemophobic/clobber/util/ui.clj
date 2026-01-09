@@ -3,6 +3,7 @@
             [membrane.ui :as ui]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
+            [clojure.java.io :as io]
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
@@ -488,6 +489,8 @@
 
     :else new-editor))
 
+(def ^:private user-home*
+  (delay (System/getProperty "user.home")))
 (defui file-picker [{:keys [editor update-editor-intent body] :as m}]
   (let [file-picker-state (::file-picker-state editor)
         ^File current-folder (get file-picker-state :current-folder)
@@ -567,6 +570,41 @@
             [:set $offset 0]])
          [[:update $search-editor #'text-mode/editor-delete-backward-char]
           [:set $offset 0]]))
+     ::goto-root
+     (fn [m]
+       (if (= search-str "")
+         [[:set $current-folder (io/file "/")]
+          [:set $offset 0]]
+         (when-let [^File f (first fs)]
+           (when (File/.isDirectory f)
+             [[:set $current-folder f]
+              [:update $search-editor (fn [editor]
+                                        (-> editor
+                                            (text-mode/editor-beginning-of-buffer)
+                                            (text-mode/editor-set-string "")))]
+              [:set $offset 0]]))))
+     ::goto-home
+     (fn [m]
+       (if (and (= search-str "")
+                @user-home*)
+         [[:set $current-folder (io/file @user-home*)]
+          [:set $offset 0]]
+         ;; else
+         [[:update $search-editor (fn [editor]
+                                    (text-mode/editor-self-insert-command editor "~"))]]))
+     ::kill-word-backward
+     (fn [m]
+       (if (= search-str "")
+         (when-let [parent (-> current-folder
+                               .getCanonicalFile
+                               .getParentFile)]
+           [[:set $current-folder parent]
+            [:set $offset 0]])
+         [[:update $search-editor (fn [editor]
+                                      (-> editor
+                                          (text-mode/editor-beginning-of-buffer)
+                                          (text-mode/editor-set-string "")))]
+          [:set $offset 0]]))
      ::update-search-editor
      (fn [{:keys [;; shadowing with $editor is buggy
                   ;; use $search-editor directly
@@ -583,6 +621,9 @@
         :update-editor-intent ::update-search-editor
         :key-bindings {"C-g" ::cancel-search
                        "RET" ::select-file
+                       "M-DEL" ::kill-word-backward
+                       "~" ::goto-home
+                       "/" ::goto-root
                        "C-s" ::next-offset
                        "DEL" ::backspace }})))))
 
