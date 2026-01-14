@@ -153,7 +153,7 @@
   (dissoc editor :select-cursor))
 
 (def key-bindings
-  (assoc text-mode/key-bindings
+  (assoc org-mode/key-bindings
          "C-x C-s" ::save-editor
          "C-x C-f" ::util.ui/file-picker
          ;; "C-c C-d" ::show-doc
