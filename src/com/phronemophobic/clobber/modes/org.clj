@@ -17,10 +17,45 @@
            java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
-
-
 (defn org-return [editor]
-  editor)
+  (let [^TSTree
+        tree (:tree editor)
+        line (-> editor :cursor :row)
+        cursor-byte (-> editor :cursor :byte )
+        
+        tree-cursor
+        (doto (TSTreeCursor. (TSTree/.getRootNode tree))
+          (util/skip-to-byte-offset cursor-byte))
+
+        parent-list-node  (transduce
+                           (comp
+                            (take-while
+                             (fn [node]
+                               (<= (-> node TSNode/.getStartByte)
+                                   cursor-byte)))
+                            (filter
+                             (fn [node]
+                               (let [end-byte (-> node TSNode/.getEndByte)]
+                                 (and
+                                  (<= cursor-byte end-byte)
+                                  (= "listitem" (TSNode/.getType node)))))))
+                           (completing
+                            (fn [old-node new-node]
+                              new-node))
+                           nil
+                           (util/tree-cursor-reducible tree-cursor))]
+
+    (if parent-list-node
+      (let [offset (-> parent-list-node
+                       (TSNode/.getStartPoint)
+                       (TSPoint/.getColumn))
+            insert-string (str
+                           "\n"
+                           (str/join "" (repeat offset " "))
+                           "- ")]
+        (text-mode/editor-self-insert-command editor insert-string))
+      ;; else
+      editor)))
 
 (def key-bindings
   (assoc text-mode/key-bindings
@@ -39,5 +74,4 @@
      :parser (doto (TSParser.)
                (.setLanguage lang))
      :buf (byte-array 4096)}))
-
 
