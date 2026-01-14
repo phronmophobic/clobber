@@ -229,7 +229,7 @@
         para (util.ui/editor->paragraph editor)
         
         status-bar (when-let [status (:status editor)]
-                     (when-let [height (-> editor :viewport :height)]
+                     (when-let [height (-> editor :viewport :text-height)]
                        (let [view (or (:temp status)
                                       (:status status))
                              status-bar (if (string? view)
