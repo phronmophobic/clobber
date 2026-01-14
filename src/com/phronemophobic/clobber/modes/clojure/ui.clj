@@ -1141,7 +1141,7 @@
               :$editor $editor}))
 
 
-(defeffect ::jump-to-definition [{:keys [editor]}]
+(defeffect ::jump-to-definition [{:keys [editor $editor]}]
   (let [^TSTree tree (:tree editor)
         rope (:rope editor)
         tc (TSTreeCursor. (.getRootNode tree))
@@ -1170,43 +1170,51 @@
             sym (read-string sym-str)
             v (ns-resolve (:eval-ns editor) sym)
             mta (meta v)]
-        (when-let [file (:file mta)]
-          (when (string? file)
-            (when-let [resource (io/resource file)]
-              (case (.getProtocol resource)
-                
-                "jar"
-                (let [jar-url-str (.getPath resource)
-                      jar-url (io/as-url jar-url-str)
-                      [jar-path file-entry-path] (str/split (.getPath jar-url) #"!/" 2)]
-                  (when-let [jar (JarFile. ^String jar-path)]
-                    (when-let [entry (.getJarEntry jar file-entry-path)]
-                      (let [contents (with-open [is (.getInputStream jar entry)]
-                                       (slurp is))]
-                        (dispatch! :com.phronemophobic.easel/add-applet
-                                   {:make-applet
-                                    (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
-                                      #(f % (merge {:source contents
-                                                    :mode :clojure}
-                                                   (when-let [line (:line mta)]
-                                                     {:line (max 0 (dec line))}))))})))))
-
-                "file"
-                (let [file (io/as-file  resource)]
-                  (when (and file
-                             (.exists file))
-                    (dispatch! :com.phronemophobic.easel/add-applet
-                                                       {:make-applet
-                              (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
-                                #(f % (merge {:file file
-                                              :mode :clojure}
-                                             (when-let [line (:line mta)]
-                                               {:line (max 0 (dec line))}))))})))
-
-                ("http" "https") nil
-                
-                ;; else
-                nil))))))))
+        
+        (if (= (.ns v) (:eval-ns editor))
+          (when-let [line (:line mta)]
+            (dispatch! ::update-editor  
+                       {:op (fn [editor]
+                              (text-mode/editor-goto-line editor (dec line)))
+                        :$editor $editor}))
+          ;; else, open new editor
+          (when-let [file (:file mta)]
+            (when (string? file)
+              (when-let [resource (io/resource file)]
+                (case (.getProtocol resource)
+                  
+                  "jar"
+                  (let [jar-url-str (.getPath resource)
+                        jar-url (io/as-url jar-url-str)
+                        [jar-path file-entry-path] (str/split (.getPath jar-url) #"!/" 2)]
+                    (when-let [jar (JarFile. ^String jar-path)]
+                      (when-let [entry (.getJarEntry jar file-entry-path)]
+                        (let [contents (with-open [is (.getInputStream jar entry)]
+                                         (slurp is))]
+                          (dispatch! :com.phronemophobic.easel/add-applet
+                                     {:make-applet
+                                      (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                                        #(f % (merge {:source contents
+                                                      :mode :clojure}
+                                                     (when-let [line (:line mta)]
+                                                       {:line (max 0 (dec line))}))))})))))
+                  
+                  "file"
+                  (let [file (io/as-file  resource)]
+                    (when (and file
+                               (.exists file))
+                      (dispatch! :com.phronemophobic.easel/add-applet
+                                 {:make-applet
+                                  (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                                    #(f % (merge {:file file
+                                                  :mode :clojure}
+                                                 (when-let [line (:line mta)]
+                                                   {:line (max 0 (dec line))}))))})))
+                  
+                  ("http" "https") nil
+                  
+                  ;; else
+                  nil)))))))))
 
 (defn editor-toggle-instarepl [editor]
   (update editor :instarepl? 
