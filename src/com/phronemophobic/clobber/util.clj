@@ -264,7 +264,7 @@
   "Navigates `cursor` past all top level nodes
   that end before `byte-offset`.
 
-  Returns `true` if navigation is successful, falsy otherwise."
+  Returns `true` if navigation is successful, falsey otherwise."
   [cursor byte-offset]
   (and (.gotoFirstChild cursor)
        (loop []
