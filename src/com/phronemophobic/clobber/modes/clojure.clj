@@ -1717,6 +1717,9 @@
    "M-u" #'text-mode/editor-upcase-word
    "M-c" #'text-mode/editor-capitalize-word
    "M-v" #'text-mode/editor-scroll-up
+
+   "M-p" #'text-mode/editor-move-line-up
+   "M-n" #'text-mode/editor-move-line-down
    
    "M-<" #'text-mode/editor-beginning-of-buffer
    "M->" #'text-mode/editor-end-of-buffer

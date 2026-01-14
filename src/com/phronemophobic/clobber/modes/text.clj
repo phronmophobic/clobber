@@ -1355,6 +1355,68 @@
                          :target-column-byte target-column-byte
                          :column-byte column-byte}))))))
 
+(defn editor-move-line-up [editor]
+  (let [start-byte (-> editor :cursor :byte)
+
+        end-line-editor (editor-move-end-of-line editor)
+        end-line-cursor (:cursor end-line-editor)
+        end-line-byte (:byte end-line-cursor)
+        
+        editor (editor-move-beginning-of-line editor)
+        byte-offset (- start-byte
+                       (-> editor :cursor :byte))
+        text (str
+              (Rope/.sliceBytes (:rope editor)
+                                (-> editor :cursor :byte)
+                                end-line-byte))
+
+        editor (editor-snip editor
+                            (-> editor :cursor :byte)
+                            end-line-byte)
+        editor (editor-delete-backward-char editor)
+        editor (editor-move-beginning-of-line editor)
+        editor (-> editor
+                   (editor-insert "\n")
+                   (editor-insert text))
+        
+        ;; byte offset is ok since relative
+        ;; position is using same text
+        editor (editor-goto-byte editor
+                                 (+ (-> editor :cursor :byte)
+                                    byte-offset))]
+    editor))
+
+(defn editor-move-line-down [editor]
+  (let [start-byte (-> editor :cursor :byte)
+
+        end-line-editor (editor-move-end-of-line editor)
+        end-line-cursor (:cursor end-line-editor)
+        end-line-byte (:byte end-line-cursor)
+        
+        editor (editor-move-beginning-of-line editor)
+        byte-offset (- start-byte
+                       (-> editor :cursor :byte))
+        text (str
+              (Rope/.sliceBytes (:rope editor)
+                                (-> editor :cursor :byte)
+                                end-line-byte))
+
+        editor (editor-snip editor
+                            (-> editor :cursor :byte)
+                            end-line-byte)
+        editor (editor-delete-char editor)
+        editor (editor-next-line editor)
+        editor (-> editor
+                   (editor-insert "\n")
+                   (editor-insert text))
+        
+        ;; byte offset is ok since relative
+        ;; position is using same text
+        editor (editor-goto-byte editor
+                                 (+ (-> editor :cursor :byte)
+                                    byte-offset))]
+    editor))
+
 (defn editor-scroll-down [editor]
   (let [to-scroll (quot (-> editor :viewport :num-lines)
                         2)]
@@ -1827,6 +1889,8 @@
    "M-f" editor-forward-word
    "M-d" editor-kill-word
    "M-DEL" editor-backward-kill-word
+   "M-p" editor-move-line-up
+   "M-n" editor-move-line-down
    "DEL" editor-delete-backward-char
    "<right>" editor-forward-char
    "<up>" editor-previous-line
