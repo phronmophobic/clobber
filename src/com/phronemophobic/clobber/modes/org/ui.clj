@@ -79,8 +79,23 @@
         (assoc-in [:viewport :height] height))))
 
 
+
+(defn ^:private wrap-memo1 [f]
+  (let [last-call (volatile! nil)]
+    (fn [o]
+      (if-let [[last-arg last-ret] @last-call]
+        (if (identical? last-arg o)
+          last-ret
+          (let [ret (f o)]
+            (vreset! last-call [o ret])
+            ret))
+        (let [ret (f o)]
+          (vreset! last-call [o ret])
+          ret)))))
+
+
 (defeffect ::update-editor [{:keys [$editor op] :as m}]
-  (dispatch! :update $editor editor-upkeep op))
+  (dispatch! :update $editor editor-upkeep (wrap-memo1 op)))
 
 (defeffect ::temp-status [{:keys [$editor msg]}]
   (future
@@ -222,11 +237,15 @@
 
 
 
-(defui editor-view [{:keys [editor]}]
+(defui editor-view [{:keys [editor focused?]}]
   
   (let [lang (:language editor)
         rope (:rope editor)
         para (util.ui/editor->paragraph editor)
+        para (assoc para :width (:width editor))
+        para (assoc-in para
+                       [:paragraph-style
+                        :paragraph-style/max-lines] (-> editor :viewport :num-lines))
         
         status-bar (when-let [status (:status editor)]
                      (when-let [height (-> editor :viewport :text-height)]
@@ -238,7 +257,8 @@
                          (ui/translate 0
                                        (- height 8 (ui/height status-bar))
                                        status-bar))))]
-    [(util.ui/cursor-view rope para (:cursor editor))
+    [(when focused?
+       (util.ui/cursor-view rope para (:cursor editor)))
      para
      status-bar]))
 
@@ -246,10 +266,12 @@
 (defui org-editor [{:keys [editor
                            focused?]
                     :as this}]
-  (let [body (editor-view {:editor editor})
+  (let [body (editor-view {:editor editor
+                           :focused? focused?})
         
         file-picker-state (::util.ui/file-picker-state editor)
         search-state (::text-mode/search editor)
+        ui (::util.ui/ui editor)
         
         body 
         (cond
@@ -260,17 +282,18 @@
                                   (max 800 w) (max 100 h))
              body])
           
-          file-picker-state
-          (ui/vertical-layout
-           body
-           (util.ui/file-picker {:editor editor
-                                 :update-editor-intent ::update-editor}))
-          
-          search-state
-          (ui/vertical-layout
-           body
-           (util.ui/search-bar {:editor editor
-                                :update-editor-intent ::update-editor}))
+          ui
+          (assoc ui
+                 :body body
+                 :focused? focused?
+                 :editor editor
+                 :$editor $editor
+                 :extra (:extra ui)
+                 :$extra [$editor (com.rpl.specter/must ::util.ui/ui) '(keypath :extra)] 
+                 :update-editor-intent ::update-editor
+                 :context context
+                 :$context $context)
+
           
           :else
           (key-binding/wrap-editor-key-bindings 
