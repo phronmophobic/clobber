@@ -1251,7 +1251,7 @@
         end-coll-str (case (.getType coll-node)
                        "str_lit" "\""
                        "vec_lit" "]"
-                       "list_lit" ")"
+                       ("list_lit" "anon_fn_lit") ")"
                        ("set_lit" "map_lit") "}")]
     (-> editor
         (text-mode/editor-insert end-coll-str slurp-end-byte)
