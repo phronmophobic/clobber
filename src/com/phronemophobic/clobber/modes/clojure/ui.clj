@@ -864,7 +864,7 @@
                          width height)))))))
 
 (def builtin?
-  #{"def" "defn" "fn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "loop" "and" "or" "doto" "defrecord" "reify" "if-let" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
+  #{"def" "defn" "fn" "defui" "for" "do" "doseq" "let" "recur" "if" "when" "when-let" "loop" "and" "or" "doto" "defrecord" "reify" "if-let" "extend-protocol" "defonce" "defprotocol" "defmulti" "defmethod" "ns" "import" "require"} )
 
 (defn syntax-style [editor
                     {:keys [start-byte-offset end-byte-offset]}]
