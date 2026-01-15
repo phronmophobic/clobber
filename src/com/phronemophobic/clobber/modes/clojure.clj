@@ -1335,12 +1335,12 @@
            (let [barf-node (.getNamedChild node (dec named-count))
                  coll-end-str (case (.getType node)
                                 "vec_lit" "]"
-                                "list_lit" ")"
+                                ("anon_fn_lit" "list_lit") ")"
                                 ("set_lit" "map_lit") "}")]
              (if (= 1 named-count)
                (let [coll-end-byte (.getEndByte node)
                      coll-start-byte (+ (.getStartByte node)
-                                        (if (= "set_lit" (.getType node))
+                                        (if (#{"anon_fn_lit" "set_lit"} (.getType node))
                                           2
                                           1))
                      add-space? (= coll-start-byte (.getStartByte barf-node))
