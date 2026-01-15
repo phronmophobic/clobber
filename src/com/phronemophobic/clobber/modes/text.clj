@@ -653,8 +653,17 @@
         bi (doto (BreakIterator/getWordInstance)
              (.setText rope))
 
-        next-char (.following bi cursor-char)]
-    (if (= -1 next-char)
+        ;; make sure to get past the next word
+        next-char (loop [char cursor-char]
+                    (let [next-char (.following bi char)]
+                      (if (= -1 next-char)
+                        char
+                        (let [has-letter? (some Character/isLetter
+                                                (.subSequence rope char next-char))]
+                          (if has-letter?
+                            next-char
+                            (recur next-char))))))]
+    (if (= cursor-char next-char)
       editor
       (let [diff-string (-> (.subSequence rope cursor-char next-char)
                             .toString)
@@ -680,9 +689,18 @@
          cursor-column-byte :column-byte} cursor
         bi (doto (BreakIterator/getWordInstance)
              (.setText rope))
-
-        prev-char (.preceding bi cursor-char)]
-    (if (= -1 prev-char)
+        
+        ;; make sure to get past the next word
+        prev-char (loop [char cursor-char]
+                    (let [prev-char (.preceding bi char)]
+                      (if (= -1 prev-char)
+                        char
+                        (let [has-letter? (some Character/isLetter
+                                                (.subSequence rope prev-char char))]
+                          (if has-letter?
+                            prev-char
+                            (recur prev-char))))))]
+    (if (= prev-char cursor-char)
       editor
       (let [diff-string (-> (.subSequence rope prev-char cursor-char )
                             .toString)
