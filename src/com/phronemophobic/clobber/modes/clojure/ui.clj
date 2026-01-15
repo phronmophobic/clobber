@@ -1022,7 +1022,13 @@
                           (para/glyph-index para x y))
 
             value-source (let [x @val]
-                           (if (keyword? x)
+                           (if (or (keyword? x)
+                                   (and (string? x)
+                                        (< (String/.length x)
+                                           50))
+                                   (number? x)
+                                   (char? x)
+                                   (boolean? x))
                              (pr-str x)
                              (let [sym (gensym "x-")]
                                (intern eval-ns sym x)
