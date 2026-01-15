@@ -506,7 +506,7 @@
              nil
              (when (util/skip-to-byte-offset tc cursor-byte)
                (util/tree-cursor-reducible tc)))]
-        (if (and parent-coll (= "list_lit" (.getType parent-coll)))
+        (if (and parent-coll (#{"list_lit" "anon_fn_lit"} (.getType parent-coll)))
           ;; try to find arglist
           (let [named-child-count (.getNamedChildCount parent-coll)]
             (when (pos? named-child-count)
