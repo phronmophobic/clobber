@@ -1146,6 +1146,16 @@
                       (clojure-mode/editor-indent editor)))
               :$editor $editor}))
 
+(defn ^:private find-ns-file
+  "Returns a string with relative path to ns, if found."
+  [ns-sym]
+  (when-let [ns (find-ns ns-sym)]
+    (->> (ns-interns ns)
+         vals
+         (map meta)
+         (keep :file)
+         (filter string?)
+         first)))
 
 (defeffect ::jump-to-definition [{:keys [editor $editor]}]
   (let [^TSTree tree (:tree editor)
@@ -1175,9 +1185,11 @@
       (let [sym-str (util/node->str rope sym-node)
             sym (read-string sym-str)
             v (ns-resolve (:eval-ns editor) sym)
-            mta (meta v)]
-        
-        (if (= (.ns v) (:eval-ns editor))
+            mta (meta v)
+            mta (if mta
+                  mta
+                  {:file (find-ns-file sym)})]
+        (if (and v (= (.ns v) (:eval-ns editor)))
           (when-let [line (:line mta)]
             (dispatch! ::update-editor  
                        {:op (fn [editor]
