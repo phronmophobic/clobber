@@ -19,7 +19,7 @@
 
 
 
-(def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit"})
+(def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit" "anon_fn_lit"})
 
 
 (defn ^:private debug-node [editor node]
