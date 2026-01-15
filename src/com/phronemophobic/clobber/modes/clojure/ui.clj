@@ -888,7 +888,7 @@
                          capture (aget (.getCaptures match) (.getCaptureIndex match))
                          capture-name (.getCaptureNameForId query (.getIndex capture))
                          node (.getNode capture)]
-                     (if (= capture-name "list")
+                     (if (#{"list" "anon"} capture-name)
                        (let [;; check if the first child is def or defn
                              first-child (.getNamedChild node 0)]
                          (if (and (not (.isNull first-child))

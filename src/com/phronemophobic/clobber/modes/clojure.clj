@@ -32,7 +32,7 @@
   "
 
   (list_lit) @list
-
+  (anon_fn_lit) @anon
 ;; Literals
 
 (num_lit) @number
