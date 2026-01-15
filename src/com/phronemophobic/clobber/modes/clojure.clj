@@ -781,7 +781,7 @@
       (str/starts-with? sym-name "def"))))
 
 (defn ^:private matches-block? [^TSNode parent rope]
-  (when (= "list_lit" (.getType parent))
+  (when (#{"anon_fn_lit" "list_lit"} (.getType parent))
     (let [first-child (.getNamedChild parent 0)
           sym-name (when (and (not (.isNull first-child))
                               (= "sym_lit" (.getType first-child)))
@@ -861,7 +861,7 @@
 
 
 (defn ^:private editor-indent-coll* [editor ^TSNode parent-coll-node]
-  (let [indent (if (= "set_lit" (.getType parent-coll-node))
+  (let [indent (if (#{"set_lit" "anon_fn_lit"} (.getType parent-coll-node))
                  2
                  1)]
     (editor-indent* editor parent-coll-node indent)))
@@ -983,12 +983,20 @@
     (if (not parent-coll-node)
       (editor-indent* editor root-node 0)
       ;; do indent
-      (if (= "list_lit" (.getType parent-coll-node))
+      (if (#{"list_lit" "anon_fn_lit"} (.getType parent-coll-node))
         (if-let [block-indent (matches-block? parent-coll-node (:rope editor))]
-          (editor-indent* editor parent-coll-node block-indent)
+          (editor-indent* editor parent-coll-node
+                          (+ block-indent
+                             (if (= "anon_fn_lit" (.getType parent-coll-node))
+                               1
+                               0)))
           (if (or (matches-inner? parent-coll-node (:rope editor))
                   (matches-def? parent-coll-node (:rope editor)))
-            (editor-indent* editor parent-coll-node 2)
+            (editor-indent* editor parent-coll-node
+                            (+ 2
+                               (if (= "anon_fn_lit" (.getType parent-coll-node))
+                                 1
+                                 0)))
             ;; else
             (editor-indent-default* editor parent-coll-node)))
         ;; use normal coll indent
