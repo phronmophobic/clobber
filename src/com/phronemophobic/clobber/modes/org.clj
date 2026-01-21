@@ -57,8 +57,52 @@
       ;; else
       editor)))
 
+(defn org-indent-right [editor]
+  (let [original-cursor (:cursor editor)
+        editor (-> editor
+                   (text-mode/editor-move-beginning-of-line)
+                   (text-mode/editor-insert "  "))
+        
+        editor (update editor
+                       :cursor
+                       (fn [cursor]
+                         (reduce (fn [m k]
+                                   (assoc m k (+ 2 (get original-cursor k))))
+                                 cursor
+                                 [:byte :char :point :column-byte])))]
+    editor))
+
+
+
+(defn org-indent-left [editor]
+  (let [original-cursor (:cursor editor)
+        editor (text-mode/editor-move-beginning-of-line editor)
+        [num-deletes editor]
+        (loop [num-deletes 0
+               editor editor]
+          (let [char (Rope/.charAt (:rope editor) (-> editor :cursor :char))]
+            (if (= \space char)
+              (let [next-num-deletes (inc num-deletes)
+                    next-editor (text-mode/editor-delete-char editor)]
+                (if (>= next-num-deletes 2)
+                  [next-num-deletes next-editor]
+                  (recur (inc num-deletes) next-editor)))
+              [num-deletes editor])))
+        
+        editor (update editor
+                       :cursor
+                       (fn [cursor]
+                         (reduce (fn [m k]
+                                   (assoc m k (- (get original-cursor k)
+                                                 num-deletes)))
+                                 cursor
+                                 [:byte :char :point :column-byte])))]
+    editor))
+
 (def key-bindings
   (assoc text-mode/key-bindings
+         "M-<right>" #'org-indent-right
+         "M-<left>" #'org-indent-left
          "M-RET" #'org-return))
 
 (defn make-editor []
