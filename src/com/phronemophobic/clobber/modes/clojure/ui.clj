@@ -1330,6 +1330,11 @@
              (assoc m
                     :update-editor-intent ::update-editor)))
 
+(defeffect ::show-insert-rectangle [{:keys [$editor editor] :as m}]
+  (dispatch! ::util.ui/show-insert-rectangle
+             (assoc m
+                    :update-editor-intent ::update-editor)))
+
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
          "C-x C-s" ::save-editor
@@ -1356,7 +1361,8 @@
          "S-=" #'editor-increase-font-size
          "C-c -" #'editor-decrease-font-size
          "S--" #'editor-decrease-font-size
-         "M-." ::jump-to-definition))
+         "M-." ::jump-to-definition
+         "C-c r" ::show-insert-rectangle))
 
 
 (defn update-instarepl [{:keys [editor $editor dispatch!] :as msg}]

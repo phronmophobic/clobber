@@ -1718,6 +1718,8 @@
    
    "C-c r" #'editor-next-reflection-warning
 
+   "C-u C-c r" text-mode/editor-delete-rectangle
+
    "M-d" #'paredit-forward-kill-word
    "M-b" #'editor-backward-word
    "M-f" #'editor-forward-word
