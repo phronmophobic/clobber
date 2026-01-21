@@ -9,6 +9,7 @@
             [membrane.alpha.component.drag-and-drop :as dnd]
             [com.phronemophobic.viscous :as viscous]
             compliment.core
+            clojure.java.doc.api
             [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util :as util]
@@ -441,8 +442,9 @@
               v (ns-resolve (:eval-ns editor) sym)
               mta (meta v)
               doc (:doc mta)]
-          (when (or (seq? (:arglists mta))
-                    (string? doc))
+          ;; check var metadata  
+          (if (or (seq? (:arglists mta))
+                  (string? doc))
             (let [arglists (when (seq? (:arglists mta))
                              (str/join
                               "\n"
@@ -466,7 +468,46 @@
                                      arglists
                                      "\n"
                                      (when (string? doc)
-                                       doc)]}}))}))))))))
+                                       doc)]}}))}))
+            ;; try javadoc
+            (when-let [jdoc-data (try
+                                   (clojure.java.doc.api/javadoc-data-fn
+                                    node-string
+                                    nil)
+                                   (catch Exception e
+                                     nil))]
+              (let [docstring 
+                    (if (seq (:selected-method jdoc-data))
+                      (str/join
+                       "\n\n"
+                       (eduction
+                        (map (fn [{:keys [clojure-call signature description]}]
+                               (str clojure-call "\n"
+                                    signature "\n\n"
+                                    description)))
+                        (:selected-method jdoc-data)))
+                      
+                      ;; else show class javadoc)
+                      (str (:classname jdoc-data)
+                           "\n\n"
+                           (:class-description-md jdoc-data)
+                           "\n\nMethods:\n\n"
+                           (str/join
+                            "\n\n"
+                            (eduction
+                             (map (fn [{:keys [signature description]}]
+                                    (str signature description)))
+                             (:methods jdoc-data)))))]
+                (dispatch! 
+                 :com.phronemophobic.easel/add-applet
+                 {:id ::doc-viewer
+                  :make-applet
+                  (fn [_]
+                    ((requiring-resolve 
+                      'com.phronemophobic.easel/map->ComponentApplet)
+                     {:label "Doc"
+                      :component-var #'doc-viewer
+                      :initial-state {:docstring docstring}}))})))))))))
 
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
