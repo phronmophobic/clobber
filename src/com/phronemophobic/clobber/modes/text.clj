@@ -1006,6 +1006,25 @@
                         :column-byte new-cursor-column-byte})
         (editor-insert s cursor-byte cursor-row cursor-column-byte))))
 
+(defn ^:private rect-goto-column* 
+  "Helper for insert-rectangle. Assumes initial cursor is at beginning of line.
+  Inserts spaces as necessary to get to target column."
+  [editor target-column]
+  (loop [n 0
+         editor editor]
+    (if (= n target-column)
+      editor
+      (let [char (-> editor :cursor :char)
+            rope (:rope editor)]
+
+        (if (or (= char (Rope/.length rope))
+                (= \newline (CharSequence/.charAt rope char)))
+          (editor-self-insert-command editor (str/join (repeat (- target-column n) " ")))
+          (recur (inc n)
+                 (editor-forward-char editor)))))))
+
+
+
 (defn editor-downcase-word [editor]
   (let [start-editor editor
         start-cursor (:cursor editor)
@@ -1376,6 +1395,120 @@
                          :row new-cursor-row
                          :target-column-byte target-column-byte
                          :column-byte column-byte}))))))
+
+(defn editor-string-insert-rectangle [editor s]
+  (if-let [select-cursor (:select-cursor editor)]
+    (let [editor (dissoc editor :select-cursor)
+          initial-cursor (:cursor editor)
+          cursor-row (:row initial-cursor)
+          select-row (:row select-cursor)
+
+          column  (let [bol-editor (editor-move-beginning-of-line editor)]
+                    (util/count-grapheme-clusters
+                     (Rope/.sliceBytes (:rope bol-editor)
+                                       (-> bol-editor :cursor :byte)
+                                       (-> editor :cursor :byte))))
+          start-row (min cursor-row select-row)
+          end-row (max cursor-row select-row)
+          editor (if (not= start-row cursor-row)
+                   (editor-previous-line (assoc-in editor [:cursor :target-column-byte] 0)
+                                         (- end-row start-row))
+                   (editor-move-beginning-of-line editor))
+          
+          
+          editor (loop [editor editor]
+                   (let [editor (-> editor
+                                    (rect-goto-column* column)
+                                    (editor-self-insert-command s))]
+                     (if (= end-row (-> editor :cursor :row))
+                       editor
+                       (recur 
+                        (editor-next-line
+                         (assoc-in editor [:cursor :target-column-byte] 0))))))
+          
+          editor (if (< cursor-row select-row)
+                   ;; go back to cursor
+                   (editor-previous-line (assoc-in editor [:cursor :target-column-byte] (+ column
+                                                                                           (util/count-grapheme-clusters s)))
+                                         (- end-row start-row ))
+                   ;; else
+                   editor)]
+      editor)
+    ;; else
+    editor))
+
+(defn editor-delete-rectangle [editor]
+  (if-let [select-cursor (:select-cursor editor)]
+    (let [
+          initial-cursor (:cursor editor)
+          cursor-row (:row initial-cursor)
+          select-row (:row select-cursor)
+          
+          cursor-column (let [bol-editor (editor-move-beginning-of-line editor)]
+                          (util/count-grapheme-clusters
+                           (Rope/.sliceBytes (:rope bol-editor)
+                                             (-> bol-editor :cursor :byte)
+                                             (-> editor :cursor :byte))))
+          select-column (let [editor (editor-exchange-point-and-mark editor)
+                              bol-editor (editor-move-beginning-of-line editor)]
+                          (util/count-grapheme-clusters
+                           (Rope/.sliceBytes (:rope bol-editor)
+                                             (-> bol-editor :cursor :byte)
+                                             (-> editor :cursor :byte))))
+          start-column (min cursor-column select-column)
+          end-column (max cursor-column select-column )
+          
+          start-row (min cursor-row select-row)
+          end-row (max cursor-row select-row)
+
+          editor (dissoc editor :select-cursor)
+          editor (if (not= start-row cursor-row)
+                   (editor-previous-line (assoc-in editor [:cursor :target-column-byte] 0)
+                                         (- end-row start-row))
+                   (editor-move-beginning-of-line editor))
+          
+          
+          editor (loop [editor editor]
+                   (let [editor (rect-goto-column* editor start-column)
+                         cursor (:cursor editor)
+                         cursor-byte (:byte cursor)
+                         cursor-char (:char cursor)
+
+                         rope (:rope editor)
+                         bi (doto (BreakIterator/getCharacterInstance)
+                              (.setText rope))
+                         end-char (loop [char-index cursor-char
+                                         col start-column]
+                                    (if (>= col end-column)
+                                      char-index
+                                      (if (and (< char-index (Rope/.length rope))
+                                               (not= \newline (Rope/.charAt rope char-index)))
+                                        (recur (BreakIterator/.following bi char-index)
+                                               (inc col))
+                                        char-index)))
+                         
+                         editor (editor-snip editor
+                                             cursor-byte
+                                             (+ cursor-byte (-> rope
+                                                                (CharSequence/.subSequence cursor-char end-char)
+                                                                str
+                                                                .getBytes
+                                                                alength)))]
+                     (if (= end-row (-> editor :cursor :row))
+                       editor
+                       (recur 
+                        (editor-next-line
+                         (assoc-in editor [:cursor :target-column-byte] 0))))))
+          
+          editor (if (< cursor-row select-row)
+                   ;; go back to cursor
+                   (editor-previous-line (assoc-in editor [:cursor :target-column-byte] start-column)
+                                         (- end-row start-row ))
+                   ;; else
+                   editor)]
+      editor)
+    ;; else
+    editor))
 
 (defn editor-move-line-up [editor]
   (let [start-byte (-> editor :cursor :byte)
@@ -1928,6 +2061,7 @@
    "C-s" editor-isearch-forward
    "C-r" editor-isearch-backward
    "TAB" editor-indent
+   "C-u C-c r" editor-delete-rectangle
    ,})
 
 
