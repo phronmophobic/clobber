@@ -267,6 +267,10 @@
 
 ;; target column is in grapheme clusters
 (defn editor-goto-row-col [editor target-row target-column]
+  "Moves the cursor to `target-row`, `target-column`.
+  
+  The `target-column` is measured in grapheme clusters.
+  The search always starts from the beginning of the rope."
   (let [^Rope rope (:rope editor)
         
         bi (doto (BreakIterator/getCharacterInstance)
