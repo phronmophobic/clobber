@@ -174,9 +174,6 @@
          ;; "C-c C-d" ::show-doc
          "C-c b" ::update-bindings
          "C-g" #'editor-cancel
-         "C-c C-p" (fn [editor]
-                     (-> editor
-                         (text-mode/editor-self-insert-command "aslkdjf")))
          "C-c t" ::tap-editor))
 
 
