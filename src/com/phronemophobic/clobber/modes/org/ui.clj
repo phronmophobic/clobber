@@ -186,6 +186,7 @@
                (update editor :key-bindings
                        (fn [bindings]
                          (merge bindings
+                                org-mode/key-bindings
                                 key-bindings)))))
   (dispatch! ::temp-status {:$editor $editor 
                             :msg "Bindings updated!"}))
