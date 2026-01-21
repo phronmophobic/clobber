@@ -217,7 +217,10 @@
                (update editor :key-bindings
                        (fn [bindings]
                          (merge bindings
-                                key-bindings))))))
+                                text-mode/key-bindings
+                                key-bindings)))))
+  (dispatch! ::temp-status {:$editor $editor
+                            :msg "Bindings updated!"}))
 
 (defn make-editor
   ([{:keys [file source] :as m}]
