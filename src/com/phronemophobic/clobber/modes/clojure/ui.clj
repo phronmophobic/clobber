@@ -268,7 +268,7 @@
             ;; else no err
             (let [temp-view (ui/translate 0 -4
                                       (viscous/inspector
-                                       {:obj (viscous/wrap val)
+                                       {:obj (viscous/wrap-unique val)
                                         :width 40
                                         :height 1
                                         :show-context? false}))]
@@ -281,7 +281,7 @@
                                                 :line-val
                                                 (fn [m]
                                                   (let [line-val (get m rope)]
-                                                    {rope (assoc line-val line-number (viscous/wrap val))})))
+                                                    {rope (assoc line-val line-number (viscous/wrap-unique val))})))
                                  editor (if print?
                                           (text-mode/editor-insert editor (with-out-str (clojure.pprint/pprint val)))
                                           editor)]
@@ -338,7 +338,7 @@
                 
                 temp-view (ui/translate 0 -4
                                         (viscous/inspector
-                                         {:obj (viscous/wrap val)
+                                         {:obj (viscous/wrap-unique val)
                                           :width 40
                                           :height 1
                                           :show-context? false}))]
@@ -346,7 +346,7 @@
                        update :line-val
                        (fn [m]
                          (let [line-val (get m rope)]
-                           {rope (assoc line-val line-number (viscous/wrap val))})))
+                           {rope (assoc line-val line-number (viscous/wrap-unique val))})))
             (dispatch! ::temp-status {:$editor $editor
                                       :msg temp-view})
             )
@@ -1443,7 +1443,7 @@
                               line (-> node
                                        .getEndPoint
                                        .getRow)
-                              line-vals (assoc line-vals line (viscous/wrap result))]
+                              line-vals (assoc line-vals line (viscous/wrap-unique result))]
                           
                           (if (not success)
                             [cache line-vals]
@@ -1455,7 +1455,7 @@
                      (fn [editor]
                        (assoc editor
                               :line-val {rope line-vals}
-                              ::insta-results {::cache (viscous/wrap cache)}))))))
+                              ::insta-results {::cache (viscous/wrap-unique cache)}))))))
     (catch Throwable e
       #_(prn e))))
 
