@@ -541,18 +541,22 @@
                                :op #(dissoc % ::file-picker-state ::ui)}]])
      ::select-file
      (fn [m]
-       (when-let [^File f (first fs)]
-         (if (.isFile f)
-           [[update-editor-intent {:editor editor
-                                   :$editor $editor
-                                   :op #(dissoc % ::file-picker-state ::ui)}]
-            [::select-file {:file f}]]
-           [[:set $current-folder f]
-            [:update $search-editor (fn [editor]
-                                      (-> editor
-                                          (text-mode/editor-beginning-of-buffer)
-                                          (text-mode/editor-set-string "")))]
-            [:set $offset 0]])))
+       (let [^File f (if (and (= search-str "~")
+                              @user-home*)
+                       (io/file @user-home*)
+                       (first fs))]
+         (when f
+           (if (.isFile f)
+             [[update-editor-intent {:editor editor
+                                     :$editor $editor
+                                     :op #(dissoc % ::file-picker-state ::ui)}]
+              [::select-file {:file f}]]
+             [[:set $current-folder f]
+              [:update $search-editor (fn [editor]
+                                        (-> editor
+                                            (text-mode/editor-beginning-of-buffer)
+                                            (text-mode/editor-set-string "")))]
+              [:set $offset 0]]))))
      ::next-offset
      (fn [m]
        [[:update $offset 
@@ -575,23 +579,18 @@
        (if (= search-str "")
          [[:set $current-folder (io/file "/")]
           [:set $offset 0]]
-         (when-let [^File f (first fs)]
-           (when (File/.isDirectory f)
+         (let [^File 
+               f (if (and (= search-str "~")
+                          @user-home*)
+                   (io/file @user-home*)
+                   (first fs))]
+           (when (and f (File/.isDirectory f))
              [[:set $current-folder f]
               [:update $search-editor (fn [editor]
                                         (-> editor
                                             (text-mode/editor-beginning-of-buffer)
                                             (text-mode/editor-set-string "")))]
               [:set $offset 0]]))))
-     ::goto-home
-     (fn [m]
-       (if (and (= search-str "")
-                @user-home*)
-         [[:set $current-folder (io/file @user-home*)]
-          [:set $offset 0]]
-         ;; else
-         [[:update $search-editor (fn [editor]
-                                    (text-mode/editor-self-insert-command editor "~"))]]))
      ::kill-word-backward
      (fn [m]
        (if (= search-str "")
@@ -622,7 +621,6 @@
         :key-bindings {"C-g" ::cancel-search
                        "RET" ::select-file
                        "M-DEL" ::kill-word-backward
-                       "~" ::goto-home
                        "/" ::goto-root
                        "C-s" ::next-offset
                        "DEL" ::backspace }})))))
