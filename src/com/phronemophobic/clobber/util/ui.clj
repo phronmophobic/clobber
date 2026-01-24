@@ -557,7 +557,7 @@
      (fn [m]
        [[:update $offset 
                        (fn [offset]
-                         (if (> offset (count fs))
+                         (if (<= (count fs) 1)
                            0
                            (inc offset)))]])
      ::backspace
