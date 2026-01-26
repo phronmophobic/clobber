@@ -470,7 +470,7 @@
                                      (when (string? doc)
                                        doc)]}}))}))
             ;; try javadoc
-            (when-let [jdoc-data (try
+            (if-let [jdoc-data (try
                                    (clojure.java.doc.api/javadoc-data-fn
                                     node-string
                                     nil)
@@ -481,9 +481,9 @@
                       (str/join
                        "\n\n"
                        (eduction
-                        (map (fn [{:keys [clojure-call signature description]}]
+                        (map (fn [{:keys [clojure-call return-type signature description]}]
                                (str clojure-call "\n"
-                                    signature "\n\n"
+                                    return-type " " signature "\n\n"
                                     description)))
                         (:selected-method jdoc-data)))
                       
@@ -495,9 +495,21 @@
                            (str/join
                             "\n\n"
                             (eduction
-                             (map (fn [{:keys [signature description]}]
-                                    (str signature description)))
+                             (map (fn [{:keys [return-type signature description]}]
+                                    (str return-type " " signature "\n" description)))
                              (:methods jdoc-data)))))]
+                (dispatch! 
+                 :com.phronemophobic.easel/add-applet
+                 {:id ::doc-viewer
+                  :make-applet
+                  (fn [_]
+                    ((requiring-resolve 
+                      'com.phronemophobic.easel/map->ComponentApplet)
+                     {:label "Doc"
+                      :component-var #'doc-viewer
+                      :initial-state {:docstring docstring}}))}))
+              ;; try compliment
+              (let [docstring (compliment.core/documentation node-string (:eval-ns editor))]
                 (dispatch! 
                  :com.phronemophobic.easel/add-applet
                  {:id ::doc-viewer
