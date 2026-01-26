@@ -1120,7 +1120,24 @@
                                             view)]
                            (ui/translate 0
                                          (- height 8 (ui/height status-bar))
-                                         status-bar))))]
+                                         status-bar))))
+          
+          body [(util.ui/cursor-view rope para (:cursor editor))
+                paren-highlight-view
+                para
+                line-vals
+                status-bar
+                (when-let [completion (-> editor
+                                          ::completion)]
+                  (when-let [->view (:->view completion)]
+                    (->view completion)))]
+          
+          width (:width editor)
+          height (-> editor :viewport :text-height)
+          body (if (and width height)
+                 (ui/fixed-bounds [width height]
+                                  body)
+                 body)]
       (dnd/on-drop
        (fn [pos obj]
          [[::drop-val {:pos pos
@@ -1128,15 +1145,7 @@
                        :editor editor
                        :$editor $editor
                        :para para}]])
-       [(util.ui/cursor-view rope para (:cursor editor))
-        paren-highlight-view
-        para
-        line-vals
-        status-bar
-        (when-let [completion (-> editor
-                                  ::completion)]
-          (when-let [->view (:->view completion)]
-            (->view completion)))]))))
+       body))))
 
 (defeffect ::show-completions [{:keys [$editor]}]
   (dispatch! ::update-editor
