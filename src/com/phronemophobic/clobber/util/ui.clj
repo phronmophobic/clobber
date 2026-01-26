@@ -610,7 +610,8 @@
                   #_$editor
                   op] :as m}]
        
-       [[:update $search-editor op]])
+       [[:set $offset 0]
+        [:update $search-editor op]])
      (ui/vertical-layout
       body
       (key-binding/wrap-editor-key-bindings
