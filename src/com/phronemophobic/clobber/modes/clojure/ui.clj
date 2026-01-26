@@ -1367,6 +1367,7 @@
          "C-x C-f" ::file-picker
          "C-c C-d" ::show-doc
          "C-c i" ::open-instarepl
+         "C-c s" ::open-scratch
          "C-u C-c i" ::toggle-instarepl
          "C-g" #'editor-cancel
          "C-c t" ::tap-editor
@@ -1566,6 +1567,20 @@
                   #(f % {:editor editor
                          :label (str 
                                  "⚡"
+                                 (truncate-front editor-label 12))
+                         :ui code-editor}))})))
+
+(defeffect ::open-scratch [{:keys [editor]}]
+  (let [editor-label (:label editor)
+        editor (-> (make-editor)
+                   (assoc :eval-ns (:eval-ns editor)))]
+    (dispatch! :com.phronemophobic.easel/add-applet
+               {:make-applet
+                (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
+                  #(f % {:editor editor
+                         ;; :ns (:eval-ns editor)
+                         :label (str 
+                                 "🐈"
                                  (truncate-front editor-label 12))
                          :ui code-editor}))})))
 
