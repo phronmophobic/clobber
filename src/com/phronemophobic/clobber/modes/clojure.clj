@@ -30,6 +30,10 @@
 (def highlight-queries
   ;; tree-sitter-clojure/queries/highlights.scm
   "
+;; Comments
+
+  (comment) @comment
+  (dis_expr) @discard 
 
   (list_lit) @list
   (anon_fn_lit) @anon
@@ -49,9 +53,7 @@
 
 (kwd_lit) @constant
 
-;; Comments
 
-(comment) @comment
 
 
 
@@ -64,11 +66,10 @@
  \"@\"
  \"~@\"
 ] @operator
-"
+")
 
 
 
-  )
 
 (def text-colors
   {"number" [0.06666667014360428 0.4000000059604645 0.2666666805744171]
@@ -76,6 +77,7 @@
    "constant.builtin" [0.20000000298023224 0.0 0.6666666865348816]
    "constant" [0.46666666865348816 0.0 0.5333333611488342]
    "comment" [0.6666666865348816 0.3333333432674408 0.0]
+   "discard" [0.4 0.4 0.4 ]
    "defn" [0.7019607843137254 0.050980392156862744 1.0]
    })
 

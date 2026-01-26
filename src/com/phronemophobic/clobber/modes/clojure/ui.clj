@@ -964,8 +964,13 @@
                              end-byte (min end-byte-offset (.getEndByte node))
 
                              styles (if (> end-byte start-byte)
-                                      (let [color (get clojure-mode/text-colors capture-name)]
-                                        (assoc styles [start-byte end-byte] {:text-style/color color}))
+                                      (if (= capture-name "discard")
+                                        (assoc styles [start-byte end-byte ]
+                                               {:text-style/color [0.4 0.4 0.4]
+                                                :text-style/font-style {:font-style/slant :italic
+                                                                        :font-style/weight :thin}})
+                                        (let [color (get clojure-mode/text-colors capture-name)]
+                                          (assoc styles [start-byte end-byte] {:text-style/color color})))
                                       ;; else
                                       styles)]
                          (recur end-byte
