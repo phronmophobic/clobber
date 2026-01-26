@@ -1383,7 +1383,8 @@
          "C-c -" #'editor-decrease-font-size
          "S--" #'editor-decrease-font-size
          "M-." ::jump-to-definition
-         "C-c r" ::show-insert-rectangle))
+         ;;"C-c r" ::show-insert-rectangle
+         ))
 
 
 (defn update-instarepl [{:keys [editor $editor dispatch!] :as msg}]
