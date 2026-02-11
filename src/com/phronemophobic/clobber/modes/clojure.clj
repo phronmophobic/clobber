@@ -213,6 +213,14 @@
                 ;; (we're essentially looking for commas)
                 end-byte (.getEndByte parent-coll-node)
                 
+                ;; check to see if parent-coll-node contains a comment as its last child
+                ;; we want to handle this special case slightly differently
+                min-byte (let [num-children (TSNode/.getNamedChildCount parent-coll-node)]
+                           (when (pos? num-children)
+                             (let [last-node (TSNode/.getNamedChild parent-coll-node (dec num-children))]
+                               (when (= "comment" (TSNode/.getType last-node))
+                                 (TSNode/.getEndByte last-node)))))
+                
                 editor (text-mode/editor-goto-byte editor (dec end-byte))
                 ^Rope
                 rope (:rope editor)
@@ -225,7 +233,9 @@
                   (let [prev-char (.preceding bi char-index)]
                     (cond
                       (= -1 prev-char) char-index
+                      (= min-byte char-index) char-index
                       (#{\space \newline} (.charAt rope prev-char)) (recur prev-char)
+
                       :else char-index)))
                 ;; char-index diff is same as bytes
                 ;; because we're only counting spaces and newlines
@@ -235,7 +245,12 @@
                 editor (-> editor
                            (text-mode/editor-goto-byte target-byte)
                            (text-mode/editor-snip target-byte (dec end-byte))
-                           (text-mode/editor-forward-char))]
+                           (text-mode/editor-forward-char))
+
+                ;; special case for when the last node in the parent coll is a comment
+                editor (if (= char-index min-byte)
+                         (editor-indent editor)
+                         editor)]
             editor))))))
 
 (defn editor-paredit-open-coll [editor open-char close-char]
