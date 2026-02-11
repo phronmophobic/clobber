@@ -1287,6 +1287,7 @@
                                      {:make-applet
                                       (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
                                         #(f % (merge {:source contents
+                                                      :label (java.util.jar.JarEntry/.getRealName entry)
                                                       :mode :clojure}
                                                      (when-let [line (:line mta)]
                                                        {:line (max 0 (dec line))}))))})))))
