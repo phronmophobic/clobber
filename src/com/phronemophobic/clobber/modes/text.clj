@@ -662,7 +662,7 @@
                     (let [next-char (.following bi char)]
                       (if (= -1 next-char)
                         char
-                        (let [has-letter? (some Character/isLetter
+                        (let [has-letter? (some Character/isLetterOrDigit
                                                 (.subSequence rope char next-char))]
                           (if has-letter?
                             next-char
@@ -699,7 +699,7 @@
                     (let [prev-char (.preceding bi char)]
                       (if (= -1 prev-char)
                         char
-                        (let [has-letter? (some Character/isLetter
+                        (let [has-letter? (some Character/isLetterOrDigit
                                                 (.subSequence rope prev-char char))]
                           (if has-letter?
                             prev-char
