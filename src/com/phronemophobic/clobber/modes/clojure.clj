@@ -181,7 +181,7 @@
       
       editor)))
 
-
+(declare editor-indent)
 (defn editor-paredit-close-coll [editor close-char]
   (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
         
