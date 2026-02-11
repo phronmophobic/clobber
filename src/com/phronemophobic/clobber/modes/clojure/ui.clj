@@ -1265,7 +1265,9 @@
           (when-let [line (:line mta)]
             (dispatch! ::update-editor  
                        {:op (fn [editor]
-                              (text-mode/editor-goto-line editor (dec line)))
+                              (->  editor
+                                   (text-mode/editor-push-mark)
+                                   (text-mode/editor-goto-line (dec line))))
                         :$editor $editor}))
           ;; else, open new editor
           (when-let [file (:file mta)]
