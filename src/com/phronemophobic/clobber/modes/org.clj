@@ -101,6 +101,8 @@
 
 (def key-bindings
   (assoc text-mode/key-bindings
+         "M-TAB" #'org-indent-left
+         "TAB" #'org-indent-right
          "M-<right>" #'org-indent-right
          "M-<left>" #'org-indent-left
          "M-RET" #'org-return))
