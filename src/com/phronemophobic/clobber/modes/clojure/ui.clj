@@ -979,38 +979,42 @@
                    styles))]
     styles))
 
-(defn editor->paragraph [editor]
-  (let [tree (:tree editor)
-        lang (:language editor)
-        ^Rope
-        rope (:rope editor)
-
-        {:keys [start-line num-lines]} (:viewport editor)
-        end-line (+ start-line num-lines)
-        
-        start-byte-offset (util/find-byte-offset-for-line tree rope start-line)
-        end-byte-offset (util/find-byte-offset-for-line tree rope end-line)
-        char-offset (-> (.sliceBytes rope 0 start-byte-offset)
-                        .toCharSequence
-                        .length)
-        viewport {:start-byte-offset start-byte-offset
-                  :char-offset char-offset
-                  :end-byte-offset end-byte-offset}
-
-        p (util.ui/styled-text rope
-                               (:base-style editor)
-                               [(syntax-style editor viewport)
-                                (util.ui/selection-style editor viewport)
-                                (util.ui/debug-selection-style editor viewport)
-                                (util.ui/highlight-search editor viewport)]
-                               start-byte-offset
-                               end-byte-offset)
-        para (para/paragraph p nil {:paragraph-style/text-style (:base-style editor)})
-        para (assoc para
-                    :char-offset char-offset
-                    :start-byte-offset start-byte-offset
-                    :end-byte-offset end-byte-offset)]
-    para))
+(defn editor->paragraph 
+  ([editor]
+   (editor->paragraph editor true))
+  ([editor focused?]
+   (let [tree (:tree editor)
+         lang (:language editor)
+         ^Rope
+         rope (:rope editor)
+         
+         {:keys [start-line num-lines]} (:viewport editor)
+         end-line (+ start-line num-lines)
+         
+         start-byte-offset (util/find-byte-offset-for-line tree rope start-line)
+         end-byte-offset (util/find-byte-offset-for-line tree rope end-line)
+         char-offset (-> (.sliceBytes rope 0 start-byte-offset)
+                         .toCharSequence
+                         .length)
+         viewport {:start-byte-offset start-byte-offset
+                   :char-offset char-offset
+                   :end-byte-offset end-byte-offset}
+         
+         p (util.ui/styled-text rope
+                                (:base-style editor)
+                                [(syntax-style editor viewport)
+                                 (when focused?
+                                   (util.ui/selection-style editor viewport))
+                                 (util.ui/debug-selection-style editor viewport)
+                                 (util.ui/highlight-search editor viewport)]
+                                start-byte-offset
+                                end-byte-offset)
+         para (para/paragraph p nil {:paragraph-style/text-style (:base-style editor)})
+         para (assoc para
+                     :char-offset char-offset
+                     :start-byte-offset start-byte-offset
+                     :end-byte-offset end-byte-offset)]
+     para)))
 
 
 (defui line-val-view [{:keys [line-val editor para]}]
@@ -1105,7 +1109,7 @@
   (when-let [tree (:tree editor)]
     (let [lang (:language editor)
           rope (:rope editor)
-          para (editor->paragraph editor)
+          para (editor->paragraph editor focused?)
           paren-highlight-view (paren-highlight editor para)
           line-vals (when-let [line-val (if (:instarepl? editor)
                                           (-> editor :line-val first second)
@@ -1127,7 +1131,8 @@
                                          (- height 8 (ui/height status-bar))
                                          status-bar))))
           
-          body [(util.ui/cursor-view rope para (:cursor editor))
+          body [(when focused?
+                  (util.ui/cursor-view rope para (:cursor editor)))
                 paren-highlight-view
                 para
                 line-vals
