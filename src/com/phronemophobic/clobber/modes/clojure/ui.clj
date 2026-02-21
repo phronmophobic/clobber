@@ -477,7 +477,8 @@
                                    (catch Exception e
                                      nil))]
               (let [docstring 
-                    (if (seq (:selected-method jdoc-data))
+                    (if-let [selected (seq (or (:selected-method jdoc-data)
+                                               (:selected-constructor jdoc-data)))]
                       (str/join
                        "\n\n"
                        (eduction
@@ -485,12 +486,19 @@
                                (str clojure-call "\n"
                                     return-type " " signature "\n\n"
                                     description)))
-                        (:selected-method jdoc-data)))
+                        selected))
                       
                       ;; else show class javadoc)
                       (str (:classname jdoc-data)
                            "\n\n"
                            (:class-description-md jdoc-data)
+                           "\n\nConstructors:\n\n"
+                           (str/join
+                            "\n\n"
+                            (eduction
+                             (map (fn [{:keys [ signature description]}]
+                                    (str signature "\n" description)))
+                             (:constructors jdoc-data)))
                            "\n\nMethods:\n\n"
                            (str/join
                             "\n\n"
