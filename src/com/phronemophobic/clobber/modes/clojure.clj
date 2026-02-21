@@ -21,6 +21,12 @@
 
 (def coll-node-types #{"map_lit" "list_lit" "set_lit" "vec_lit" "anon_fn_lit"})
 
+(defn coll-end-str [^TSNode coll-node]
+  (case (.getType coll-node)
+    "str_lit" "\""
+    "vec_lit" "]"
+    ("list_lit" "anon_fn_lit") ")"
+    ("set_lit" "map_lit") "}")  )
 
 (defn ^:private debug-node [editor node]
   (if node
@@ -263,6 +269,41 @@
     (-> editor
         (text-mode/editor-self-insert-command (str open-char close-char))
         (text-mode/editor-backward-char))))
+
+(defn editor-paredit-split-sexp [editor]
+  (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+        
+        {cursor-byte :byte
+         cursor-char :char
+         cursor-point :point
+         cursor-row :row
+         cursor-column-byte :column-byte} cursor]
+    (let [root-node (.getRootNode tree)
+          cursor (TSTreeCursor. root-node)
+          ^TSNode
+          parent-coll-node
+          (loop [parent nil]
+            (let [idx (.gotoFirstChildForByte cursor cursor-byte)
+                  node (.currentNode cursor)]
+              (if (or (= -1 idx)
+                      (> (.getStartByte node)
+                         cursor-byte))
+                parent
+                (if (contains? coll-node-types (.getType node))
+                  (recur node)
+                  (recur parent)))))]
+      (if (not parent-coll-node)
+        editor
+        (let [end-coll-str (coll-end-str parent-coll-node)
+              begin-coll-str (case (.getType parent-coll-node)
+                               "str_lit" "\""
+                               "vec_lit" "["
+                               ("list_lit" "anon_fn_lit") "("
+                               ("set_lit" "map_lit") "{")
+              editor (-> editor
+                         (text-mode/editor-insert (str end-coll-str " " begin-coll-str))
+                         (editor-paredit-close-coll end-coll-str))]
+          editor)))))
 
 (defn editor-cider-eval-defun-at-point [editor]
   editor)
@@ -1270,14 +1311,12 @@
                                       (+ start-byte diff-bytes))]
     editor))
 
+
+
 (defn ^:private do-slurp* [editor ^TSNode coll-node ^TSNode slurp-node]
   (let [coll-end-byte (.getEndByte coll-node)
         slurp-end-byte (.getEndByte slurp-node)
-        end-coll-str (case (.getType coll-node)
-                       "str_lit" "\""
-                       "vec_lit" "]"
-                       ("list_lit" "anon_fn_lit") ")"
-                       ("set_lit" "map_lit") "}")]
+        end-coll-str (coll-end-str coll-node)]
     (-> editor
         (text-mode/editor-insert end-coll-str slurp-end-byte)
         (text-mode/editor-snip (dec coll-end-byte) coll-end-byte))))
@@ -1752,6 +1791,7 @@
    "M->" #'text-mode/editor-end-of-buffer
    "M-(" #'editor-paredit-wrap-round
    "M-s" #'editor-paredit-splice-sexp
+   "M-S" #'editor-paredit-split-sexp
 
    "\"" #'editor-paredit-doublequote
    "[" #'editor-paredit-open-square
