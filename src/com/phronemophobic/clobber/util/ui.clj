@@ -881,7 +881,9 @@
                 :op (fn [editor]
                       (let [editor (dissoc editor ::ui)]
                         (if line
-                          (text-mode/editor-goto-row-col editor line 0)
+                          (-> editor
+                              (text-mode/editor-push-mark)
+                              (text-mode/editor-goto-row-col (max 0 (dec line)) 0))
                           ;; parse failed
                           editor)))})))
 
