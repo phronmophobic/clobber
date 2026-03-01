@@ -500,6 +500,8 @@
         offset (get extra :offset 0)
         search-str (.toString ^Rope (:rope search-editor))
         search-str-lower (str/lower-case search-str)
+        
+        create-file? (get extra :create-file?) 
 
         fs (into 
             []
@@ -545,7 +547,7 @@
                               @user-home*)
                        (io/file @user-home*)
                        (first fs))]
-         (when f
+         (if f
            (if (.isFile f)
              [[update-editor-intent {:editor editor
                                      :$editor $editor
@@ -556,7 +558,9 @@
                                         (-> editor
                                             (text-mode/editor-beginning-of-buffer)
                                             (text-mode/editor-set-string "")))]
-              [:set $offset 0]]))))
+              [:set $offset 0]])
+           ;; else ask to create new file
+           [[:set $create-file? true]])))
      ::next-offset
      (fn [m]
        [[:update $offset 
@@ -614,17 +618,38 @@
         [:update $search-editor op]])
      (ui/vertical-layout
       body
-      (key-binding/wrap-editor-key-bindings
-       {:body search-editor-body
-        :$body nil
-        :editor search-editor
-        :update-editor-intent ::update-search-editor
-        :key-bindings {"C-g" ::cancel-search
-                       "RET" ::select-file
-                       "M-DEL" ::kill-word-backward
-                       "/" ::goto-root
-                       "C-s" ::next-offset
-                       "DEL" ::backspace }})))))
+      (let [search-editor-body (if create-file?
+                                 (ui/on
+                                  ::key-binding/miss
+                                  (fn [_]
+                                    [[:set $create-file? false]])
+                                  ::key-binding/press
+                                  (fn [{:keys [intent]}]
+                                    (let [f (io/file current-folder search-str)]
+                                      [[update-editor-intent {:editor editor
+                                                              :$editor $editor
+                                                              :op #(dissoc % ::file-picker-state ::ui)}]
+                                       [::create-and-select-file {:file f}]]))
+                                  
+                                  (key-binding/wrap-key-bindings
+                                   {:body (update search-editor-body
+                                                  :paragraph
+                                                  conj " [Confirm]")
+                                    :$body nil
+                                    :key-bindings {"RET" ::create-file}}))
+                                 ;; else normal
+                                 (key-binding/wrap-editor-key-bindings
+                                  {:body search-editor-body
+                                   :$body nil
+                                   :editor search-editor
+                                   :update-editor-intent ::update-search-editor
+                                   :key-bindings {"C-g" ::cancel-search
+                                                  "RET" ::select-file
+                                                  "M-DEL" ::kill-word-backward
+                                                  "/" ::goto-root
+                                                  "C-s" ::next-offset
+                                                  "DEL" ::backspace }}))]
+        search-editor-body)))))
 
 
 (defeffect ::select-file [{:keys [file]}]
@@ -632,6 +657,14 @@
              {:make-applet
               (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
                 #(f % {:file file}))}))
+
+
+(defeffect ::create-and-select-file [{:keys [file]}]
+  (File/.createNewFile file)
+  (dispatch! ::select-file {:file file})
+  nil)
+
+
 
 (defeffect ::file-picker [{:keys [editor $editor update-editor-intent]}]
   (dispatch! (if update-editor-intent
