@@ -2053,6 +2053,7 @@
    "<left>" editor-backward-char
    "C-y" editor-yank
    "C-SPC" editor-set-mark
+   "C-u C-SPC" editor-pop-mark
    "C-w" editor-kill-region
    "M-w" editor-save-region
    "M-SPC" editor-single-space
