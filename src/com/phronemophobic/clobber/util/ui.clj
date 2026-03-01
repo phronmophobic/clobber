@@ -1007,3 +1007,4 @@
               :op (fn [editor]
                     (assoc editor ::ui
                            (insert-rectangle-view {:extra {:string-editor (text-mode/make-editor)}})))}))
+
