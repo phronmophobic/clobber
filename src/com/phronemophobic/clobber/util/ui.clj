@@ -697,7 +697,8 @@
         ps [(when file
               (.getName file))
             " ("
-            (-> cursor :row str)
+            ;; display line numbers starting at 1
+            (-> cursor :row inc str)
             ","
             (-> cursor :column-byte str)
             ") "
