@@ -239,30 +239,27 @@
               ;; these source line numbers are 1 indexed
               ;; we are adding a line for the ns form
               rdr (doto (LineNumberingPushbackReader.
-                         (StringReader. 
-                          (if (pos? line-number)
-                            (str (pr-str
-                                  `(ns ~eval-ns-name))
-                                 "\n"
-                                 (util/node->str rope node))
-                            ;; else
-                            (util/node->str rope node))))
-                    (.setLineNumber line-number))
+                         (StringReader. (util/node->str rope node)))
+                    (.setLineNumber (inc line-number)))
               
+              _ (push-thread-bindings (cond-> {#'*repl* true}
+                                        eval-ns (assoc #'*ns* eval-ns)
+                                        source-path (assoc Compiler/SOURCE_PATH source-path
+                                                           Compiler/SOURCE source-name)))
               [err val] (try
-                          [nil
-                           (binding [*repl* true]
-                             (clojure.lang.Compiler/load rdr source-path source-name))]
+                          (let [form (read rdr)]
+                            [nil
+                             (Compiler/eval form)])
                           (catch Exception e
-                            [e nil]))
-              
-              ]
+                            [e nil])
+                          (finally
+                            (pop-thread-bindings)))]
           (if err
             (do 
               (dispatch! ::temp-status {:$editor $editor
                                         :msg
                                         (str (-> err class .getName) ": " (.getMessage err) "\n"
-                                             (-> err .getCause .getMessage))})
+                                             (some-> err .getCause .getMessage))})
               (tap> err)
               (prn err))
             ;; else no err
@@ -323,19 +320,20 @@
                 ;; these source line numbers are 1 indexed
                 ;; we are adding a line for the ns form
                 rdr (doto (LineNumberingPushbackReader.
-                           (StringReader. 
-                            (if (pos? line-number)
-                              (str (pr-str
-                                    `(ns ~eval-ns-name))
-                                   "\n"
-                                   (util/node->str rope node))
-                              ;; else
-                              (util/node->str rope node))))
-                      (.setLineNumber line-number))
-
-                val (binding [*repl* true]
-                      (clojure.lang.Compiler/load rdr source-path source-name))
+                           (StringReader. (util/node->str rope node)))
+                      (.setLineNumber (inc line-number)))
                 
+
+                _ (push-thread-bindings (cond-> {#'*repl* true}
+                                          eval-ns (assoc #'*ns* eval-ns)
+                                          source-path (assoc Compiler/SOURCE_PATH source-path
+                                                             Compiler/SOURCE source-name)))
+                val (try
+                      (let [form (read rdr)]
+                        (Compiler/eval form))
+                      (finally
+                        (pop-thread-bindings)))
+
                 temp-view (ui/translate 0 -4
                                         (viscous/inspector
                                          {:obj (viscous/wrap-unique val)
@@ -348,12 +346,11 @@
                          (let [line-val (get m rope)]
                            {rope (assoc line-val line-number (viscous/wrap-unique val))})))
             (dispatch! ::temp-status {:$editor $editor
-                                      :msg temp-view})
-            )
+                                      :msg temp-view}))
           (catch Exception e
             (dispatch! ::temp-status {:$editor $editor
                                       :msg (str (-> e class .getName) ": " (.getMessage e) "\n"
-                                                (-> e .getCause .getMessage))})
+                                                (some-> e .getCause .getMessage))})
             (tap> e)
             (prn e)))))))
 
