@@ -797,7 +797,7 @@
       (symbol ns-str))))
 
 (defn make-editor
-  ([{:keys [file ns source] :as m}]
+  ([{:keys [file ns source url] :as m}]
    (let [editor (make-editor)
 
          ;; contents
@@ -805,11 +805,11 @@
          (cond
            source (text-mode/editor-insert editor source 0 0 0)
 
-           file (let [source (slurp file)
-                      last-file-load (java.time.Instant/now)]
-                  (-> editor
-                      (text-mode/editor-insert source 0 0 0)
-                      (assoc :last-file-load last-file-load)))
+           (or file url) (let [source (slurp (or file url))
+                               last-file-load (java.time.Instant/now)]
+                           (-> editor
+                               (text-mode/editor-insert source 0 0 0)
+                               (assoc :last-file-load last-file-load)))
 
            ns (let [eval-ns (the-ns ns)
                     ns-sym (ns-name eval-ns)

@@ -10,6 +10,11 @@
   (:import java.io.File))
 
 
+(defn ^:private path-ext [^String path]
+  (let [idx (.lastIndexOf path ".")]
+    (when (not= -1 idx)
+      (subs path idx))))
+
 (defn ^:private file-ext [^File f]
   (let [fname (.getName f)
         idx (.lastIndexOf fname ".")]
@@ -18,14 +23,18 @@
 
 
 
+
 (defn guess-mode
-  [{:keys [file source] :as opts}]
+  [{:keys [file url source] :as opts}]
   (let [mode
         (cond
           (:mode opts) (:mode opts)
 
           (or (when file
                 (#{".edn" ".clj" ".cljc"} (file-ext file)))
+              (when url
+                (when-let [path (java.net.URL/.getPath url)]
+                  (#{".edn" ".clj" ".cljc"} (path-ext path))))
               (:ns opts))
           :clojure
           
