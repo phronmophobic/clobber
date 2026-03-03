@@ -171,6 +171,7 @@
   (assoc org-mode/key-bindings
          "C-x C-s" ::save-editor
          "C-x C-f" ::util.ui/file-picker
+         "M-x" ::util.ui/mx-selector
          ;; "C-c C-d" ::show-doc
          "C-c b" ::update-bindings
          "C-g" #'editor-cancel

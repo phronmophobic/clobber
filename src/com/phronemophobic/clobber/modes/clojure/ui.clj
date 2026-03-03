@@ -33,7 +33,8 @@
            java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
-(declare clojure-key-bindings)
+(declare clojure-key-bindings
+         clojure-mx-commands)
 
 (def ^:private
   default-font-families
@@ -198,10 +199,20 @@
   (dispatch! :update
              $editor
              (fn [editor]
-               (update editor :key-bindings
-                       (fn [bindings]
-                         (merge bindings
-                                clojure-key-bindings)))))
+               (-> editor
+                   (update :key-bindings
+                           (fn [bindings]
+                             (merge bindings
+                                    clojure-key-bindings)))
+                   ;; also update mx-commands
+                   (update :mx-commands
+                           (fn [mx-commands]
+                             (into []
+                                   (comp cat
+                                         (distinct))
+                                   [#_mx-commands
+                                    clojure-mx-commands]))))))
+    
   (dispatch! ::temp-status {:$editor $editor
                             :msg "Bindings updated!"}))
 
@@ -862,6 +873,7 @@
       :viscous? true
       :parser parser
       :key-bindings clojure-key-bindings
+      :mx-commands clojure-mx-commands
       :buf buf})))
 
 
@@ -1359,6 +1371,11 @@
   (dispatch! ::util.ui/file-picker (assoc m
                                           :update-editor-intent ::update-editor)))
 
+(defeffect ::mx-selector [{:keys [$editor editor] :as m}]
+  (dispatch! :com.phronemophobic.clobber.util.ui/mx-selector
+             (assoc m
+                    :update-editor-intent ::update-editor)))
+
 (defeffect ::show-find-replace [{:keys [$editor editor] :as m}]
   (dispatch! ::util.ui/show-find-replace
              (assoc m
@@ -1373,6 +1390,54 @@
   (dispatch! ::util.ui/show-insert-rectangle
              (assoc m
                     :update-editor-intent ::update-editor)))
+
+(defn revert-buffer [editor]
+  (if-let [file (:file editor)]
+    (let [update-time (java.time.Instant/now)
+          source (slurp file)
+
+          old-cursor (:cursor editor)
+                
+          editor (-> editor
+                     (assoc :rope Rope/EMPTY)
+                     (dissoc :tree)
+                     (assoc :cursor {:byte 0
+                                     :char 0
+                                     :point 0
+                                     :row 0
+                                     :column-byte 0})
+                     (text-mode/editor-self-insert-command source)
+                     (assoc :last-file-load update-time
+                            :last-change update-time))
+                
+                end-cursor (:cursor editor)
+                editor (if (or (< (:row old-cursor)
+                                  (:row end-cursor))
+                               (and (= (:row old-cursor)
+                                       (:row end-cursor))
+                                    (<= (:column-byte old-cursor)
+                                        (:column-byte end-cursor))))
+                         (text-mode/editor-goto-row-col editor
+                                                        (:row old-cursor)
+                                                        (:column-byte old-cursor))
+                         editor)
+                editor (text-mode/editor-update-viewport editor)]
+      editor)
+    ;; else, no file
+    editor))
+
+(defeffect ::revert-buffer [{:keys [$editor]}]
+  (dispatch! :update $editor revert-buffer))
+
+(defeffect ::delete-rectangle [{:keys [$editor]}]
+  (dispatch! ::update-editor
+             {:$editor $editor
+              :op #'text-mode/editor-delete-rectangle}))
+
+(def clojure-mx-commands
+  [::show-insert-rectangle
+   ::delete-rectangle
+   ::revert-buffer])
 
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
@@ -1402,6 +1467,8 @@
          "C-c -" #'editor-decrease-font-size
          "S--" #'editor-decrease-font-size
          "M-." ::jump-to-definition
+         "M-x" ::mx-selector
+
          ;;"C-c r" ::show-insert-rectangle
          ))
 

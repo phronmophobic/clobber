@@ -187,6 +187,11 @@
   (dispatch! ::util.ui/file-picker (assoc m
                                           :update-editor-intent ::update-editor)))
 
+(defeffect ::mx-selector [{:keys [$editor editor] :as m}]
+  (dispatch! :com.phronemophobic.clobber.util.ui/mx-selector
+             (assoc m
+                    :update-editor-intent ::update-editor)))
+
 (defeffect ::show-find-replace [{:keys [$editor editor] :as m}]
   (dispatch! ::util.ui/show-find-replace
              (assoc m
@@ -204,6 +209,7 @@
   (assoc text-mode/key-bindings
          "C-x C-s" ::save-editor
          "C-x C-f" ::file-picker
+         "M-x" ::mx-selector
          "M-%" ::show-find-replace
          "M-g M-g" ::show-goto-line
          "C-c b" ::update-bindings
