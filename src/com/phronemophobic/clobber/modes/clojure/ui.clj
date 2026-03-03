@@ -1436,10 +1436,17 @@
              {:$editor $editor
               :op #'text-mode/editor-delete-rectangle}))
 
+(defeffect ::show-stacktrace-viewer [{}]
+  (dispatch! :com.phronemophobic.easel/add-component-as-applet
+             (requiring-resolve 'com.phronemophobic.clobber.modes.clojure.ui.stacktrace/stacktrace-viewer)
+             {:exception nil}))
+
 (def clojure-mx-commands
-  [::show-insert-rectangle
+  [::string-insert-rectangle
    ::delete-rectangle
-   ::revert-buffer])
+   ::update-bindings
+   ::revert-buffer
+   ::show-stacktrace-viewer])
 
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
