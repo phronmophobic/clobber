@@ -813,8 +813,10 @@
 
            ns (let [eval-ns (the-ns ns)
                     ns-sym (ns-name eval-ns)
-                    resource-path (ns-sym->resource-path ns-sym)
-                    resource (io/resource resource-path)
+                    resource (some (fn [ext]
+                                     (io/resource (ns-sym->resource-path ns-sym ext)))
+                                   [".clj"
+                                    ".cljc"])
                     source (slurp resource)
                     file (when (= "file" (.getProtocol resource))
                            (io/as-file resource))
