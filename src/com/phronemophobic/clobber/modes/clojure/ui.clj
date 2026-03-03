@@ -1388,7 +1388,7 @@
              (assoc m
                     :update-editor-intent ::update-editor)))
 
-(defeffect ::show-insert-rectangle [{:keys [$editor editor] :as m}]
+(defeffect ::string-insert-rectangle [{:keys [$editor editor] :as m}]
   (dispatch! ::util.ui/show-insert-rectangle
              (assoc m
                     :update-editor-intent ::update-editor)))
