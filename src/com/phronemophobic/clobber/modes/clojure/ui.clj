@@ -210,7 +210,7 @@
                              (into []
                                    (comp cat
                                          (distinct))
-                                   [#_mx-commands
+                                   [mx-commands
                                     clojure-mx-commands]))))))
     
   (dispatch! ::temp-status {:$editor $editor
