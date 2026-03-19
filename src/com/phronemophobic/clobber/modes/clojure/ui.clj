@@ -470,6 +470,22 @@
               (dispatch! 
                :com.phronemophobic.easel/add-applet
                {:id ::doc-viewer
+                :update-applet
+                (fn [applet]
+                  (let [$ref (:$ref applet)
+                        $scroll-state [$ref '(keypath :scroll-state)]]
+                    (assoc applet
+                           :scroll-state {:$extra [(:$ref applet) '(keypath :scroll-state :extra)]
+                                          :extra {}
+                                          :offset [0 0]
+                                          :$offset [$scroll-state '(keypath :offset)]}
+                           :state {:docstring 
+                                   [node-string
+                                    "\n"
+                                    arglists
+                                    "\n"
+                                    (when (string? doc)
+                                      doc)]} )))
                 :make-applet
                 (fn [_]
                   ((requiring-resolve 
