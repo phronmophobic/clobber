@@ -195,6 +195,12 @@
                    (editor-upkeep editor
                                   #(dissoc % :select-cursor)))))))
 
+(defeffect ::editor-drop [{:keys [$editor path mpos]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (editor-upkeep editor
+                              #(text-mode/editor-self-insert-command % (pr-str path))))))
+
 (defeffect ::update-bindings [{:keys [$editor]}]
   (dispatch! :update
              $editor
@@ -1634,6 +1640,13 @@
                  body))
                ;; else
                body)
+        body (ui/on-drop
+              (fn [path mpos]
+                [[::editor-drop {:editor editor
+                                 :$editor $editor
+                                 :path path
+                                 :mpos mpos}]])
+              body)
         body (ui/vertical-layout
               body
               (util.ui/status-bar {:editor editor
