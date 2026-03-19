@@ -192,6 +192,18 @@
   (dispatch! ::temp-status {:$editor $editor 
                             :msg "Bindings updated!"}))
 
+
+(def org-theme
+  {"checkbox" {:text-style/font-style #:font-style{:weight :bold}}
+   "headline"
+   {:text-style/font-style #:font-style{:weight :bold}}})
+
+(def org-highlight-queries
+  "
+  (headline) @headline
+  (checkbox) @checkbox
+  ")
+
 (defn make-editor
   ([{:keys [file source] :as m}]
    (let [editor (make-editor)
@@ -217,17 +229,20 @@
                   editor)]
      editor))
   ([]
-   (-> (org-mode/make-editor)
-       (assoc :viewport {:num-lines 52
-                         :start-line 0}
-              :key-bindings key-bindings
-              :theme util.ui/default-theme
-              :base-style
-              #:text-style
-              {:font-families ["Menlo"]
-              :font-size 12
-              :height 1.2
-              :height-override true}))))
+   (let [editor (org-mode/make-editor)]
+     (-> editor
+         (assoc :viewport {:num-lines 52
+                           :start-line 0}
+                :key-bindings key-bindings
+                :query (TSQuery. (:language editor)
+                                 org-highlight-queries)
+                :theme org-theme
+                :base-style
+                #:text-style
+                {:font-families ["Menlo"]
+                :font-size 12
+                :height 1.2
+                :height-override true})))))
 
 (defn make-editor-from-file [f]
   (let [source (slurp f)]
