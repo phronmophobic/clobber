@@ -505,9 +505,17 @@
 
         fs (into 
             []
-            (comp (filter (fn [^File f]
-                            (str/includes? (str/lower-case (.getName f))
-                                           search-str-lower)))
+            (comp (remove (fn [^File f]
+                            (let [fname (.getName f)]
+                              (or (and (str/starts-with? fname ".")
+                                       (not (str/starts-with? search-str-lower ".")))
+                                  (and (str/starts-with? fname "#")
+                                       (not (str/starts-with? search-str-lower "#")))))))
+                  (remove (fn [^File f]
+                            (let [fname (.getName f)]
+                              (and (seq search-str-lower)
+                                   (not (str/includes? (str/lower-case fname)
+                                                       search-str-lower))))))
                   (drop offset))
             (sort (.listFiles current-folder)))
         ps (into 
