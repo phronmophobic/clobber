@@ -112,10 +112,7 @@
                 (.getStackTrace exception)))]
     [(dnd/on-drop
       (fn [pos obj]
-        (dev/dtap obj)
-        
         (when-let [x* (:x obj)]
-          
           (let [x @x*]
             (when (instance? Throwable x)
               [[:set $paragraph nil]
