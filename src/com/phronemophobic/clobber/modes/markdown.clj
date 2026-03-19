@@ -17,51 +17,14 @@
 
 
 (def key-bindings
-  { ;; "C-M-x" editor-eval-top-form
-
-   "C-a" #'text-mode/editor-move-beginning-of-line
-   "M-m" #'text-mode/editor-back-to-indentation
-   "C-d" #'text-mode/editor-delete-char
-   "C-e" #'text-mode/editor-move-end-of-line
-   "C-f" #'text-mode/editor-forward-char
-   "C-b" #'text-mode/editor-backward-char
-
-   "C-j" #'text-mode/editor-newline
-   "RET" #'text-mode/editor-newline
-   
-   "C-k" #'text-mode/editor-kill-line
-   "C-l" #'text-mode/editor-recenter-top-bottom
-   "C-n" #'text-mode/editor-next-line
-   "C-o" #'text-mode/editor-open-line
-   "C-p" #'text-mode/editor-previous-line
-   "C-v" #'text-mode/editor-scroll-down
-
-   ;; "M-d" #'paredit-forward-kill-word
-   ;; "M-b" #'editor-backward-word
-   ;; "M-f" #'editor-forward-word
-   "M-v" #'text-mode/editor-scroll-up
-   
-   "M-<" #'text-mode/editor-beginning-of-buffer
-   "M->" #'text-mode/editor-end-of-buffer
-
-   "DEL" #'text-mode/editor-delete-backward-char
-   ;; "M-DEL" #'paredit-backward-kill-word
-   ;; "RET" #'paredit-newline
-   "<right>" #'text-mode/editor-forward-char
-   "<up>" #'text-mode/editor-previous-line
-   "<down>" #'text-mode/editor-next-line
-   "<left>" #'text-mode/editor-backward-char
-   ;; "TAB" #'editor-indent
-   ;; "C-M-q" #'editor-indent-region
-
-   "C-y" #'text-mode/editor-yank
-   "C-SPC" #'text-mode/editor-set-mark
-   "C-w" #'text-mode/editor-kill-region
-   "M-w" #'text-mode/editor-save-region
-   ;; "C-x C-s" editor-save-buffer
-
-   "M-SPC" #'text-mode/editor-single-space
-   "M-\\" #'text-mode/editor-delete-horizontal-space})
+  (merge text-mode/key-bindings
+         {}
+         ;; "M-TAB" #'org-indent-left
+         ;; "TAB" #'org-indent-right
+         ;; "M-<right>" #'org-indent-right
+         ;; "M-<left>" #'org-indent-left
+         ;; "M-RET" #'org-return
+         ))
 
 (comment
   
