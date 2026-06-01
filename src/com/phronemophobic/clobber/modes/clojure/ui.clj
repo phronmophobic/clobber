@@ -1440,19 +1440,23 @@
                      (text-mode/editor-self-insert-command source)
                      (assoc :last-file-load update-time
                             :last-change update-time))
+          editor (if-let [eval-ns (when-let [ns-sym (guess-ns (:rope editor))]
+                                    (create-ns ns-sym))]
+                   (assoc editor :eval-ns eval-ns)
+                   editor)
                 
-                end-cursor (:cursor editor)
-                editor (if (or (< (:row old-cursor)
-                                  (:row end-cursor))
-                               (and (= (:row old-cursor)
-                                       (:row end-cursor))
-                                    (<= (:column-byte old-cursor)
-                                        (:column-byte end-cursor))))
-                         (text-mode/editor-goto-row-col editor
-                                                        (:row old-cursor)
-                                                        (:column-byte old-cursor))
-                         editor)
-                editor (text-mode/editor-update-viewport editor)]
+          end-cursor (:cursor editor)
+          editor (if (or (< (:row old-cursor)
+                            (:row end-cursor))
+                         (and (= (:row old-cursor)
+                                 (:row end-cursor))
+                              (<= (:column-byte old-cursor)
+                                  (:column-byte end-cursor))))
+                   (text-mode/editor-goto-row-col editor
+                                                  (:row old-cursor)
+                                                  (:column-byte old-cursor))
+                   editor)
+          editor (text-mode/editor-update-viewport editor)]
       editor)
     ;; else, no file
     editor))
