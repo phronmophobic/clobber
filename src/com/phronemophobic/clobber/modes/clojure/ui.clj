@@ -414,7 +414,11 @@
       (let [^Rope rope (:rope editor)
             source (.toString rope)
             now (java.time.Instant/now)]
-        (spit file source)
+        (try
+          (spit file source)
+          (catch Exception e
+            (tap> e)
+            (throw e)))
         (dispatch! :update $editor 
                    assoc
                    :last-file-load now
