@@ -225,10 +225,13 @@
 (defeffect ::editor-eval-and-tap-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :tap? true)))
 
+(defeffect ::editor-eval-and-show-last-sexp [m]
+  (dispatch! ::editor-eval-last-sexp (assoc m :show? true)))
+
 (defeffect ::editor-eval-and-print-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :print? true)))
 
-(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? print?]}]
+(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? print? show?]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
           {cursor-byte :byte
@@ -288,6 +291,10 @@
                                         :show-context? false}))]
               (when tap?
                 (tap> val))
+              (when show?
+                (dispatch! :com.phronemophobic.easel/add-component-as-applet
+                           (constantly val)
+                           {}))
 
               (dispatch! :update $editor
                          (fn [editor]
@@ -1492,6 +1499,7 @@
          "C-c C-p" ::editor-eval-and-print-last-sexp
          "C-c b" ::update-bindings
          "C-c C-o" :com.phronemophobic.easel.tap-watcher/clear-taps
+         "C-c v" ::editor-eval-and-show-last-sexp
          "C-c p" #'editor-press-start
          "C-c +" #'editor-increase-font-size
          "S-=" #'editor-increase-font-size
