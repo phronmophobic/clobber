@@ -49,13 +49,12 @@
   (case mode
     :clojure #'com.phronemophobic.clobber.modes.clojure.ui/code-editor
     :org #'com.phronemophobic.clobber.modes.org.ui/org-editor
+    ;; :markdown (requiring-resolve 'com.phronemophobic.clobber.modes.markdown.wysiwyg/code-editor)
     ;; else
     #'com.phronemophobic.clobber.modes.text.ui/text-editor))
 
 (defn make-editor
-  "Creates a new editor with associated ui.
-  
-  Returns a map with `:editor` and `:ui`.
+  "Creates a new editor.
   
   If `:mode` is provided, use that mode. Otherwise, try to guess the right mode.
   
