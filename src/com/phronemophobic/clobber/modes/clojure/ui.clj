@@ -267,7 +267,7 @@
                           (let [form (read rdr)]
                             [nil
                              (Compiler/eval form)])
-                          (catch Exception e
+                          (catch Throwable e
                             [e nil])
                           (finally
                             (pop-thread-bindings)))]
@@ -364,7 +364,7 @@
                            {rope (assoc line-val line-number (viscous/wrap-unique val))})))
             (dispatch! ::temp-status {:$editor $editor
                                       :msg temp-view}))
-          (catch Exception e
+          (catch Throwable e
             (dispatch! ::temp-status {:$editor $editor
                                       :msg (str (-> e class .getName) ": " (.getMessage e) "\n"
                                                 (some-> e .getCause .getMessage))})
@@ -393,7 +393,7 @@
           (clojure.lang.Compiler/load rdr source-path source-name))
         (dispatch! ::temp-status {:$editor $editor
                                   :msg "buffer loaded."})
-        (catch Exception e
+        (catch Throwable e
           (tap> e)
           (dispatch! ::temp-status {:$editor $editor
                                     :msg
