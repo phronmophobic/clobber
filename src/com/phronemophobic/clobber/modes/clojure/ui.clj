@@ -508,12 +508,13 @@
                                                 (when (string? doc)
                                                   doc)]}))
             ;; try javadoc
-            (if-let [jdoc-data (try
+            (if-let [jdoc-data (binding [*ns* (:eval-ns editor)]
+                                 (try
                                    (clojure.java.doc.api/javadoc-data-fn
                                     node-string
                                     nil)
                                    (catch Exception e
-                                     nil))]
+                                     nil)))]
               (let [docstring 
                     (if-let [selected (seq (or (:selected-method jdoc-data)
                                                (:selected-constructor jdoc-data)))]
