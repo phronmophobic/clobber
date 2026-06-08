@@ -437,6 +437,28 @@
                   first)]
     (para/paragraph docstring width default-paragraph-style)))
 
+(defeffect ::make-or-update-doc [{:keys [docstring]}]
+  (dispatch! 
+   :com.phronemophobic.easel/add-applet
+   {:id ::doc-viewer
+    :update-applet
+    (fn [applet]
+      (let [$ref (:$ref applet)
+            $scroll-state [$ref '(keypath :scroll-state)]]
+        (assoc applet
+               :scroll-state {:$extra [(:$ref applet) '(keypath :scroll-state :extra)]
+                              :extra {}
+                              :offset [0 0]
+                              :$offset [$scroll-state '(keypath :offset)]}
+               :state {:docstring docstring} )))
+    :make-applet
+    (fn [_]
+      ((requiring-resolve 
+        'com.phronemophobic.easel/map->ComponentApplet)
+       {:label "Doc"
+        :component-var #'doc-viewer
+        :initial-state {:docstring docstring}}))}))
+
 (defeffect ::show-doc [{:keys [editor $editor]}]
   (when-let [^TSTree tree (:tree editor)]
     (let [tc (TSTreeCursor. (.getRootNode tree))
@@ -478,38 +500,13 @@
                                (:arglists mta))))]
               ;; This should really be a more general
               ;; intent that easel's implementation catches and implements
-              (dispatch! 
-               :com.phronemophobic.easel/add-applet
-               {:id ::doc-viewer
-                :update-applet
-                (fn [applet]
-                  (let [$ref (:$ref applet)
-                        $scroll-state [$ref '(keypath :scroll-state)]]
-                    (assoc applet
-                           :scroll-state {:$extra [(:$ref applet) '(keypath :scroll-state :extra)]
-                                          :extra {}
-                                          :offset [0 0]
-                                          :$offset [$scroll-state '(keypath :offset)]}
-                           :state {:docstring 
-                                   [node-string
-                                    "\n"
-                                    arglists
-                                    "\n"
-                                    (when (string? doc)
-                                      doc)]} )))
-                :make-applet
-                (fn [_]
-                  ((requiring-resolve 
-                    'com.phronemophobic.easel/map->ComponentApplet)
-                   {:label "Doc"
-                    :component-var #'doc-viewer
-                    :initial-state {:docstring 
-                                    [node-string
-                                     "\n"
-                                     arglists
-                                     "\n"
-                                     (when (string? doc)
-                                       doc)]}}))}))
+              (dispatch! ::make-or-update-doc {:docstring
+                                               [node-string
+                                                "\n"
+                                                arglists
+                                                "\n"
+                                                (when (string? doc)
+                                                  doc)]}))
             ;; try javadoc
             (if-let [jdoc-data (try
                                    (clojure.java.doc.api/javadoc-data-fn
@@ -547,28 +544,12 @@
                              (map (fn [{:keys [return-type signature description]}]
                                     (str return-type " " signature "\n" description)))
                              (:methods jdoc-data)))))]
-                (dispatch! 
-                 :com.phronemophobic.easel/add-applet
-                 {:id ::doc-viewer
-                  :make-applet
-                  (fn [_]
-                    ((requiring-resolve 
-                      'com.phronemophobic.easel/map->ComponentApplet)
-                     {:label "Doc"
-                      :component-var #'doc-viewer
-                      :initial-state {:docstring docstring}}))}))
+                (dispatch! ::make-or-update-doc
+                           {:docstring docstring}))
               ;; try compliment
               (let [docstring (compliment.core/documentation node-string (:eval-ns editor))]
-                (dispatch! 
-                 :com.phronemophobic.easel/add-applet
-                 {:id ::doc-viewer
-                  :make-applet
-                  (fn [_]
-                    ((requiring-resolve 
-                      'com.phronemophobic.easel/map->ComponentApplet)
-                     {:label "Doc"
-                      :component-var #'doc-viewer
-                      :initial-state {:docstring docstring}}))})))))))))
+                (dispatch! ::make-or-update-doc
+                           {:docstring docstring})))))))))
 
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
