@@ -515,6 +515,7 @@
                                     node-string
                                     nil)
                                    (catch Exception e
+                                     (tap> e)
                                      nil)))]
               (let [docstring 
                     (if-let [selected (seq (or (:selected-method jdoc-data)
