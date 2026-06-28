@@ -190,6 +190,29 @@
   (dispatch! ::temp-status {:$editor $editor 
                             :msg "Bindings updated!"}))
 
+(defeffect ::editor-paste [{:keys [$editor s]}]
+  (dispatch! :update $editor
+             (fn [editor]
+               (editor-upkeep editor
+                              #(text-mode/editor-self-insert-command % s )))))
+
+(defeffect ::editor-copy [{:keys [$editor editor]}]
+  (when-let [select-cursor (:select-cursor editor)]
+    (let [cursor (:cursor editor)
+          start-byte (min (:byte select-cursor)
+                          (:byte cursor))
+          end-byte (max (:byte select-cursor)
+                        (:byte cursor))
+          
+          ^Rope rope (:rope editor) 
+          selected-text (-> (.sliceBytes rope start-byte end-byte)
+                            .toString)]
+      (dispatch! :clipboard-copy selected-text)
+      (dispatch! :update $editor
+                 (fn [editor]
+                   (editor-upkeep editor
+                                  #(dissoc % :select-cursor)))))))
+
 
 (defn make-editor
   ([{:keys [file source] :as m}]
@@ -300,10 +323,25 @@
           (named-node-children node)))
   )
 
+(defmethod node->styled-text* "strikethrough" [ctx ^TSNode node]
+  (let [style (util.ui/merge-styles [(:style ctx)
+                                     #:text-style
+                                     {
+                                     :decoration #{:text-decoration/line-through}
+                                     }])
+        ctx (assoc ctx :style style)]
+    (style-children ctx node)))
+
 (defmethod node->styled-text* "tight_list" [ctx ^TSNode node]
-  (conj
-   (style-children ctx node)
-   "\n"))
+  (let [ctx (update ctx :list/indentation (fn [indentation]
+                                            (if indentation
+                                              (inc indentation)
+                                              0)))
+        result (style-children ctx node)
+        result (if (zero? (:list/indentation ctx))
+                 (conj result "\n")
+                 result)]
+    result))
 
 (defmethod node->styled-text* "loose_list" [ctx ^TSNode node]
   (conj
@@ -312,12 +350,22 @@
 
 
 (defmethod node->styled-text* "list_item" [ctx ^TSNode node]
-  (style-children ctx node))
+  (let [indentation (get ctx :list/indentation 0)]
+    (into [(str/join ""
+                     (repeat (* 10 indentation)
+                             " "))]
+          (style-children ctx node))))
 
 (defmethod node->styled-text* "list_marker" [ctx ^TSNode node]
-  {:text " • "
-   :style (:style ctx)
-   :node {:type (.getType node)}})
+  (let [marker-text (util/rope->str (:rope ctx)
+                                    (max (:start-byte ctx) (.getStartByte node))
+                                    (min (:end-byte ctx) (.getEndByte node)))
+        marker-text (if (= "-" marker-text)
+                      "•"
+                      marker-text)]
+    {:text (str " " marker-text " ")
+     :style (:style ctx)
+     :node {:type (.getType node)}}))
 
 (defmethod node->styled-text* "document" [ctx ^TSNode node]
   (style-children ctx node))
@@ -330,7 +378,8 @@
    :style (:style ctx)})
 
 (defmethod node->styled-text* "backslash_escape" [ctx ^TSNode node]
-  nil)
+  (style-children ctx node)
+  #_nil)
 
 
 
