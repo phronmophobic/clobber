@@ -1328,73 +1328,75 @@
   ([editor]
    (editor-next-line editor 1))
   ([editor n]
-   (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
-         {cursor-byte :byte
-          cursor-char :char
-          cursor-point :point
-          cursor-row :row
-          cursor-target-column-byte :target-column-byte
-          cursor-column-byte :column-byte} cursor
-
-         target-column-byte (or cursor-target-column-byte
-                                cursor-column-byte)
-
-         bi (doto (BreakIterator/getCharacterInstance)
-              (.setText rope))
-
-         ;; find newline
-         [lines char-index] (loop [char-index cursor-char
-                                   lines 0
-                                   ;; only used when hitting
-                                   ;; end of buffer
-                                   last-line-char nil]
-                              (let [next-char (.following bi char-index)]
-                                (cond
-                                  ;; last line. go to last line char
-                                  (= -1 next-char) (if (nil? last-line-char)
-                                                     ;; started on last line
-                                                     [0 cursor-char]
-                                                     [lines last-line-char])
-                                  (= \newline (.charAt rope char-index)) (let [lines (inc lines)]
-                                                                           (if (= lines n)
-                                                                             [lines next-char]
-                                                                             (recur next-char lines next-char)))
-                                  :else (recur next-char lines last-line-char))))
-
-         ;; keep going until target column-byte
-         ;; target byte doesn't even make sense
-         ;; treat target byte as target grapheme cluster for now
-         [char-index column-byte]
-         (if (pos? lines)
-           (let [line-start-char char-index]
-             (loop [char-index char-index
-                    n 0]
-
-               (let [next-char (.following bi char-index)]
-                 (if (or (= -1 next-char)
-                         (= \newline (.charAt rope char-index))
-                         (= n target-column-byte))
-                   [char-index (-> (.subSequence rope line-start-char char-index)
-                                   .toString
-                                   .getBytes
-                                   alength)]
-                   (recur next-char
-                          (inc n))))))
-           [cursor-char cursor-column-byte])]
-     (if (= char-index cursor-char)
-       editor
-       (let [diff-string (-> (.subSequence rope cursor-char char-index )
-                             .toString)
-             num-bytes (alength (.getBytes diff-string "utf-8"))
-             new-cursor-column-byte (+ cursor-column-byte num-bytes)
-             new-cursor-row (+ cursor-row lines)]
-         (assoc editor
-                :cursor {:byte (+ cursor-byte num-bytes)
-                         :char (+ cursor-char (.length diff-string))
-                         :point (+ cursor-point (util/num-points diff-string))
-                         :row new-cursor-row
-                         :target-column-byte target-column-byte
-                         :column-byte column-byte}))))))
+   (if (<= n 0)
+     editor
+     (let [{:keys [cursor paragraph ^Rope rope buf ^TSParser parser]} editor
+           {cursor-byte :byte
+            cursor-char :char
+            cursor-point :point
+            cursor-row :row
+            cursor-target-column-byte :target-column-byte
+            cursor-column-byte :column-byte} cursor
+           
+           target-column-byte (or cursor-target-column-byte
+                                  cursor-column-byte)
+           
+           bi (doto (BreakIterator/getCharacterInstance)
+                (.setText rope))
+           
+           ;; find newline
+           [lines char-index] (loop [char-index cursor-char
+                                     lines 0
+                                     ;; only used when hitting
+                                     ;; end of buffer
+                                     last-line-char nil]
+                                (let [next-char (.following bi char-index)]
+                                  (cond
+                                    ;; last line. go to last line char
+                                    (= -1 next-char) (if (nil? last-line-char)
+                                                       ;; started on last line
+                                                       [0 cursor-char]
+                                                       [lines last-line-char])
+                                    (= \newline (.charAt rope char-index)) (let [lines (inc lines)]
+                                                                             (if (= lines n)
+                                                                               [lines next-char]
+                                                                               (recur next-char lines next-char)))
+                                    :else (recur next-char lines last-line-char))))
+           
+           ;; keep going until target column-byte
+           ;; target byte doesn't even make sense
+           ;; treat target byte as target grapheme cluster for now
+           [char-index column-byte]
+           (if (pos? lines)
+             (let [line-start-char char-index]
+               (loop [char-index char-index
+                      n 0]
+                 
+                 (let [next-char (.following bi char-index)]
+                   (if (or (= -1 next-char)
+                           (= \newline (.charAt rope char-index))
+                           (= n target-column-byte))
+                     [char-index (-> (.subSequence rope line-start-char char-index)
+                                     .toString
+                                     .getBytes
+                                     alength)]
+                     (recur next-char
+                            (inc n))))))
+             [cursor-char cursor-column-byte])]
+       (if (= char-index cursor-char)
+         editor
+         (let [diff-string (-> (.subSequence rope cursor-char char-index )
+                               .toString)
+               num-bytes (alength (.getBytes diff-string "utf-8"))
+               new-cursor-column-byte (+ cursor-column-byte num-bytes)
+               new-cursor-row (+ cursor-row lines)]
+           (assoc editor
+                  :cursor {:byte (+ cursor-byte num-bytes)
+                           :char (+ cursor-char (.length diff-string))
+                           :point (+ cursor-point (util/num-points diff-string))
+                           :row new-cursor-row
+                           :target-column-byte target-column-byte
+                           :column-byte column-byte})))))))
 
 (defn editor-string-insert-rectangle [editor s]
   (if-let [select-cursor (:select-cursor editor)]
