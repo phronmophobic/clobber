@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [clojure.core.async :as async]
             clojure.pprint
+            clojure.reflect
             [membrane.ui :as ui]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
@@ -601,7 +602,7 @@
                         v (ns-resolve eval-ns sym)
                         
                         arglists (-> v meta :arglists)]
-                    (when arglists
+                    (if arglists
                       (let [cursor-index
                             (loop [index 1]
                               (if (>= index named-child-count)
@@ -637,7 +638,62 @@
                                {:paragraph-style/text-style (:base-style editor)})]
                         (dispatch! :update $editor
                                    (fn [editor]
-                                     (assoc-in editor [:status :status] p))))))))))
+                                     (assoc-in editor [:status :status] p))))
+                      ;; couldn't find arglist from metadata.
+                      ;; check if it is a method value
+                      (when (qualified-symbol? sym)
+                        (when-let [cls (ns-resolve eval-ns (symbol (namespace sym)) )]
+                          (when (class? cls)
+                            (let [
+                                  base-style (:base-style editor)
+                                  cursor-index
+                                  (loop [index 1]
+                                    (if (>= index named-child-count)
+                                      (dec index)
+                                      (let [argnode (.getNamedChild parent-coll index)]
+                                        (if (<= cursor-byte (.getEndByte argnode))
+                                          (dec index)
+                                          (recur (inc index))))))
+
+                                  method-name (let [sym-name (clojure.core/name sym)]
+                                                (if (str/starts-with? sym-name ".")
+                                                  (subs sym-name 1)
+                                                  sym-name))
+                                  {:keys [members]} (clojure.reflect/type-reflect cls)
+                                  arglists (into []
+                                                 (comp (filter (fn [{:keys [name]}]
+                                                                 (= (clojure.core/name name) 
+                                                                    method-name)))
+                                                       (keep :parameter-types)
+                                                       (map #(cons "this" %)))
+                                                 members)
+
+                                  ps (into [(str 
+                                             sym
+                                             " ")]
+                                           (comp (map (fn [arglist]
+                                                        ["["
+                                                         (into []
+                                                               (comp
+                                                                (map-indexed (fn [i method-sym]
+                                                                               (let [s (name method-sym)]
+                                                                                 (if (= i cursor-index)
+                                                                                   {:text s
+                                                                                    :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
+                                                                                   s))))
+                                                                (interpose " "))
+                                                               arglist)
+                                                         "]"]))
+                                                 (interpose " "))
+                                           arglists)
+                                  p (para/paragraph
+                                     ps
+                                     nil
+                                     {:paragraph-style/text-style (:base-style editor)})]
+                              (dispatch! :update $editor
+                                   (fn [editor]
+                                     (assoc-in editor [:status :status] p)))))))
+                      ))))))
           ;; else, remove arglist
           (when (-> editor :status :status)
             (dispatch! :update $editor
