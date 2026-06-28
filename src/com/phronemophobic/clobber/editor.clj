@@ -41,6 +41,10 @@
           (= ".org" (when file
                       (file-ext file)))
           :org
+          
+          ;; (= ".md" (when file
+          ;;            (file-ext file)))
+          ;; :markdown
 
           :else :text)]
     mode))
@@ -65,6 +69,8 @@
      :clojure (cui/make-editor opts)
      
      :org (oui/make-editor opts)
+     ;; :markdown ((requiring-resolve 'com.phronemophobic.clobber.modes.markdown.wysiwyg/make-editor)
+     ;;            opts)
      
      ;; else
      (tui/make-editor opts))))
