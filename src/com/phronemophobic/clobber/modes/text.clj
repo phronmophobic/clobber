@@ -1584,8 +1584,12 @@
                         2)]
     (editor-previous-line editor to-scroll)))
 
-
 (defn editor-goto-line [editor n]
+  ;; we should probably be a bit more clever
+  ;; probably scan from current cursor or from 
+  ;; the beginning depending on the target line
+  ;; however, it may become moot if we update Rope
+  ;; to keep track of lines for us.
   (-> editor
       (assoc :cursor {:byte 0
                       :char 0
