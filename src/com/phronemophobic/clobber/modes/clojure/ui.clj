@@ -791,8 +791,13 @@
                              ;; if there's just one completion
                              ;; and the completion is still valid
                              ;; then autocomplete
-                             (-> (text-mode/editor-self-insert-command editor (subs (-> completions first :candidate) (count sym-str)))
-                                 (dissoc ::completion))
+                             (let [sym-start-byte (.getStartByte sym-node)
+                                   sym-end-byte (.getEndByte sym-node)]
+                               (-> editor
+                                   (text-mode/editor-goto-byte sym-start-byte)
+                                   (text-mode/editor-snip sym-start-byte sym-end-byte)
+                                   (text-mode/editor-self-insert-command (-> completions first :candidate))
+                                   (dissoc ::completion)))
                              ;; else
                              (assoc editor
                                     ::completion
@@ -1294,8 +1299,16 @@
              {:op (fn [editor]
                     (if-let [{:keys [completions prefix]} (::completion editor)] 
                       (if (= 1 (count completions))
-                        (-> (text-mode/editor-self-insert-command editor (subs (-> completions first :candidate) (count prefix)))
-                            (dissoc ::completion))
+                        (let [prefix-bytes (alength (String/.getBytes prefix))
+                              
+                              cursor-byte (-> editor :cursor :byte)
+                              new-cursor-byte (max 0 (- cursor-byte
+                                                        prefix-bytes))]
+                          (-> editor
+                              (text-mode/editor-goto-byte new-cursor-byte)
+                              (text-mode/editor-snip new-cursor-byte cursor-byte)
+                              (text-mode/editor-self-insert-command (-> completions first :candidate))
+                              (dissoc ::completion)))
                         ;; else
                         (let [longest-shared-prefix (transduce
                                                      (comp (map :candidate)
@@ -1303,9 +1316,18 @@
                                                      (completing shared-prefix)
                                                      (-> completions first :candidate)
                                                      (rest completions))]
-                          (if (= prefix longest-shared-prefix)
+                          (if (or (= prefix longest-shared-prefix)
+                                  (< (count longest-shared-prefix)
+                                     (count prefix)))
                             editor
-                            (text-mode/editor-self-insert-command editor (subs longest-shared-prefix (count prefix))))))
+                            (let [prefix-bytes (alength (String/.getBytes prefix))
+                                  cursor-byte (-> editor :cursor :byte)
+                                  new-cursor-byte (max 0 (- cursor-byte
+                                                            prefix-bytes))]
+                              (-> editor
+                                  (text-mode/editor-goto-byte new-cursor-byte)
+                                  (text-mode/editor-snip new-cursor-byte cursor-byte)
+                                  (text-mode/editor-self-insert-command longest-shared-prefix))))))
                       (clojure-mode/editor-indent editor)))
               :$editor $editor}))
 
