@@ -155,7 +155,7 @@
           (>= cursor-char (.length rope))
           (first
            (para/get-rects-for-range (assoc para :paragraph [(:paragraph para)
-                                                             " "])
+                                                             "8"])
                                      cursor-char (inc cursor-char)
                                      :max
                                      :tight))
