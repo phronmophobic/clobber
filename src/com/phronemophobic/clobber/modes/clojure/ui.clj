@@ -268,7 +268,9 @@
                                         source-path (assoc Compiler/SOURCE_PATH source-path
                                                            Compiler/SOURCE source-name)))
               [err val] (try
-                          (let [form (read rdr)]
+                          (let [form (read {:read-cond :allow
+                                            :features #{:clj}} 
+                                           rdr)]
                             [nil
                              (Compiler/eval form)])
                           (catch Throwable e
@@ -354,7 +356,9 @@
                                           source-path (assoc Compiler/SOURCE_PATH source-path
                                                              Compiler/SOURCE source-name)))
                 val (try
-                      (let [form (read rdr)]
+                      (let [form (read {:read-cond :allow
+                                        :features #{:clj}}
+                                       rdr)]
                         (Compiler/eval form))
                       (finally
                         (pop-thread-bindings)))
@@ -1617,7 +1621,8 @@
                               [success binding-sym result :as ret]
                               (if-let [ret (get cache forms)]
                                 ret
-                                (let [form (read-string s)
+                                (let [form (read-string {:read-cond :allow
+                                                         :features #{:clj}} s)
                                       [binding-sym form] (if (list? form)
                                                            (case (first form)
                                                              
