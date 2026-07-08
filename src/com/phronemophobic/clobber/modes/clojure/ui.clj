@@ -1543,12 +1543,21 @@
              (requiring-resolve 'com.phronemophobic.clobber.modes.clojure.ui.stacktrace/stacktrace-viewer)
              {:exception nil}))
 
+
+(defeffect ::diff-with-file [{:keys [editor]}]
+  (when-let [f (:file editor)]
+    (dispatch! :com.phronemophobic.easel.fidgit/show-unified-diff
+               {:source (slurp f)
+                :target (-> editor :rope str)
+                :mode :clojure})))
+
 (def clojure-mx-commands
   [::string-insert-rectangle
    ::delete-rectangle
    ::update-bindings
    ::revert-buffer
-   ::show-stacktrace-viewer])
+   ::show-stacktrace-viewer
+   ::diff-with-file])
 
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
