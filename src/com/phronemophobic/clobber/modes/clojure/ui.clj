@@ -669,8 +669,11 @@
                                                  (comp (filter (fn [{:keys [name]}]
                                                                  (= (clojure.core/name name) 
                                                                     method-name)))
-                                                       (keep :parameter-types)
-                                                       (map #(cons "this" %)))
+                                                       (filter :parameter-types)
+                                                       (map (fn [{:keys [parameter-types flags]}]
+                                                              (if (:static flags)
+                                                                parameter-types
+                                                                (cons "this" parameter-types)))))
                                                  members)
 
                                   ps (into [(str 
