@@ -1551,13 +1551,22 @@
                 :target (-> editor :rope str)
                 :mode :clojure})))
 
+
+
+(defeffect ::git-diff [{:keys [editor]}]
+  (when-let [f (:file editor)]
+    (dispatch! :com.phronemophobic.easel.fidgit/show-diff {:fname f})))
+
+
+
 (def clojure-mx-commands
   [::string-insert-rectangle
    ::delete-rectangle
    ::update-bindings
    ::revert-buffer
    ::show-stacktrace-viewer
-   ::diff-with-file])
+   ::diff-with-file
+   ::git-diff])
 
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
