@@ -29,9 +29,9 @@
                               :git/tag "v0.1.4"
                               :git/sha "34e381e"}
 
-        com.ibm.icu/icu4j {:mvn/version "68.1"}
-        com.ibm.icu/icu4j-charset {:mvn/version "68.1"}
-        com.ibm.icu/icu4j-localespi {:mvn/version "68.1"}
+        com.ibm.icu/icu4j {:mvn/version "70.1"}
+        com.ibm.icu/icu4j-charset {:mvn/version "70.1"}
+        com.ibm.icu/icu4j-localespi {:mvn/version "70.1"}
         }
  :aliases
  {:project
