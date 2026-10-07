@@ -296,7 +296,11 @@
                 (tap> val))
               (when show?
                 (dispatch! :com.phronemophobic.easel/add-component-as-applet
-                           (constantly val)
+                           (constantly 
+                            (let [val (if (var? val)
+                                        @val
+                                        val)]
+                              val))
                            {}))
 
               (dispatch! :update $editor
