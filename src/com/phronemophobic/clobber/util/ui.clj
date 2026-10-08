@@ -541,7 +541,7 @@
         search-editor-body 
         (para/paragraph
          ps
-         nil
+         (:width editor)
          {:paragraph-style/text-style base-style})]
     (ui/on
      ::cancel-search
