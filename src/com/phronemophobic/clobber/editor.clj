@@ -23,6 +23,8 @@
 
 
 
+(def ^:private clojure-file-suffixes
+  #{".edn" ".clj" ".cljc" ".jank" ".bb"})
 
 (defn guess-mode
   [{:keys [file url source] :as opts}]
@@ -31,10 +33,10 @@
           (:mode opts) (:mode opts)
 
           (or (when file
-                (#{".edn" ".clj" ".cljc"} (file-ext file)))
+                (clojure-file-suffixes (file-ext file)))
               (when url
                 (when-let [path (java.net.URL/.getPath url)]
-                  (#{".edn" ".clj" ".cljc"} (path-ext path))))
+                  (clojure-file-suffixes (path-ext path))))
               (:ns opts))
           :clojure
           
