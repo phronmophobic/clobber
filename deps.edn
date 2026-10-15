@@ -28,10 +28,13 @@
         org.clojure/java.doc {:git/url "https://github.com/clojure/java.doc"
                               :git/tag "v0.1.4"
                               :git/sha "34e381e"}
+        nrepl/nrepl {:mvn/version "1.8.0"}
 
         com.ibm.icu/icu4j {:mvn/version "70.1"}
         com.ibm.icu/icu4j-charset {:mvn/version "70.1"}
         com.ibm.icu/icu4j-localespi {:mvn/version "70.1"}
+
+        com.phronemophobic/source-logging-pushback-reader {:mvn/version "1.0"}
         }
  :aliases
  {:project
