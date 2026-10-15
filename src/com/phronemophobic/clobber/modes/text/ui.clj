@@ -41,6 +41,7 @@
   {".json" :json
    ".sh" :bash
    ".cpp" :cpp
+   ".hpp" :cpp
    ".html" :html
    ".css" :css
    ".java" :java
