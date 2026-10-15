@@ -11,8 +11,10 @@
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.membrandt :as ant]
             [com.phronemophobic.viscous :as viscous]
+            [com.phronemophobic.clobber.editor :as clobber.editor]
             [com.phronemophobic.clobber.modes.markdown :as markdown-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
+            [com.phronemophobic.clobber.modes.text.ui :as text-mode.ui]
             [com.phronemophobic.clobber.util :as util]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
             [com.phronemophobic.clobber.util.ui :as util.ui])
@@ -305,22 +307,68 @@
 
 (defmethod node->styled-text* "info_string" [ctx ^TSNode node]
   ;; used for fenced code blocks
+  
+  
+  nil
   )
 
 
 (defmethod node->styled-text* "fenced_code_block" [ctx ^TSNode node]
-  (conj
-   (style-children ctx node)
-   "\n"))
+  
+  (let [code-type (first
+                   (into []
+                         (comp
+                          (keep (fn [i]
+                                  (let [child (.getNamedChild node i)]
+                                    (when (= "info_string" (.getType child))
+                                      (let [s (util/rope->str (:rope ctx)
+                                                              (max (:start-byte ctx) (.getStartByte child))
+                                                              (min (:end-byte ctx) (.getEndByte child)))]
+                                        s)))))
+                          (take 1))
+                         (range (.getNamedChildCount node))))
+        ctx (if code-type
+              (assoc ctx :code/type code-type)
+              ctx)]
+    (conj
+     (style-children ctx node)
+     "\n")))
 
 (defmethod node->styled-text* "code_fence_content" [ctx ^TSNode node]
-  (let [style (util.ui/merge-styles [(:style ctx)
-                                     #:text-style
-                                     {:font-families ["Menlo"]}])
-        ctx (assoc ctx :style style)]
-    (into []
-          (map #(node->styled-text* ctx %))
-          (named-node-children node)))
+  
+  (if (= "c" (:code/type ctx))
+    (let [source (util/rope->str (:rope ctx)
+                                 (max (:start-byte ctx) (.getStartByte node))
+                                 (min (:end-byte ctx) (.getEndByte node)))
+          
+          style (util.ui/merge-styles [(:style ctx)
+                                       #:text-style
+                                       {:font-families ["Menlo"]}])
+          
+          editor (-> (text-mode.ui/make-editor)
+                     (assoc :base-style style)
+                     (text-mode.ui/set-language :c)
+                     (text-mode/editor-insert source 0 0 0))
+          p (util.ui/editor->paragraph editor)
+          text (:paragraph p)
+          text (into []
+                     (map (fn [t]
+                            (if (string? t)
+                              {:text t
+                               :style style}
+                              t)))
+                     text)]
+
+      text)
+    
+    ;; else
+    (let [style (util.ui/merge-styles [(:style ctx)
+                                       #:text-style
+                                       {:font-families ["Menlo"]}])
+          ctx (assoc ctx :style style)]
+      (into []
+            (map #(node->styled-text* ctx %))
+            (named-node-children node))))
   )
 
 (defmethod node->styled-text* "strikethrough" [ctx ^TSNode node]
