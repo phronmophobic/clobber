@@ -595,7 +595,14 @@
                f (if (and (= search-str "~")
                           @user-home*)
                    (io/file @user-home*)
-                   (first fs))]
+                   ;; else, check for exact match
+                   
+                   (let [exact-file (io/file current-folder search-str)]
+                     (if (and (File/.exists exact-file)
+                              (File/.isDirectory exact-file))
+                       exact-file
+                       ;; else use first match
+                       (first fs))))]
            (when (and f (File/.isDirectory f))
              [[:set $current-folder f]
               [:update $search-editor (fn [editor]
