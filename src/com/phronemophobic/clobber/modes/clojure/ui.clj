@@ -2081,8 +2081,13 @@
 
 (defeffect ::open-scratch [{:keys [editor]}]
   (let [editor-label (:label editor)
+
+        evaluator (:evaluator editor)
         editor (-> (make-editor)
-                   (assoc :eval-ns (:eval-ns editor)))]
+                   (assoc :eval-ns (:eval-ns editor)))
+        editor (if evaluator
+                 (assoc editor :evaluator evaluator)
+                 editor)]
     (dispatch! :com.phronemophobic.easel/add-applet
                {:make-applet
                 (let [f (requiring-resolve 'com.phronemophobic.easel.clobber/clobber-applet)]
