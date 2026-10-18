@@ -248,50 +248,18 @@
           node (util/previous-named-child-for-byte tree cursor-byte)]
       (when node
         (when-let [evaluator (:evaluator editor)]
-          (let [ ;; eval-ns (:eval-ns editor)
-                
-                ;; eval-ns-name (ns-name eval-ns)
-                line-number (-> node
+          (let [line-number (-> node
                                 .getStartPoint
                                 .getRow)
                 col (-> node
                         .getStartPoint
                         TSPoint/.getColumn)
-                
-                ;; [;; path relative to class-path  
-                ;;  source-path
-                ;;  ;; filename
-                ;;  source-name]
-                ;; (when-let [^File f (:file editor)]
-                ;;   [(ns-sym->resource-path eval-ns-name (util/file-ext f))
-                ;;    (.getName f)])
-                
-                ;; tree-sitter line numbers are 0 indexed
-                ;; these source line numbers are 1 indexed
-                ;; we are adding a line for the ns form
-                ;; rdr (doto (LineNumberingPushbackReader.
-                ;;            (StringReader. (util/node->str rope node)))
-                ;;       (.setLineNumber (inc line-number)))
-                
-                ;; _ (push-thread-bindings (cond-> {#'*repl* true}
-                ;;                           eval-ns (assoc #'*ns* eval-ns)
-                ;;                           source-path (assoc Compiler/SOURCE_PATH source-path
-                ;;                                              Compiler/SOURCE source-name)))
+
                 [err val] (evaluator/evaluate evaluator {:source-path (:eval/source-path editor)
                                                          :source (:eval/source editor)
                                                          :code (util/node->str rope node)
                                                          :line (inc line-number)
-                                                         :col col})
-                #_(try
-                    (let [form (read {:read-cond :allow
-                                      :features #{:clj}} 
-                                     rdr)]
-                      [nil
-                       (Compiler/eval form)])
-                    (catch Throwable e
-                      [e nil])
-                    (finally
-                      (pop-thread-bindings)))]
+                                                         :col col})]
             (if err
               (do 
                 (dispatch! ::temp-status {:$editor $editor
@@ -353,54 +321,19 @@
         editor
         (try
           (when-let [evaluator (:evaluator editor)]
-            (let [;; eval-ns (:eval-ns editor)
-                  ;; eval-ns-name (ns-name eval-ns)
-                  node (.currentNode cursor)
-                  ;; line-number (-> node
-                  ;;                 .getEndPoint
-                  ;;                 .getRow)
+            (let [node (.currentNode cursor)
+                  line-number (-> node
+                                  .getStartPoint
+                                  .getRow)
+                  col (-> node
+                          .getStartPoint
+                          TSPoint/.getColumn)
                   
-                  ;; [;; path relative to class-path  
-                  ;;  source-path
-                  ;;  ;; filename
-                  ;;  source-name]
-                  ;; (when-let [^File f (:file editor)]
-                  ;;   [(ns-sym->resource-path eval-ns-name (util/file-ext f))
-                  ;;    (.getName f)])
-                  
-                  ;; ;; tree-sitter line numbers are 0 indexed
-                  ;; ;; these source line numbers are 1 indexed
-                  ;; ;; we are adding a line for the ns form
-                  ;; rdr (doto (LineNumberingPushbackReader.
-                  ;;            (StringReader. (util/node->str rope node)))
-                  ;;       (.setLineNumber (inc line-number)))
-                  
-
-                  ;; _ (push-thread-bindings (cond-> {#'*repl* true}
-                  ;;                           eval-ns (assoc #'*ns* eval-ns)
-                  ;;                           source-path (assoc Compiler/SOURCE_PATH source-path
-                  ;;                                              Compiler/SOURCE source-name)))
-                  ;; val (try
-                  ;;       (let [form (read {:read-cond :allow
-                  ;;                         :features #{:clj}}
-                  ;;                        rdr)]
-                  ;;         (Compiler/eval form))
-                  ;;       (finally
-                  ;;         (pop-thread-bindings)))
-                line-number (-> node
-                                .getStartPoint
-                                .getRow)
-                col (-> node
-                        .getStartPoint
-                        TSPoint/.getColumn)
-
                   [err val] (evaluator/evaluate evaluator {:source-path (:eval/source-path editor)
                                                            :source (:eval/source editor)
                                                            :code (util/node->str rope node)
                                                            :line (inc line-number)
-                                                           :col col})
-
-                  ]
+                                                           :col col})]
               
               (if err
                 (let []
@@ -430,21 +363,8 @@
   (future
     (when-let [evaluator (:evaluator editor)]
 
-      (let [;;eval-ns (:eval-ns editor)
-            ;;eval-ns-name (ns-name eval-ns)
-            
-            ;; [;; path relative to class-path  
-            ;;  source-path
-            ;;  ;; filename
-            ;;  source-name] (when-let [^File f (:file editor)]
-            ;;                 [(ns-sym->resource-path eval-ns-name (util/file-ext f))
-            ;;                  (.getName f)])
-            
-            
-            ^Rope
+      (let [^Rope
             rope (:rope editor)
-            ;; rdr (LineNumberingPushbackReader.
-            ;;      (StringReader. (.toString rope)))
             [err val] (evaluator/load-file evaluator {:source-path (:eval/source-path editor)
                                                       :source (:eval/source editor)
                                                       :code (.toString rope)})]
@@ -458,19 +378,7 @@
             (prn err))
           ;; else use val
           (dispatch! ::temp-status {:$editor $editor
-                                    :msg "buffer loaded."}))
-        #_(try
-          (binding [*repl* true]
-            (clojure.lang.Compiler/load rdr source-path source-name))
-          (dispatch! ::temp-status {:$editor $editor
-                                    :msg "buffer loaded."})
-          (catch Throwable e
-            (tap> e)
-            (dispatch! ::temp-status {:$editor $editor
-                                      :msg
-                                      (str (-> e class .getName) ": " (.getMessage e) "\n"
-                                           (-> e .getCause .getMessage))})
-            (prn e)))))))
+                                    :msg "buffer loaded."}))))))
 
 (defeffect ::save-editor [{:keys [editor $editor]}]
   (future
@@ -604,79 +512,12 @@
         (when-let [evaluator (:evaluator editor)]
           (future
             (let [node-string (util/node->str rope node)
-                  ;; sym (read-string node-string)
-                  ;; v (ns-resolve (:eval-ns editor) sym)
-                  ;; mta (meta v)
-                  ;; doc (:doc mta)
                   doc-info (evaluator/doc evaluator {:sym node-string})
                   docstring (when doc-info
                               (format-docstring doc-info))]
               
               (when docstring
-                (dispatch! ::make-or-update-doc {:docstring docstring}))
-              ;; check var metadata  
-              #_(if (or (seq? (:arglists mta))
-                        (string? doc))
-                  (let [arglists (when (seq? (:arglists mta))
-                                   (str/join
-                                    "\n"
-                                    (eduction
-                                     (map pr-str)
-                                     (:arglists mta))))]
-                    ;; This should really be a more general
-                    ;; intent that easel's implementation catches and implements
-                    (dispatch! ::make-or-update-doc {:docstring
-                                                     [node-string
-                                                      "\n"
-                                                      arglists
-                                                      "\n"
-                                                      (when (string? doc)
-                                                        doc)]}))
-                  ;; try javadoc
-                  (if-let [jdoc-data (binding [*ns* (:eval-ns editor)]
-                                       (try
-                                         (clojure.java.doc.api/javadoc-data-fn
-                                          node-string
-                                          nil)
-                                         (catch Exception e
-                                           (tap> e)
-                                           nil)))]
-                    (let [docstring 
-                          (if-let [selected (seq (or (:selected-method jdoc-data)
-                                                     (:selected-constructor jdoc-data)))]
-                            (str/join
-                             "\n\n"
-                             (eduction
-                              (map (fn [{:keys [clojure-call return-type signature description]}]
-                                     (str clojure-call "\n"
-                                          return-type " " signature "\n\n"
-                                          description)))
-                              selected))
-                            
-                            ;; else show class javadoc)
-                            (str (:classname jdoc-data)
-                                 "\n\n"
-                                 (:class-description-md jdoc-data)
-                                 "\n\nConstructors:\n\n"
-                                 (str/join
-                                  "\n\n"
-                                  (eduction
-                                   (map (fn [{:keys [ signature description]}]
-                                          (str signature "\n" description)))
-                                   (:constructors jdoc-data)))
-                                 "\n\nMethods:\n\n"
-                                 (str/join
-                                  "\n\n"
-                                  (eduction
-                                   (map (fn [{:keys [return-type signature description]}]
-                                          (str return-type " " signature "\n" description)))
-                                   (:methods jdoc-data)))))]
-                      (dispatch! ::make-or-update-doc
-                                 {:docstring docstring}))
-                    ;; try compliment
-                    (let [docstring (compliment.core/documentation node-string (:eval-ns editor))]
-                      (dispatch! ::make-or-update-doc
-                                 {:docstring docstring})))))))))))
+                (dispatch! ::make-or-update-doc {:docstring docstring})))))))))
 
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
@@ -690,8 +531,7 @@
 
 (defn update-arglist [{:keys [$editor editor dispatch!] :as m}]
   ;; TODO: should try to cache results
-  (when-let [;; eval-ns (:eval-ns editor)
-             evaluator (:evaluator editor)]
+  (when-let [evaluator (:evaluator editor)]
     (when-let [^TSTree tree (:tree editor)]
       (let [rope (:rope editor)
             tc (TSTreeCursor. (.getRootNode tree))
@@ -723,11 +563,7 @@
             (when (pos? named-child-count)
               (let [first-child (.getNamedChild parent-coll 0)]
                 (when (= "sym_lit" (.getType first-child))
-                  (let [;; sym (read-string 
-                        ;;      (util/node->str rope first-child))
-                        ;; v (ns-resolve eval-ns sym)
-                        sym (util/node->str rope first-child)
-                        ;; arglists (-> v meta :arglists)
+                  (let [sym (util/node->str rope first-child)
                         arglists (evaluator/arglist evaluator {:sym sym})
 
                         cursor-index
@@ -765,103 +601,7 @@
                                {:paragraph-style/text-style (:base-style editor)})]
                     (dispatch! :update $editor
                                (fn [editor]
-                                 (assoc-in editor [:status :status] p)))
-                    
-                    #_(if arglists
-                      (let [cursor-index
-                            (loop [index 1]
-                              (if (>= index named-child-count)
-                                (dec index)
-                                (let [argnode (.getNamedChild parent-coll index)]
-                                  (if (<= cursor-byte (.getEndByte argnode))
-                                    (dec index)
-                                    (recur (inc index))))))
-                            
-                            base-style (:base-style editor)
-                            ps (into [(str 
-                                       (pr-str v)
-                                       " ")]
-                                     (comp
-                                      (map (fn [arglist]
-                                             ["["
-                                              (into []
-                                                    (comp
-                                                     (map-indexed (fn [i node]
-                                                                    (let [s (pr-str node)]
-                                                                      (if (= i cursor-index)
-                                                                        {:text s
-                                                                         :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
-                                                                        s))))
-                                                     (interpose " "))
-                                                    arglist)
-                                              "]"]))
-                                      (interpose " "))
-                                     arglists)
-                            p (para/paragraph
-                               ps
-                               nil
-                               {:paragraph-style/text-style (:base-style editor)})]
-                        (dispatch! :update $editor
-                                   (fn [editor]
-                                     (assoc-in editor [:status :status] p))))
-                      ;; couldn't find arglist from metadata.
-                      ;; check if it is a method value
-                      (when (qualified-symbol? sym)
-                        (when-let [cls (ns-resolve eval-ns (symbol (namespace sym)) )]
-                          (when (class? cls)
-                            (let [
-                                  base-style (:base-style editor)
-                                  cursor-index
-                                  (loop [index 1]
-                                    (if (>= index named-child-count)
-                                      (dec index)
-                                      (let [argnode (.getNamedChild parent-coll index)]
-                                        (if (<= cursor-byte (.getEndByte argnode))
-                                          (dec index)
-                                          (recur (inc index))))))
-
-                                  method-name (let [sym-name (clojure.core/name sym)]
-                                                (if (str/starts-with? sym-name ".")
-                                                  (subs sym-name 1)
-                                                  sym-name))
-                                  {:keys [members]} (clojure.reflect/type-reflect cls)
-                                  arglists (into []
-                                                 (comp (filter (fn [{:keys [name]}]
-                                                                 (= (clojure.core/name name) 
-                                                                    method-name)))
-                                                       (filter :parameter-types)
-                                                       (map (fn [{:keys [parameter-types flags]}]
-                                                              (if (:static flags)
-                                                                parameter-types
-                                                                (cons "this" parameter-types)))))
-                                                 members)
-
-                                  ps (into [(str 
-                                             sym
-                                             " ")]
-                                           (comp (map (fn [arglist]
-                                                        ["["
-                                                         (into []
-                                                               (comp
-                                                                (map-indexed (fn [i method-sym]
-                                                                               (let [s (name method-sym)]
-                                                                                 (if (= i cursor-index)
-                                                                                   {:text s
-                                                                                    :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
-                                                                                   s))))
-                                                                (interpose " "))
-                                                               arglist)
-                                                         "]"]))
-                                                 (interpose " "))
-                                           arglists)
-                                  p (para/paragraph
-                                     ps
-                                     nil
-                                     {:paragraph-style/text-style (:base-style editor)})]
-                              (dispatch! :update $editor
-                                   (fn [editor]
-                                     (assoc-in editor [:status :status] p)))))))
-                      ))))))
+                                 (assoc-in editor [:status :status] p))))))))
           ;; else, remove arglist
           (when (-> editor :status :status)
             (dispatch! :update $editor
@@ -924,11 +664,6 @@
                 sym-str (if slash?
                           (str sym-str "/")
                           sym-str)
-                ;; completions (into
-                ;;              []
-                ;;              (compliment.core/completions sym-str
-                ;;                                           {:ns (:eval-ns editor)
-                ;;                                            :sort-order :by-name}))
                 
                 completions (evaluator/completions evaluator {:prefix sym-str})]
             (if (seq completions)
@@ -1085,9 +820,6 @@
          editor (if file
                   (assoc editor :file file)
                   editor)
-
-         
-
 
          ;; eval-ns && evaluator
          editor (if-not (:eval-ns editor)
