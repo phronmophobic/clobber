@@ -104,6 +104,8 @@
   returns {:row row :column-byte column}."
   [^CharSequence s]
   ;; we could probably make this faster!
+  ;; todo: why are we using a breakiterator
+  ;;       when we're not counting grapheme clusters?
   (let [bi (doto (BreakIterator/getCharacterInstance)
              (.setText s))]
     (loop [row 0
