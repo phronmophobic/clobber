@@ -46,6 +46,7 @@
    ".css" :css
    ".java" :java
    ".js" :javascript
+   ".wgsl" :javascript
    ".py" :python
    ".c" :c
    ".h" :c})
