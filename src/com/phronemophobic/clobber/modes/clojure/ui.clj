@@ -231,13 +231,16 @@
 (defeffect ::editor-eval-and-tap-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :tap? true)))
 
+(defeffect ::editor-eval-and-show-model-last-sexp [m]
+  (dispatch! ::editor-eval-last-sexp (assoc m :show-model? true)))
+
 (defeffect ::editor-eval-and-show-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :show? true)))
 
 (defeffect ::editor-eval-and-print-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :print? true)))
 
-(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? print? show?]}]
+(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? print? show? show-model?]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
           {cursor-byte :byte
@@ -287,6 +290,9 @@
                                           val)]
                                 val))
                              {}))
+                (when show-model?
+                  (dispatch! :com.phronemophobic.easel.scad/show-model-viewer
+                             {:model val}))
 
                 (dispatch! :update $editor
                            (fn [editor]
@@ -1600,6 +1606,7 @@
          "C-M-x" ::editor-eval-top-form
          "C-x C-e" ::editor-eval-last-sexp
          "C-u C-x C-e" ::editor-eval-and-tap-last-sexp
+         "C-c m" ::editor-eval-and-show-model-last-sexp
          "C-c C-p" ::editor-eval-and-print-last-sexp
          "C-c b" ::update-bindings
          "C-c C-o" :com.phronemophobic.easel.tap-watcher/clear-taps
