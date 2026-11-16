@@ -278,8 +278,7 @@
 
 
 (defui editor-view [{:keys [editor focused?]}]
-  (let [lang (:language editor)
-        rope (:rope editor)
+  (let [rope (:rope editor)
         para (util.ui/editor->paragraph editor)
         para (assoc para :width (:width editor))
         para (assoc-in para
