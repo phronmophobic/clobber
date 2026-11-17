@@ -237,10 +237,13 @@
 (defeffect ::editor-eval-and-show-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :show? true)))
 
+(defeffect ::editor-eval-and-pprint-last-sexp [m]
+  (dispatch! ::editor-eval-last-sexp (assoc m :pprint? true)))
+
 (defeffect ::editor-eval-and-print-last-sexp [m]
   (dispatch! ::editor-eval-last-sexp (assoc m :print? true)))
 
-(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? print? show? show-model?]}]
+(defeffect ::editor-eval-last-sexp [{:keys [editor $editor tap? pprint? print? show? show-model?]}]
   (future
     (let [{:keys [^TSTree tree cursor paragraph ^Rope rope buf ^TSParser parser]} editor
           {cursor-byte :byte
@@ -304,9 +307,15 @@
                                                                           .getEndPoint
                                                                           .getRow)]
                                                       {rope (assoc line-val line-number (viscous/wrap-unique val))})))
-                                   editor (if print?
+                                   editor (cond
+
+                                            pprint?
                                             (text-mode/editor-insert editor (with-out-str (clojure.pprint/pprint val)))
-                                            editor)]
+                                            
+                                            print?
+                                            (text-mode/editor-insert editor (with-out-str (print val)))
+
+                                            :else editor)]
                                editor)))
                 (dispatch! ::temp-status {:$editor $editor
                                           :msg temp-view})))))))))
@@ -1607,7 +1616,8 @@
          "C-x C-e" ::editor-eval-last-sexp
          "C-u C-x C-e" ::editor-eval-and-tap-last-sexp
          "C-c m" ::editor-eval-and-show-model-last-sexp
-         "C-c C-p" ::editor-eval-and-print-last-sexp
+         "C-c C-p" ::editor-eval-and-pprint-last-sexp
+         "C-u C-c C-p" ::editor-eval-and-print-last-sexp
          "C-c b" ::update-bindings
          "C-c C-o" :com.phronemophobic.easel.tap-watcher/clear-taps
          "C-c v" ::editor-eval-and-show-last-sexp
