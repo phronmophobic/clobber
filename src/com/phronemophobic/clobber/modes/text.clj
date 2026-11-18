@@ -320,13 +320,12 @@
                     :row row
                     :column-byte column-byte})))
 
-(defn editor-set-string
+(defn editor-set-rope
   "Updates the editor's contents, but nothing else.
 
   Notably, the cursor remains unchanged."
-  [editor s]
-  (let [rope (Rope/from s)
-        ^TSParser
+  [editor rope]
+  (let [^TSParser
         parser (:parser editor)
         tree (when parser
                (let [reader (util/->RopeReader rope)]
@@ -334,6 +333,13 @@
     (assoc editor
            :rope rope
            :tree tree)))
+
+(defn editor-set-string
+  "Updates the editor's contents, but nothing else.
+
+  Notably, the cursor remains unchanged."
+  [editor s]
+  (editor-set-rope editor (Rope/from s)))
 
 (defn editor-clear [editor]
   (-> editor
