@@ -46,38 +46,22 @@
           (ui/on
            :mouse-down
            (fn [_]
-             [[::cui/update-editor {:$editor $editor
-                                    :op
-                                    (fn [editor]
-                                      (update-in editor
-                                                 [::clj-kondo :finding-index]
-                                                 (fn [n]
-                                                   (let [newn (dec (or n 0))]
-                                                     (if (neg? newn)
-                                                       (dec (count (-> editor ::clj-kondo :findings)))
-                                                       newn)))))}]
-              [::run-clj-kondo {:$editor $editor}]])
+             [[::previous-warning {:$editor $editor}]])
            (icon.ui/icon {:name "left-circle"}))
           (ui/on
            :mouse-down
            (fn [_]
-             [[::cui/update-editor {:$editor $editor
-                                    :op
-                                    (fn [editor]
-                                      (update-in editor
-                                                 [::clj-kondo :finding-index]
-                                                 (fn [n]
-                                                   (let [newn (inc (or n 0))]
-                                                     (if (>= newn (count (-> editor ::clj-kondo :findings)))
-                                                       0
-                                                       newn)))))}]
-              [::run-clj-kondo {:$editor $editor}]])
+             [[::next-warning {:$editor $editor}]])
            (icon.ui/icon {:name "right-circle"}))
           (ui/label (str " " finding-index " / " (count findings) " "))))
         
+        key-bindings (assoc (:key-bindings editor)
+                            "C-r" ::previous-warning
+                            "C-s" ::next-warning)
+        
         view
         (key-binding/wrap-editor-key-bindings 
-         {:key-bindings (:key-bindings editor)
+         {:key-bindings key-bindings
           :editor editor
           :update-editor-intent ::cui/update-editor
           :body view
@@ -167,14 +151,30 @@
         (tap> e)))))
 
 
-(comment
-  
-  (dev/add-component-as-applet
-   #'clj-kondo-view
-   {:update-editor-intent ::test-update-editor-intent
-    :editor (assoc x-325250
-                   :clj-kondo/findings x-325243)})
-  
 
-  ,)
+(defeffect ::next-warning [{:keys [$editor]}]
+  (dispatch! ::cui/update-editor {:$editor $editor
+                                  :op
+                                  (fn [editor]
+                                    (update-in editor
+                                               [::clj-kondo :finding-index]
+                                               (fn [n]
+                                                 (let [newn (inc (or n 0))]
+                                                   (if (>= newn (count (-> editor ::clj-kondo :findings)))
+                                                     0
+                                                     newn)))))})
+  (dispatch! ::run-clj-kondo {:$editor $editor}))
 
+(defeffect ::previous-warning [{:keys [$editor]}]
+  (dispatch! ::cui/update-editor
+             {:$editor $editor
+              :op
+              (fn [editor]
+                (update-in editor
+                           [::clj-kondo :finding-index]
+                           (fn [n]
+                             (let [newn (dec (or n 0))]
+                               (if (neg? newn)
+                                 (dec (count (-> editor ::clj-kondo :findings)))
+                                 newn)))))})
+  (dispatch! ::run-clj-kondo {:$editor $editor}))
