@@ -1,10 +1,6 @@
 (ns com.phronemophobic.clobber.editor
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str]
-            [membrane.component :refer [defeffect defui]]
-            [com.phronemophobic.clobber.modes.text :as text-mode]
+  (:require 
             [com.phronemophobic.clobber.modes.text.ui :as tui]
-            [com.phronemophobic.clobber.modes.org :as org-mode]
             [com.phronemophobic.clobber.modes.org.ui :as oui]
             [com.phronemophobic.clobber.modes.clojure.ui :as cui])
   (:import java.io.File))
