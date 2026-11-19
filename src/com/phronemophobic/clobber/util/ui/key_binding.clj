@@ -73,23 +73,6 @@
    key-bindings))
 
 
-(comment
-  (def clojure-keytree
-  (key-bindings->keytree
-   (assoc clojure-mode/key-bindings
-          "C-x C-s" ::save-editor
-          "C-x C-f" ::file-picker
-          "C-c C-d" ::show-doc
-          "C-g" #'editor-cancel
-          "C-c t" ::tap-editor
-          "C-c C-k" ::load-buffer
-          "M-TAB" ::show-completions
-          ;; "C-c C-v" ::editor-paste
-          "C-M-x" ::editor-eval-top-form
-          "C-x C-e" ::editor-eval-last-sexp
-          "C-s" #'init-search-forward))))
-
-
 (def uppercase {\, \<
                 \. \>
                 \/ \?

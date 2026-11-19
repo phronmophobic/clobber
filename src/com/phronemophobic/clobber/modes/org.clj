@@ -1,26 +1,18 @@
 (ns com.phronemophobic.clobber.modes.org
   (:require [com.phronemophobic.clobber.modes.text :as text-mode]
-            [clojure.edn :as edn]
             [com.phronemophobic.clobber.util :as util]
-            [clojure.java.io :as io]
             [clojure.string :as str])
   (:import (org.treesitter TSTree
-                           TSInputEdit
-                           TSInputEncoding
                            TSTreeCursor
                            TreeSitterOrg
                            TSParser
                            TSPoint
                            TSNode)
-           com.ibm.icu.text.BreakIterator
-           clojure.lang.LineNumberingPushbackReader
-           java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
 (defn org-return [editor]
   (let [^TSTree
         tree (:tree editor)
-        line (-> editor :cursor :row)
         cursor-byte (-> editor :cursor :byte )
         
         tree-cursor

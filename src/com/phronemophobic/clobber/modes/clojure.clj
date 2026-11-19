@@ -144,7 +144,6 @@
             target-byte (.getEndByte wrap-node)
             diff-rope (.sliceBytes rope cursor-byte target-byte)
             diff-string (.toString diff-rope)
-            diff-points (.size diff-rope)
             rc-offset (util/count-row-column-bytes diff-string)
 
             new-cursor-row (+ cursor-row (:row rc-offset))
@@ -277,38 +276,39 @@
          cursor-char :char
          cursor-point :point
          cursor-row :row
-         cursor-column-byte :column-byte} cursor]
-    (let [root-node (.getRootNode tree)
-          cursor (TSTreeCursor. root-node)
-          split-coll-node-types (conj coll-node-types "str_lit")
-
-          ^TSNode
-          parent-coll-node
-          (loop [parent nil]
-            (let [idx (.gotoFirstChildForByte cursor cursor-byte)
-                  node (.currentNode cursor)]
-              (if (or (= -1 idx)
-                      (> (.getStartByte node)
-                         cursor-byte))
-                parent
-                (if (contains? split-coll-node-types (.getType node))
-                  (recur node)
-                  (recur parent)))))]
-      (if (not parent-coll-node)
-        editor
-        (let [end-coll-str (coll-end-str parent-coll-node)
-              parent-coll-node-type (.getType parent-coll-node)
-              begin-coll-str (case parent-coll-node-type
-                               "str_lit" "\""
-                               "vec_lit" "["
-                               ("list_lit" "anon_fn_lit") "("
-                               ("set_lit" "map_lit") "{")
-              editor (-> editor
-                         (text-mode/editor-insert (str end-coll-str " " begin-coll-str)))
-              editor (if (= "str_lit" parent-coll-node-type)
-                       (text-mode/editor-forward-char editor)
-                       (editor-paredit-close-coll editor end-coll-str))]
-          editor)))))
+         cursor-column-byte :column-byte} cursor
+        
+        root-node (.getRootNode tree)
+        cursor (TSTreeCursor. root-node)
+        split-coll-node-types (conj coll-node-types "str_lit")
+        
+        ^TSNode
+        parent-coll-node
+        (loop [parent nil]
+          (let [idx (.gotoFirstChildForByte cursor cursor-byte)
+                node (.currentNode cursor)]
+            (if (or (= -1 idx)
+                    (> (.getStartByte node)
+                       cursor-byte))
+              parent
+              (if (contains? split-coll-node-types (.getType node))
+                (recur node)
+                (recur parent)))))]
+    (if (not parent-coll-node)
+      editor
+      (let [end-coll-str (coll-end-str parent-coll-node)
+            parent-coll-node-type (.getType parent-coll-node)
+            begin-coll-str (case parent-coll-node-type
+                             "str_lit" "\""
+                             "vec_lit" "["
+                             ("list_lit" "anon_fn_lit") "("
+                             ("set_lit" "map_lit") "{")
+            editor (-> editor
+                       (text-mode/editor-insert (str end-coll-str " " begin-coll-str)))
+            editor (if (= "str_lit" parent-coll-node-type)
+                     (text-mode/editor-forward-char editor)
+                     (editor-paredit-close-coll editor end-coll-str))]
+        editor))))
 
 (defn editor-cider-eval-defun-at-point [editor]
   editor)

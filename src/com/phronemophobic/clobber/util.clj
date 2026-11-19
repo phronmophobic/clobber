@@ -14,7 +14,6 @@
                            TSQueryCursor
                            TSQueryMatch
                            TreeSitterClojure
-                           TreeSitterJson
                            TSInputEdit
                            TSInputEncoding
                            TSRange)

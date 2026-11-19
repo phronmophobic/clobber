@@ -266,11 +266,12 @@
   )
 
 ;; target column is in grapheme clusters
-(defn editor-goto-row-col [editor target-row target-column]
+(defn editor-goto-row-col
   "Moves the cursor to `target-row`, `target-column`.
   
   The `target-column` is measured in grapheme clusters.
   The search always starts from the beginning of the rope."
+  [editor target-row target-column]
   (let [^Rope rope (:rope editor)
         
         bi (doto (BreakIterator/getCharacterInstance)
@@ -1394,7 +1395,6 @@
          (let [diff-string (-> (.subSequence rope cursor-char char-index )
                                .toString)
                num-bytes (alength (.getBytes diff-string "utf-8"))
-               new-cursor-column-byte (+ cursor-column-byte num-bytes)
                new-cursor-row (+ cursor-row lines)]
            (assoc editor
                   :cursor {:byte (+ cursor-byte num-bytes)

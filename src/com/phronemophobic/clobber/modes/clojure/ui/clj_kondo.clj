@@ -1,26 +1,14 @@
 (ns com.phronemophobic.clobber.modes.clojure.ui.clj-kondo
-  (:require [clojure.string :as str]
-            [membrane.ui :as ui]
+  (:require [membrane.ui :as ui]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [com.phronemophobic.clobber.util.ui :as util.ui]
-            [clojure.java.io :as io]
             [clj-kondo.core :as clj-kondo]
-            [com.phronemophobic.clobber.modes.clojure :as clojure-mode]
             [com.phronemophobic.clobber.modes.clojure.ui :as-alias cui]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
-            [com.phronemophobic.membrandt :as ant]
-            [com.phronemophobic.membrandt.icon.ui :as icon.ui]
-            [com.phronemophobic.clobber.util :as util])
-  (:import (org.treesitter TSQuery
-                           TSTree
-                           TSNode
-                           TSQueryCapture
-                           TSQueryCursor)
-           com.ibm.icu.text.BreakIterator
-           java.io.ByteArrayInputStream
-           java.io.File
+            [com.phronemophobic.membrandt.icon.ui :as icon.ui])
+  (:import java.io.ByteArrayInputStream
            io.lacuna.bifurcan.Rope))
 
 (defui clj-kondo-view [{:keys [focused? body editor]}]

@@ -5,6 +5,8 @@
             clojure.pprint
             clojure.reflect
             [membrane.ui :as ui]
+            membrane.skia
+            com.rpl.specter
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
             [membrane.alpha.component.drag-and-drop :as dnd]
@@ -33,12 +35,9 @@
                            TSInputEncoding)
            (java.util.jar JarFile)
            com.ibm.icu.text.BreakIterator
-           clojure.lang.LineNumberingPushbackReader
-           java.io.ByteArrayInputStream
            java.time.Duration
            java.time.Instant
            java.io.File
-           java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
 (declare clojure-key-bindings
@@ -341,45 +340,44 @@
           idx (.gotoFirstChildForByte cursor cursor-byte)]
       (if (= -1 idx)
         editor
-        (try
-          (when-let [evaluator (:evaluator editor)]
-            (let [node (.currentNode cursor)
-                  line-number (-> node
-                                  .getStartPoint
-                                  .getRow)
-                  col (-> node
-                          .getStartPoint
-                          TSPoint/.getColumn)
-                  
-                  [err val] (evaluator/evaluate evaluator {:source-path (:eval/source-path editor)
-                                                           :source (:eval/source editor)
-                                                           :code (util/node->str rope node)
-                                                           :line (inc line-number)
-                                                           :col col})]
-              
-              (if err
-                (let []
-                  (dispatch! ::temp-status {:$editor $editor
-                                            :msg (str (-> err class .getName) ": " (.getMessage err) "\n"
-                                                      (some-> err .getCause .getMessage))})
-                  (tap> err)
-                  (prn err))
-                ;; else use val
-                (let [temp-view (ui/translate 0 -4
-                                              (viscous/inspector
-                                               {:obj (viscous/wrap-unique val)
-                                                :width 40
-                                                :height 1
-                                                :show-context? false}))]
-                  (dispatch! :update $editor
-                             update :line-val
-                             (fn [m]
-                               (let [line-val (get m rope)]
-                                 {rope (assoc line-val
-                                              (-> node .getEndPoint .getRow)
-                                              (viscous/wrap-unique val))})))
-                  (dispatch! ::temp-status {:$editor $editor
-                                            :msg temp-view}))))))))))
+        (when-let [evaluator (:evaluator editor)]
+          (let [node (.currentNode cursor)
+                line-number (-> node
+                                .getStartPoint
+                                .getRow)
+                col (-> node
+                        .getStartPoint
+                        TSPoint/.getColumn)
+                
+                [err val] (evaluator/evaluate evaluator {:source-path (:eval/source-path editor)
+                                                         :source (:eval/source editor)
+                                                         :code (util/node->str rope node)
+                                                         :line (inc line-number)
+                                                         :col col})]
+            
+            (if err
+              (do
+                (dispatch! ::temp-status {:$editor $editor
+                                          :msg (str (-> err class .getName) ": " (.getMessage err) "\n"
+                                                    (some-> err .getCause .getMessage))})
+                (tap> err)
+                (prn err))
+              ;; else use val
+              (let [temp-view (ui/translate 0 -4
+                                            (viscous/inspector
+                                             {:obj (viscous/wrap-unique val)
+                                              :width 40
+                                              :height 1
+                                              :show-context? false}))]
+                (dispatch! :update $editor
+                           update :line-val
+                           (fn [m]
+                             (let [line-val (get m rope)]
+                               {rope (assoc line-val
+                                            (-> node .getEndPoint .getRow)
+                                            (viscous/wrap-unique val))})))
+                (dispatch! ::temp-status {:$editor $editor
+                                          :msg temp-view})))))))))
 
 (defeffect ::load-buffer [{:keys [editor $editor]}]
   (future
@@ -391,7 +389,7 @@
                                                       :source (:eval/source editor)
                                                       :code (.toString rope)})]
         (if err
-          (let []
+          (do
             (tap> err)
             (dispatch! ::temp-status {:$editor $editor
                                       :msg
@@ -821,7 +819,7 @@
                                      (io/resource (ns-sym->resource-path ns-sym ext)))
                                    [".clj"
                                     ".cljc"])
-                    source (slurp resource)
+
                     file (when (= "file" (.getProtocol resource))
                            (io/as-file resource))
                     last-file-load (when file
@@ -864,7 +862,7 @@
          editor
          (if-let [^File f (:file editor)]
            (let [source-path (if-let [ns-name (:ns-name editor)]
-                               (ns-sym->resource-path (:ns-name editor) (util/file-ext f))
+                               (ns-sym->resource-path ns-name (util/file-ext f))
                                (File/.getCanonicalPath f))
                  source-name (File/.getName f)]
              (assoc editor
@@ -967,8 +965,6 @@
         ^TSQuery query (TSQuery. (:language editor)
                                  clojure-mode/highlight-queries)
 
-
-        base-style (:base-style editor)
         ^TSTree tree (:tree editor)
         ^Rope rope (:rope editor)
 
@@ -1026,7 +1022,6 @@
    (editor->paragraph editor true))
   ([editor focused?]
    (let [tree (:tree editor)
-         lang (:language editor)
          ^Rope
          rope (:rope editor)
          
@@ -1150,8 +1145,7 @@
 (defui editor-view [{:keys [editor
                             focused?]}]
   (when-let [tree (:tree editor)]
-    (let [lang (:language editor)
-          rope (:rope editor)
+    (let [rope (:rope editor)
           para (editor->paragraph editor focused?)
           paren-highlight-view (paren-highlight editor para)
           line-vals (when-let [line-val (if (:instarepl? editor)

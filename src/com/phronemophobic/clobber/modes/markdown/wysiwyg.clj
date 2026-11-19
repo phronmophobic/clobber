@@ -1,17 +1,8 @@
 (ns com.phronemophobic.clobber.modes.markdown.wysiwyg
-  (:require [clojure.java.io :as io]
-            [clojure.datafy :as d]
-            [clojure.core.protocols :as p]
-            [clojure.string :as str]
-            [clojure.core.async :as async]
-            [membrane.basic-components :as basic]
+  (:require [clojure.string :as str]
             [membrane.ui :as ui]
-            [membrane.skia :as skia]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
-            [com.phronemophobic.membrandt :as ant]
-            [com.phronemophobic.viscous :as viscous]
-            [com.phronemophobic.clobber.editor :as clobber.editor]
             [com.phronemophobic.clobber.modes.markdown :as markdown-mode]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.modes.text.ui :as text-mode.ui]
@@ -32,14 +23,6 @@
                            TreeSitterMarkdown
                            TSInputEdit
                            TSInputEncoding)
-           java.nio.charset.Charset
-           java.util.Arrays
-           java.nio.ByteBuffer
-           java.util.regex.Pattern
-           com.ibm.icu.text.BreakIterator
-           clojure.lang.LineNumberingPushbackReader
-           java.io.File
-           java.io.StringReader
            io.lacuna.bifurcan.Rope))
 
 
@@ -161,8 +144,7 @@
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
     (when-let [file (:file editor)]
-      (let [source (slurp file)
-            previous-source (.toString (:rope editor))]
+      (let [source (slurp file)]
         (dispatch! :set $editor
           (editor-upkeep editor
           #(text-mode/editor-set-string % source))))))
@@ -693,9 +675,7 @@
 
 
 (defui editor-view [{:keys [editor focused?]}]
-  
-  (let [lang (:language editor)
-        rope (:rope editor)
+  (let [rope (:rope editor)
         para (util.ui/editor->paragraph editor)
         para (assoc para :width (:width editor))
         para (assoc-in para
@@ -718,6 +698,12 @@
      status-bar]))
 
 
+;; we don't want to rebuild this
+;; over and over
+;; it also causes equality issues
+;; for $extra from frame to frame
+(def ^:private util-ui-must
+  (com.rpl.specter/must ::util.ui/ui))
 (defui code-editor [{:keys [editor
                             ^:membrane.component/contextual
                             focused?
@@ -727,9 +713,6 @@
   (let [body (editor-view {:editor editor
                            :focused? focused?})
 
-        
-        file-picker-state (::util.ui/file-picker-state editor)
-        search-state (::text-mode/search editor)
         ui (::util.ui/ui editor)
                
         body 
@@ -748,7 +731,7 @@
                  :editor editor
                  :$editor $editor
                  :extra (:extra ui)
-                 :$extra [$editor (com.rpl.specter/must ::util.ui/ui) '(keypath :extra)] 
+                 :$extra [$editor util-ui-must '(keypath :extra)] 
                  :update-editor-intent ::update-editor
                  :context context
                  :$context $context)

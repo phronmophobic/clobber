@@ -1,5 +1,6 @@
 (ns com.phronemophobic.clobber.modes.text.ui
-  (:require [clojure.java.io :as io]
+  (:require com.rpl.specter
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [membrane.ui :as ui]
             [membrane.skia.paragraph :as para]
@@ -178,8 +179,7 @@
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
     (when-let [file (:file editor)]
-      (let [source (slurp file)
-            previous-source (.toString ^Rope (:rope editor))]
+      (let [source (slurp file)]
         (dispatch! :set $editor
           (editor-upkeep editor
           #(text-mode/editor-set-string % source))))))
@@ -270,13 +270,6 @@
               :height 1.2
               :height-override true}))))
 
-(defn make-editor-from-file [f]
-  (let [source (slurp f)]
-    (-> (make-editor)
-        (assoc :file f))))
-
-
-
 (defui editor-view [{:keys [editor focused?]}]
   (let [rope (:rope editor)
         para (util.ui/editor->paragraph editor)
@@ -300,6 +293,12 @@
      para
      status-bar]))
 
+;; we don't want to rebuild this
+;; over and over
+;; it also causes equality issues
+;; for $extra from frame to frame
+(def ^:private util-ui-must
+  (com.rpl.specter/must ::util.ui/ui))
 (defui text-editor [{:keys [editor
                             focused?]
                      :as this}]
@@ -323,7 +322,7 @@
                  :editor editor
                  :$editor $editor
                  :extra (:extra ui)
-                 :$extra [$editor (com.rpl.specter/must ::util.ui/ui) '(keypath :extra)] 
+                 :$extra [$editor util-ui-must '(keypath :extra)] 
                  :update-editor-intent ::update-editor
                  :context context
                  :$context $context)

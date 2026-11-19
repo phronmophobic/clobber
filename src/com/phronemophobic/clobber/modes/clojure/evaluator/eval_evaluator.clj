@@ -3,6 +3,8 @@
   (:require [com.phronemophobic.clobber.modes.clojure.evaluator
              :as evaluator
              :refer [IEvaluator]]
+            clojure.java.doc.api
+            clojure.reflect
             compliment.core
             [clojure.string :as str]
             [com.phronemophobic.source-logging-pushback-reader :as slpr]))
@@ -45,7 +47,7 @@
 
 (defn doc-string [{:keys [ns]
                    sym-str :sym
-                   :as m }]
+                   :as m}]
   (let [sym (read-string sym-str)
         v (ns-resolve ns sym)
         mta (meta v)
@@ -57,19 +59,7 @@
        :ns ns
        :doc doc
        :arglists (:arglists mta)}
-      #_(let [arglists (when (seq? (:arglists mta))
-                       (str/join
-                        "\n"
-                        (eduction
-                         (map pr-str)
-                         (:arglists mta))))
-            docstring [sym-str
-                       "\n"
-                       arglists
-                       "\n"
-                       (when (string? doc)
-                         doc)]]
-        docstring)
+
       ;; try javadoc
       (if-let [jdoc-data (binding [*ns* ns]
                            (try
@@ -81,37 +71,7 @@
                                nil)))]
         (assoc jdoc-data
                :type :javadoc)
-        #_(let [docstring 
-              (if-let [selected (seq (or (:selected-method jdoc-data)
-                                         (:selected-constructor jdoc-data)))]
-                (str/join
-                 "\n\n"
-                 (eduction
-                  (map (fn [{:keys [clojure-call return-type signature description]}]
-                         (str clojure-call "\n"
-                              return-type " " signature "\n\n"
-                              description)))
-                  selected))
-                
-                ;; else show class javadoc)
-                (str (:classname jdoc-data)
-                     "\n\n"
-                     (:class-description-md jdoc-data)
-                     "\n\nConstructors:\n\n"
-                     (str/join
-                      "\n\n"
-                      (eduction
-                       (map (fn [{:keys [ signature description]}]
-                              (str signature "\n" description)))
-                       (:constructors jdoc-data)))
-                     "\n\nMethods:\n\n"
-                     (str/join
-                      "\n\n"
-                      (eduction
-                       (map (fn [{:keys [return-type signature description]}]
-                              (str return-type " " signature "\n" description)))
-                       (:methods jdoc-data)))))]
-          docstring)
+
         ;; try compliment
         (let [docstring (compliment.core/documentation
                          sym-str
@@ -141,18 +101,7 @@
       (when (qualified-symbol? sym)
         (when-let [cls (ns-resolve ns (symbol (namespace sym)) )]
           (when (class? cls)
-            (let [
-                  ;; base-style (:base-style editor)
-                  ;; cursor-index
-                  ;; (loop [index 1]
-                  ;;   (if (>= index named-child-count)
-                  ;;     (dec index)
-                  ;;     (let [argnode (.getNamedChild parent-coll index)]
-                  ;;       (if (<= cursor-byte (.getEndByte argnode))
-                  ;;         (dec index)
-                  ;;         (recur (inc index))))))
-                  
-                  method-name (let [sym-name (clojure.core/name sym)]
+            (let [method-name (let [sym-name (clojure.core/name sym)]
                                 (if (str/starts-with? sym-name ".")
                                   (subs sym-name 1)
                                   sym-name))
@@ -166,59 +115,15 @@
                                               (if (:static flags)
                                                 parameter-types
                                                 (cons "this" parameter-types)))))
-                                 members)
-                  
-                  ;; ps (into [(str 
-                  ;;            sym
-                  ;;            " ")]
-                  ;;          (comp (map (fn [arglist]
-                  ;;                       ["["
-                  ;;                        (into []
-                  ;;                              (comp
-                  ;;                               (map-indexed (fn [i method-sym]
-                  ;;                                              (let [s (name method-sym)]
-                  ;;                                                (if (= i cursor-index)
-                  ;;                                                  {:text s
-                  ;;                                                   :style (assoc base-style :text-style/font-style {:font-style/weight :bold})}
-                  ;;                                                  s))))
-                  ;;                               (interpose " "))
-                  ;;                              arglist)
-                  ;;                        "]"]))
-                  ;;                (interpose " "))
-                  ;;          arglists)
-                  ;; p (para/paragraph
-                  ;;    ps
-                  ;;    nil
-                  ;;    {:paragraph-style/text-style (:base-style editor)})
-]
-              arglists
-              #_(dispatch! :update $editor
-                         (fn [editor]
-                           (assoc-in editor [:status :status] p)))))))
-      )))
+                                 members)]
+              arglists)))))))
 (comment
   (arglist {:ns (the-ns 'user)
             :sym "String/.replace" })
   ,)
 
 (defn load-file [{:keys [ source-path source code]}]
-  (let [
-        ;; eval-ns-name ns
-        
-        #_#_[;; path relative to class-path  
-         source-path
-         ;; filename
-         source-name] (when-let [^File f file]
-                        [(ns-sym->resource-path eval-ns-name (util/file-ext f))
-                         (.getName f)])
-        
-        
-        ;; ^Rope
-        ;; rope (:rope editor)
-        rdr (slpr/source-logging-pushback-reader code nil nil)
-        #_(LineNumberingPushbackReader.
-             (StringReader. #_(.toString rope)
-                            code))]
+  (let [rdr (slpr/source-logging-pushback-reader code nil nil)]
     (try
       (binding [*repl* true]
         [nil (clojure.lang.Compiler/load rdr source-path source)])

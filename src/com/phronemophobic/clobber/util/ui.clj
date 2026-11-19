@@ -1,5 +1,6 @@
 (ns com.phronemophobic.clobber.util.ui
-  (:require [clojure.string :as str]
+  (:require com.rpl.specter
+            [clojure.string :as str]
             [membrane.ui :as ui]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
@@ -279,7 +280,7 @@
           end-byte (.getEndByte debug-node)]
       {[start-byte end-byte] {:text-style/background-color {:color [1.0 0.8431372549019608 0.5294117647058824 0.7]}}})))
 
-(defn highlight-search [editor {:keys [char-offset start-byte-offset end-byte-offset]}]
+(defn highlight-search [editor {:keys [char-offset start-byte-offset]}]
   (when-let [^java.util.regex.MatchResult
              match (-> editor ::text-mode/search :match)]
     (when (>= (.start match)
@@ -302,14 +303,8 @@
                     theme
                     {:keys [start-byte-offset end-byte-offset]}]
   (let [^TSQueryCursor qc (TSQueryCursor.)
-        ;; ^TSQuery query (TSQuery. (:language editor)
-        ;;                          queries)
-
-
-        base-style (:base-style editor)
         ^TSTree tree (:tree editor)
-        ^Rope rope (:rope editor)
-
+        
         _ (.setByteRange qc start-byte-offset end-byte-offset)
         _ (.exec qc query (.getRootNode tree))
         matches (.getCaptures qc)
@@ -320,18 +315,18 @@
                          ^TSQueryCapture
                          capture (aget (.getCaptures match) (.getCaptureIndex match))
                          capture-name (.getCaptureNameForId query (.getIndex capture))
-                         node (.getNode capture)]
-                       ;; else
-                       (let [start-byte (min end-byte-offset (.getStartByte node))
-                             end-byte (min end-byte-offset (.getEndByte node))
-
-                             styles (if (> end-byte start-byte)
-                                      (let [style (get theme capture-name)]
-                                        (assoc styles [start-byte end-byte] style))
-                                      ;; else
-                                      styles)]
-                         (recur end-byte
-                                styles)))
+                         node (.getNode capture)
+                         
+                         start-byte (min end-byte-offset (.getStartByte node))
+                         end-byte (min end-byte-offset (.getEndByte node))
+                         
+                         styles (if (> end-byte start-byte)
+                                  (let [style (get theme capture-name)]
+                                    (assoc styles [start-byte end-byte] style))
+                                  ;; else
+                                  styles)]
+                     (recur end-byte
+                            styles))
                    ;; else
                    styles))]
     styles))
@@ -951,9 +946,8 @@
   (dispatch! update-editor-intent
              {:$editor $editor
               :op (fn [editor]
-                    (let []
-                      (assoc editor ::ui
-                             (goto-line-view {:extra {:line-number-editor (text-mode/make-editor)}}))))}))
+                    (assoc editor ::ui
+                           (goto-line-view {:extra {:line-number-editor (text-mode/make-editor)}})))}))
 
 (comment
   
@@ -1046,7 +1040,7 @@
                         (drop offset))
                   mx-commands)
         ps (into 
-            [{:text (str "M-x ")
+            [{:text "M-x "
               :style (assoc base-style :text-style/color [0.05 0.05 0.85])}
              search-str
              (when (seq search-str)

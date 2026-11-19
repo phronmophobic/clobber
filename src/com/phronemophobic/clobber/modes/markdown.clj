@@ -1,19 +1,7 @@
 (ns com.phronemophobic.clobber.modes.markdown
   (:require [com.phronemophobic.clobber.modes.text :as text-mode]
-            [clojure.edn :as edn]
-            [com.phronemophobic.clobber.util :as util]
-            [clojure.java.io :as io]
-            [clojure.string :as str])
-  (:import (org.treesitter TSTree
-                           TSInputEdit
-                           TSInputEncoding
-                           TSTreeCursor
-                           TreeSitterMarkdown
-                           TSParser
-                           TSPoint
-                           TSNode)
-           com.ibm.icu.text.BreakIterator
-           io.lacuna.bifurcan.Rope))
+            [com.phronemophobic.clobber.util :as util])
+  (:import (org.treesitter TreeSitterMarkdown)))
 
 
 (def key-bindings

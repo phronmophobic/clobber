@@ -4,7 +4,6 @@
              :as evaluator
              :refer [IEvaluator]]
             [clojure.core.async :as async]
-            [membrane.component :refer [defeffect]]
             [nrepl.transport :as transport]
             [nrepl.core :as nrepl]))
 
@@ -15,36 +14,33 @@
 ;; https://cljdoc.org/d/nrepl/nrepl/1.8.0/doc/development/building-clients
 
 (defn ^:private send-sync [conn msg]
-  (let [{:keys [write-ch read-mult]} conn]
-    
-      (let [ret-ch (async/chan 10)
-            msg (update msg :id (fn [id]
-                                  (or id (str (random-uuid)))))
-            msg-id (:id msg)]
-        (try
-          (async/tap read-mult ret-ch)
-          (async/>!! write-ch msg)
-          (loop [msgs []]
-            (if-let [msg (async/<!! ret-ch)]
-              (if (= (:id msg)
-                     msg-id)
-                (let [msgs (conj msgs msg)]
-                  ;; status key signifies end of chain
-                  (if (:status msg)
-                    msgs
-                    (recur msgs)))
-                ;; else, msg id does not match. continue
-                (recur msgs))
-              ;; else, msg is nil. ret-ch is closed
-              msgs))
-          (finally
-            (async/untap read-mult ret-ch)
-            (async/close! ret-ch))))))
+  (let [{:keys [write-ch read-mult]} conn
+        ret-ch (async/chan 10)
+          msg (update msg :id (fn [id]
+                                (or id (str (random-uuid)))))
+          msg-id (:id msg)]
+    (try
+      (async/tap read-mult ret-ch)
+      (async/>!! write-ch msg)
+      (loop [msgs []]
+        (if-let [msg (async/<!! ret-ch)]
+          (if (= (:id msg)
+                 msg-id)
+            (let [msgs (conj msgs msg)]
+              ;; status key signifies end of chain
+              (if (:status msg)
+                msgs
+                (recur msgs)))
+            ;; else, msg id does not match. continue
+            (recur msgs))
+          ;; else, msg is nil. ret-ch is closed
+          msgs))
+      (finally
+        (async/untap read-mult ret-ch)
+        (async/close! ret-ch)))))
 
 (comment
   
-  (def my-conn x-106191) 
-
   (send-sync my-conn {:op "describe"})
   (send-sync my-conn {:op "lookup"
                       :ns "user"
@@ -57,11 +53,8 @@
                       :code "42"})
        (keep :value)
        last)
-  
-  
-  (def my-evaluator (nrepl-evaluator my-conn))
-   (evaluator/evaluate my-evaluator {:code "(range 10000000)"})
-  )
+
+  ,)
 
 (defn evaluate [{:keys [ns conn eval-opts]}
                 {:keys [source-path source code line col]}]

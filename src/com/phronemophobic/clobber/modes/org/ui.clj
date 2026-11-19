@@ -1,17 +1,13 @@
 (ns com.phronemophobic.clobber.modes.org.ui
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str]
+  (:require com.rpl.specter
             [membrane.ui :as ui]
             [membrane.skia.paragraph :as para]
             [membrane.component :refer [defeffect defui]]
-            [com.phronemophobic.membrandt :as ant]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.modes.org :as org-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
             [com.phronemophobic.clobber.util.ui :as util.ui])
-  (:import (org.treesitter TSQuery
-                           TSParser)
-           java.io.File
+  (:import (org.treesitter TSQuery)
            io.lacuna.bifurcan.Rope))
 
 (defn editor-upkeep [editor op]
@@ -155,8 +151,7 @@
 (defeffect ::reload-editor [{:keys [editor $editor]}]
   (future
     (when-let [file (:file editor)]
-      (let [source (slurp file)
-            previous-source (.toString ^Rope (:rope editor))]
+      (let [source (slurp file)]
         (dispatch! :set $editor
           (editor-upkeep editor
           #(text-mode/editor-set-string % source))))))
@@ -244,17 +239,9 @@
                 :height 1.2
                 :height-override true})))))
 
-(defn make-editor-from-file [f]
-  (let [source (slurp f)]
-    (-> (make-editor)
-        (assoc :file f))))
-
-
-
 (defui editor-view [{:keys [editor focused?]}]
   
-  (let [lang (:language editor)
-        rope (:rope editor)
+  (let [rope (:rope editor)
         para (util.ui/editor->paragraph editor)
         para (assoc para :width (:width editor))
         para (assoc-in para
@@ -276,15 +263,18 @@
      para
      status-bar]))
 
-
+;; we don't want to rebuild this
+;; over and over
+;; it also causes equality issues
+;; for $extra from frame to frame
+(def ^:private util-ui-must
+  (com.rpl.specter/must ::util.ui/ui))
 (defui org-editor [{:keys [editor
                            focused?]
                     :as this}]
   (let [body (editor-view {:editor editor
                            :focused? focused?})
         
-        file-picker-state (::util.ui/file-picker-state editor)
-        search-state (::text-mode/search editor)
         ui (::util.ui/ui editor)
         
         body 
@@ -303,7 +293,7 @@
                  :editor editor
                  :$editor $editor
                  :extra (:extra ui)
-                 :$extra [$editor (com.rpl.specter/must ::util.ui/ui) '(keypath :extra)] 
+                 :$extra [$editor util-ui-must '(keypath :extra)] 
                  :update-editor-intent ::update-editor
                  :context context
                  :$context $context)
