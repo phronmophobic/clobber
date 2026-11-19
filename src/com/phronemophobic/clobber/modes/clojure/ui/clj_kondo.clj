@@ -7,6 +7,7 @@
             [com.phronemophobic.clobber.modes.clojure.ui :as-alias cui]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util.ui.key-binding :as key-binding]
+            [com.phronemophobic.viscous :as viscous]
             [com.phronemophobic.membrandt.icon.ui :as icon.ui])
   (:import java.io.ByteArrayInputStream
            io.lacuna.bifurcan.Rope))
@@ -119,7 +120,44 @@
                                          end-cursor (:cursor editor)]
                                      {[(:byte start-cursor)
                                        (:byte end-cursor)]
-                                      {:text-style/background-color {:color [0 0 1.0 0.2]}}}))]
+                                      {:text-style/background-color {:color [0 0 1.0 0.2]}}}))
+            
+            base-style (:base-style editor)
+            line-view (when finding
+                        (viscous/wrap-unique
+                         (with-meta
+                          (let [body (para/paragraph
+                                      [{:text (str (:type finding))
+                                        :style (util.ui/merge-styles
+                                                [(get util.ui/default-theme "keyword")
+                                                 base-style])}
+                                       "\n"
+                                       (:message finding)]
+                                      nil
+                                      {:paragraph-style/text-style base-style})
+                                [bw bh] (ui/bounds body)
+                                pad 2
+                                border (ui/with-style 
+                                        ::ui/style-stroke
+                                        (ui/rounded-rectangle (+ (* 2 pad)
+                                                                 bw) 
+                                                              (+ (* 2 pad)
+                                                                 bh) 
+                                                              4))
+                                background (ui/with-style 
+                                            ::ui/style-fill
+                                            (ui/with-color [1 1 1]
+                                                           (ui/rounded-rectangle (+ (* 2 pad)
+                                                                                    bw) 
+                                                                                 (+ (* 2 pad)
+                                                                                    bh) 
+                                                                                 4)))]
+                            [background
+                             border
+                             (ui/translate pad pad body)])
+                          {:view true})))]
+        
+        
 
         (dispatch! ::cui/update-editor
                    {:editor editor
@@ -144,7 +182,12 @@
                                                            (max 0 (- height (ui/height ui)))))
                                                
                                                editor (assoc editor ::util.ui/ui ui)]
-                                           editor))]
+                                           editor))
+                                
+                                editor (if finding
+                                         (assoc-in editor [:line-val rope]
+                                                   {(dec (:end-row finding)) line-view})
+                                         editor)]
                             editor))})
         (dispatch! :repaint!))
       (catch Exception e
