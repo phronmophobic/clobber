@@ -29,6 +29,7 @@
                               :git/tag "v0.1.4"
                               :git/sha "34e381e"}
         nrepl/nrepl {:mvn/version "1.8.0"}
+        clj-kondo/clj-kondo {:mvn/version "2026.10.26"}
 
         com.ibm.icu/icu4j {:mvn/version "70.1"}
         com.ibm.icu/icu4j-charset {:mvn/version "70.1"}
