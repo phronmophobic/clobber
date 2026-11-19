@@ -176,7 +176,7 @@
                                          editor
                                          (let [ui (clj-kondo-view
                                                    {::util.ui/close-fn (fn [editor]
-                                                                         (dissoc editor ::clj-kondo))})
+                                                                         (dissoc editor ::clj-kondo :line-val))})
                                                ui (assoc ui :adjust-height
                                                          (fn [height]
                                                            (max 0 (- height (ui/height ui)))))
