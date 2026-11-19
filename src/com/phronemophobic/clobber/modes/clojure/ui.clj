@@ -16,6 +16,7 @@
             [com.phronemophobic.clobber.modes.clojure.evaluator :as evaluator]
             [com.phronemophobic.clobber.modes.clojure.evaluator.eval-evaluator :as eval-evaluator]
             [com.phronemophobic.clobber.modes.clojure.evaluator.nrepl-evaluator :as nrepl-evaluator]
+            [com.phronemophobic.clobber.modes.clojure.ui.clj-kondo :as cui.clj-kondo]
             [com.phronemophobic.clobber.modes.text :as text-mode]
             [com.phronemophobic.clobber.util :as util]
             [com.phronemophobic.clobber.util.ui :as util.ui]
@@ -33,6 +34,7 @@
            (java.util.jar JarFile)
            com.ibm.icu.text.BreakIterator
            clojure.lang.LineNumberingPushbackReader
+           java.io.ByteArrayInputStream
            java.time.Duration
            java.time.Instant
            java.io.File
@@ -97,6 +99,10 @@
                      (-> new-editor
                          (assoc :last-change (java.time.Instant/now)))
                      new-editor)
+        new-editor (if rope-changed?
+                     (-> new-editor
+                         (dissoc ::cui.clj-kondo/highlights))
+                     new-editor)
 
         ;; this could be improved
         ;; probably want some specific
@@ -125,6 +131,7 @@
   (-> editor
       (dissoc :select-cursor)
       (dissoc ::util.ui/ui)
+      (dissoc ::cui.clj-kondo/highlights)
       (dissoc ::completion)))
 
 (defn editor-set-height [editor height]
@@ -1040,6 +1047,7 @@
                                 [(syntax-style editor viewport)
                                  (when focused?
                                    (util.ui/selection-style editor viewport))
+                                 (::cui.clj-kondo/highlights editor)
                                  (util.ui/debug-selection-style editor viewport)
                                  (util.ui/highlight-search editor viewport)]
                                 start-byte-offset
@@ -1594,7 +1602,8 @@
    ::show-stacktrace-viewer
    ::diff-with-file
    ::git-diff
-   ::use-nrepl-evaluator])
+   ::use-nrepl-evaluator
+   ::cui.clj-kondo/run-clj-kondo])
 
 (def clojure-key-bindings
   (assoc clojure-mode/key-bindings
